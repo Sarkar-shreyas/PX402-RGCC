@@ -13,6 +13,7 @@ from distribution_production import (
     Probability_Distribution,
     extract_t_samples,
 )
+from config import BINS, N, T_RANGE
 
 
 # ---------- t prime definition ---------- #
@@ -29,6 +30,11 @@ def generate_t_prime(t: np.ndarray, phi: np.ndarray) -> np.ndarray:
     """
     phi1, phi2, phi3, phi4 = phi.T
     t1, t2, t3, t4, t5 = t.T
+    t1 = np.clip(t1, 0, 1)
+    t2 = np.clip(t2, 0, 1)
+    t3 = np.clip(t3, 0, 1)
+    t4 = np.clip(t4, 0, 1)
+    t5 = np.clip(t5, 0, 1)
     r1 = np.sqrt(1 - t1 * t1)
     r2 = np.sqrt(1 - t2 * t2)
     r3 = np.sqrt(1 - t3 * t3)
@@ -49,11 +55,11 @@ def generate_t_prime(t: np.ndarray, phi: np.ndarray) -> np.ndarray:
         numerator / np.where(np.abs(denominator) < 1e-12, np.nan + 0j, denominator)
     )
 
-    return t_prime
+    return np.clip(t_prime, 0.0, 1.0 - 1e-15)
 
 
-# ---------- RG Factory ---------- #
-def rg_iterations(
+# ---------- RG Factories ---------- #
+def rg_iterations_for_fp(
     N: int,
     bins: int,
     K: int,
@@ -67,25 +73,30 @@ def rg_iterations(
     # Generate initial P(t) = 2t distribution
     if not existing_distribution:
         initial_t = generate_initial_t_distribution(N)
-        P_t = Probability_Distribution(initial_t, bins)
+        P_t = Probability_Distribution(initial_t, bins, range=T_RANGE)
     else:
         P_t = existing_distribution
 
     # Setup variables for iteration and storage
     previous_Qz: Probability_Distribution | None = None
     parameter_storage = []
+    fig, (ax0, ax1) = plt.subplots(1, 2, figsize=(10, 4))
+    ax0.set_xlim(-5, 5)
+    ax0.set_ylim(0.0, 0.25)
+    ax0.set_xlabel("z")
+    ax0.set_ylabel("Q(z)")
+    ax0.set_title("Evolution of Q(z)")
 
-    plt.figure(figsize=(7, 4))
-    plt.xlim([-5, 5])
-    plt.ylim([0.0, 0.27])
-    plt.xlabel("z")
-    plt.ylabel("Q(z)")
-    plt.title("Evolution of Q(z)")
+    ax1.set_xlim(0, 1)
+    ax1.set_ylim(0.0, 4)
+    ax1.set_xlabel("t")
+    ax1.set_ylabel("P(t)")
+    ax1.set_title("Evolution of P(t)")
 
     inner_start_time = time.time()
     print("-" * 100)
     print("Beginning procedure")
-
+    num_convergences = 0
     # RG procedure, breaks early if convergence reached
     for _ in range(K):
         current_time = time.time()
@@ -105,9 +116,11 @@ def rg_iterations(
         # Recenter z and initialise histogram
         next_z = center_z_distribution(next_z)
         current_Qz = Probability_Distribution(next_z, bins)
-        if _ in set(range(1, K, 7)):
-            centers = 0.5 * (current_Qz.bin_edges[:-1] + current_Qz.bin_edges[1:])
-            plt.plot(centers, current_Qz.histogram_values, label=f"Iteration {_}")
+        if _ in set(range(1, K, 2)):
+            z_centers = 0.5 * (current_Qz.bin_edges[:-1] + current_Qz.bin_edges[1:])
+            ax0.plot(z_centers, current_Qz.histogram_values, label=f"Iteration {_}")
+            t_centers = 0.5 * (P_t.bin_edges[:-1] + P_t.bin_edges[1:])
+            ax1.plot(t_centers, P_t.histogram_values, label=f"Iteration {_}")
             print(f"Values have been plotted for iteration {_}")
 
         # Check for convergence
@@ -119,9 +132,12 @@ def rg_iterations(
             current_mean, current_std = current_Qz.mean_and_std()
             parameter_storage.append((_, delta, current_std))
             if delta < 1e-3:
+                num_convergences += 1
                 print(f"Converged at iteration #{_}")
-                if _ >= 7:
-                    plt.savefig("z_dist.png", dpi=150)
+                if num_convergences == 3 or _ == K - 1:
+                    plt.savefig(f"plots/converged_z_dist_with_{N}_iters.png", dpi=150)
+                    print("Updated plot file with FP distribution")
+                    print("-" * 100)
                     return current_Qz, P_t, parameter_storage
             else:
                 print(f"Didn't converge in iteration {_}, onto the next.")
@@ -131,11 +147,30 @@ def rg_iterations(
 
         next_g = convert_z_to_g(current_Qz.sample(N))
         next_t = np.sqrt(next_g)
-        P_t = Probability_Distribution(next_t, bins)
+        P_t = Probability_Distribution(next_t, bins, range=T_RANGE)
         previous_Qz = current_Qz
 
     # If it didn't converge, return the final set of data
-    plt.legend()
-
-    plt.savefig("plots/z_dist.png", dpi=150)
+    ax0.legend()
+    ax1.legend()
+    plt.tight_layout()
+    print("Updated plot file without convergence")
+    print("-" * 100)
+    plt.savefig(f"plots/z_dist_with_{N}_iters.png", dpi=150)
     return previous_Qz, P_t, parameter_storage  # type: ignore
+
+
+def rg_iterator_for_nu(Qz: Probability_Distribution) -> Probability_Distribution:
+    """Factory to perform a single RG iteration without recentering, for critical exponent estimation"""
+
+    z_sample = Qz.sample(N)
+    g_values = convert_z_to_g(z_sample)
+    t_values = np.sqrt(g_values)
+    P_t = Probability_Distribution(t_values, BINS, range=T_RANGE)
+    t_sample = extract_t_samples(P_t, N)
+    phi_samples = generate_random_phases(N)
+    t_prime = generate_t_prime(t_sample, phi_samples)
+    next_z = convert_t_to_z(t_prime)
+    next_Qz = Probability_Distribution(next_z, BINS)
+
+    return next_Qz

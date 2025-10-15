@@ -1,4 +1,5 @@
 import numpy as np
+from config import Z_RANGE, BINS
 
 
 # ---------- Initial distribution helpers ---------- #
@@ -26,9 +27,9 @@ def center_z_distribution(Q_z: np.ndarray) -> np.ndarray:
 class Probability_Distribution:
     """A class to simplify manipulation of probability distributions for later use"""
 
-    def __init__(self, values, bins):
+    def __init__(self, values, bins=BINS, range=Z_RANGE):
         histogram_values, bin_edges = np.histogram(
-            values, bins=bins, range=(-10.0, 10.0), density=True
+            values, bins=bins, range=range, density=True
         )
         cdf = histogram_values.cumsum()
         cdf = cdf / cdf[-1]
@@ -57,7 +58,8 @@ class Probability_Distribution:
 
     def sample(self, N: int) -> np.ndarray:
         """Return an inverse CDF style sample of the probability distribution"""
-        u = generate_initial_t_distribution(N)
+        # u = generate_initial_t_distribution(N)
+        u = np.random.uniform(0, 1 + 1e-15, N)
         index = np.searchsorted(self.cdf, u)
         index = np.clip(index, 0, len(self.cdf) - 1)
         left_edge = self.bin_edges[index]

@@ -1,11 +1,12 @@
-from rg_iterator import rg_iterations
+from rg_iterator import rg_iterations_for_fp
 from exponent_analysis import critical_exponent_estimation
-from config import N, K, Z_PERTURBATION, BINS
+from config import N, K, BINS
 import time
+import json
 
 if __name__ == "__main__":
     start_time = time.time()
-    fixed_point_Qz, fixed_point_Pt, params = rg_iterations(N, BINS, K)
+    fixed_point_Qz, fixed_point_Pt, params = rg_iterations_for_fp(N, BINS, K)
     final_params = list(params[-1])
     data = "".join(
         [
@@ -14,13 +15,36 @@ if __name__ == "__main__":
         ]
     )
 
-    nu_estimate = critical_exponent_estimation(fixed_point_Qz, Z_PERTURBATION, K)
+    estimation_params = critical_exponent_estimation(fixed_point_Qz)
+    nu_data = estimation_params["Nu_data"]
+    nu_values = estimation_params["Nu_values"]
+    final_nu = nu_data["mean"]
+    z_perturbations = estimation_params["perturbations"]
+    z_p = [round(z_p, 4) for z_p in z_perturbations]
+    z_peaks = estimation_params["z_peaks"]
     # print(data)
-    end_time = time.time()
-    print("-" * 100)
 
-    print(f"Program took {end_time - start_time:.3f} seconds")
-    print(f"Estimation of nu: {nu_estimate:.3f}")
+    print("-" * 100)
+    with open(
+        f"params/fixed_point/final_params_with_{N}_samples.json", "w", encoding="utf-8"
+    ) as file:
+        json.dump(final_params, file, indent=4)
+
+    with open(
+        f"params/exponent/estimation_params_with_{N}_samples.json",
+        "w",
+        encoding="utf-8",
+    ) as file:
+        json.dump(estimation_params, file, indent=4)
+
     print(
-        f"Final values: Distance between histograms: Distance between peaks = {final_params[1]}, Standard Deviation = {final_params[2]}."
+        f"Final values for FP determination: Distance between histograms: Distance between peaks = {final_params[1]:.4f}, Standard Deviation = {final_params[2]:.3f}."
     )
+    print("-" * 100)
+    print(f"Perturbations used: {z_p}")
+    # print(f"Peaks used: {z_peaks}")
+    print(f"Nu values obtained \n{nu_values}")
+    print(f"Final nu estimation: {final_nu:.3f}")
+    print("=" * 100)
+    end_time = time.time()
+    print(f"Program took {end_time - start_time:.3f} seconds")
