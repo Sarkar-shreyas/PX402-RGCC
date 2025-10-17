@@ -2,7 +2,7 @@ import numpy as np
 from rg_iterator import rg_iterator_for_nu
 from distribution_production import Probability_Distribution
 from config import N, K, Z_RANGE, BINS
-from scipy.stats import norm
+from scipy.stats import norm, linregress
 import time
 import matplotlib
 
@@ -11,12 +11,33 @@ import matplotlib.pyplot as plt
 
 
 # ---------- Distribution manipulation helpers ---------- #
+
+
 def get_peak_from_subset(z_subset: np.ndarray) -> float:
-    """
-    Apply Shaw's method to find the approximate z_peak value of the Q(z) distribution; Assumes input is a subset of the original distribution
-    Slice the top 5% of values of Q(z) for each subset
-    Fit a Gaussian to each slice, and calculate the approximate maxima
-    Find the arithmetic mean of maxima to determine the z_peak value
+    """Estimate the peak location of a Q(z) distribution subset using Shaw's method.
+
+    The function builds a histogram of the provided subset, identifies the histogram
+    bin with the maximum density, and grows a symmetric interval around that bin
+    until approximately 5% of the total probability mass (in that neighbourhood) is
+    captured. It then selects the raw z values that fall inside that interval and
+    fits a Gaussian to those "tip" values using ``scipy.stats.norm.fit``. The
+    returned value is the absolute value of the fitted mean (mu). If the fit
+    produces a non-finite mean, the function falls back to a weighted average of
+    the bin centres inside the selected interval.
+
+    Parameters
+    ----------
+    z_subset : numpy.ndarray
+        One-dimensional array of sampled z values representing a subset of the
+        full Q(z) distribution. The array may be empty or contain very few
+        elements; the function attempts to handle these cases gracefully.
+
+    Returns
+    -------
+    float
+        Estimated peak location (absolute value) for the subset. If the fit
+        fails or produces non-finite results, a weighted average of bin centres
+        is returned instead.
     """
     # Set up the histogram from the input subset
     z_values, bin_edges = np.histogram(z_subset, bins=BINS, range=Z_RANGE, density=True)
@@ -59,7 +80,7 @@ def get_peak_from_subset(z_subset: np.ndarray) -> float:
 
     # Use scipy's norm fit to apply a gaussian fit
     mu, _ = norm.fit(z_tip_values)
-
+    # return float(mu)
     # Prevent infinite values messing up the log
     if not np.isfinite(mu):
         bin_centers = bin_edges[left_index : right_index + 1]
@@ -76,7 +97,25 @@ def get_peak_from_subset(z_subset: np.ndarray) -> float:
 
 
 def estimate_z_peak(z_sample: np.ndarray) -> float:
-    """Splits the input z_sample into 10 subsets of data and performs the a gaussian fit to the top 5% of each subset, returning the average peak across subsets"""
+    """Estimate the average peak location for a full sample by aggregating subset peaks.
+
+    The input sample is split into 10 equal (or near-equal) subsets. For each
+    subset the ``get_peak_from_subset`` function is used to estimate a local
+    peak. The arithmetic mean of these per-subset peak estimates is returned.
+
+    Parameters
+    ----------
+    z_sample : numpy.ndarray
+        One-dimensional array of sampled z values from a Probability_Distribution
+        object. The array should contain enough samples to be split into the
+        default 10 subsets; if it contains fewer elements, some subsets will be
+        empty and ``get_peak_from_subset`` will handle them.
+
+    Returns
+    -------
+    float
+        Arithmetic mean of the per-subset peak estimates.
+    """
     z_subsets = np.array_split(z_sample, 10)
     mu_values = [get_peak_from_subset(z_subset) for z_subset in z_subsets]
 
@@ -87,17 +126,44 @@ def estimate_z_peak(z_sample: np.ndarray) -> float:
 def critical_exponent_estimation(
     fixed_point_Qz: Probability_Distribution,
 ) -> dict:
-    """
-    Perturbs the fixed point distribution by a set of fixed z values,
-    Calculates the average peak of the top 5% of the new distribution with a Gaussian fit and average method,
-    Performs linear regression to fit the peak against the perturbation, slope obtained is z_k/z_0
-    Calculates v using v = ln(2^k)/ln(z_k/z_0)
-    Returns values of interest in a dictionary
+    """Estimate critical exponent nu using RG flow analysis of perturbed distributions.
+
+    This function implements a multi-step analysis to estimate the critical exponent nu:
+    1. Applies a series of small perturbations to a fixed-point distribution Q(z)
+    2. For each perturbation:
+       - Tracks the evolution of distribution peaks through K RG steps
+       - Uses ``estimate_z_peak`` to locate peaks in perturbed distributions
+    3. Performs linear regression between initial perturbations and evolved peaks
+    4. Estimates nu using the scaling relation nu = ln(2^k)/ln(z_k/z_0)
+
+    The analysis includes visualization of the RG flow for z_0 = 0.007 and tracks
+    computation time for each major step. A figure showing the evolution of Q(z)
+    is saved to the plots directory.
+
+    Parameters
+    ----------
+    fixed_point_Qz : Probability_Distribution
+        The fixed-point distribution Q*(z) around which to perform perturbative
+        analysis. This distribution should be at or very near the RG fixed point.
+
+    Returns
+    -------
+    dict
+        A dictionary containing:
+        - 'Nu_values': List of nu estimates for each RG step
+        - 'Nu_data': Dict with mean/median nu values and analysis bounds
+        - 'parameters': List of dicts with slope and R² for each RG step
+        - 'z_peaks': 2D array of peak locations [RG_step, perturbation]
+        - 'perturbations': List of perturbation magnitudes used
+
+    Notes
+    -----
+    The function uses a predefined set of perturbations from 4e-4 to 11e-4
+    and averages nu estimates between RG steps 5 and 12 for the final result.
+    Progress and timing information is printed to stdout during execution.
     """
     # Set up list of perturbations to try
-    perturbation_list = np.array(
-        [1e-4, 2e-4, 3e-4, 4e-4, 5e-4, 6e-4, 7e-4, 8e-4, 9e-4, 1e-3, 11e-4]
-    )
+    perturbation_list = np.array([4e-4, 5e-4, 6e-4, 7e-4, 8e-4, 9e-4, 1e-3, 11e-4])
     num_perturbations = len(perturbation_list)
 
     # Set up an empty array to track z peaks
@@ -112,7 +178,7 @@ def critical_exponent_estimation(
     plt.ylabel("Q(z)")
     plt.title("Q(z) vs z with z_0 = 0.007")
     plt.xlim([-3, 10])
-    plt.ylim([0, 0.25])
+    plt.ylim([0, 0.3])
     for i, perturbation in enumerate(perturbation_list):
         z_sample = fixed_point_Qz.sample(N)
         perturbed_z = z_sample + perturbation
@@ -128,7 +194,10 @@ def critical_exponent_estimation(
             next_z_sample = next_Qz.sample(N)
             z_peaks[n, i] = estimate_z_peak(next_z_sample)
             print(f"RG Step #{n} done for perturbation {i}")
-            if perturbation == 7e-4 and n % 3 == 1:
+            print(
+                f"Time elapsed since analysis began: {time.time() - start_time:.3f} seconds"
+            )
+            if perturbation == 7e-4 and n % 2 == 1:
                 centers = 0.5 * (next_Qz.bin_edges[:-1] + next_Qz.bin_edges[1:])
                 plt.plot(centers, next_Qz.histogram_values, label=f"RG step {n}")
             perturbed_Qz = next_Qz
@@ -179,6 +248,7 @@ def critical_exponent_estimation(
         x_x = np.dot(x, x)
         # result = linregress(x, y)
         # slope = result.slope  # type: ignore
+        # r2 = result.rvalue**2  # type: ignore
         slope = x_y / x_x
         residual = y - slope * x
         sse = float(np.dot(residual, residual))

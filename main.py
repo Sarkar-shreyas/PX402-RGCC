@@ -1,3 +1,14 @@
+"""Main execution script for the RG flow analysis.
+
+This script orchestrates the full RG analysis workflow:
+1. Find the fixed point distribution Q*(z) through iterative RG transformations
+2. Estimate the critical exponent nu using perturbations around Q*(z)
+3. Save results and convergence parameters to JSON files
+
+The analysis uses parameters defined in config.py and saves results to the
+params directory, separated into fixed point and critical exponent data.
+"""
+
 from rg_iterator import rg_iterations_for_fp
 from exponent_analysis import critical_exponent_estimation
 from config import N, K, BINS

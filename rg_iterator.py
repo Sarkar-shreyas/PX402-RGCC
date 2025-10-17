@@ -18,15 +18,32 @@ from config import BINS, N, T_RANGE
 
 # ---------- t prime definition ---------- #
 def generate_t_prime(t: np.ndarray, phi: np.ndarray) -> np.ndarray:
-    """
-    Takes in an array of sample t and phi values, and returns the computed t' value.
+    """Generate next-step amplitudes using the RG transformation.
 
-    Args:
-        t (np.ndarray): A numpy array of t values in the shape (N, 5) where N is the number of iterations
-        phi (np.ndarray): A numpy array of phi values in the shape (N, 4) where N is the number of iterations
+    Implements the core RG transformation that maps five input amplitudes and
+    four phases to a new amplitude t'. The transformation preserves important
+    symmetries while capturing the essential physics of the model.
 
-    Returns:
-        t' (np.ndarray): A numpy array of t' values calculated based on input t and phi values, with shape (N,) where N is the number of iterations
+    Parameters
+    ----------
+    t : numpy.ndarray
+        Array of shape (N, 5) containing five amplitude samples per row.
+        Values should be in range [0,1].
+    phi : numpy.ndarray
+        Array of shape (N, 4) containing four random phases per row.
+        Values should be in range [0,2π].
+
+    Returns
+    -------
+    numpy.ndarray
+        Array of shape (N,) containing the transformed amplitudes t'.
+        Values are clipped to range [0,1-1e-15] for numerical stability.
+
+    Notes
+    -----
+    The transformation includes safeguards against division by zero and
+    produces values strictly less than 1 to prevent numerical issues in
+    subsequent logarithmic transformations.
     """
     phi1, phi2, phi3, phi4 = phi.T
     t1, t2, t3, t4, t5 = t.T
@@ -41,15 +58,30 @@ def generate_t_prime(t: np.ndarray, phi: np.ndarray) -> np.ndarray:
     r4 = np.sqrt(1 - t4 * t4)
     r5 = np.sqrt(1 - t5 * t5)
 
-    numerator = (r1 * t2 * (1 - np.exp(1j * phi4) * t3 * t4 * t5)) - (
-        np.exp(1j * phi3)
-        * r5
-        * (r3 * t2 + np.exp(1j * (phi2 - phi1)) * r2 * r4 * t1 * t3)
+    numerator = (
+        (r1 * t2)
+        + ((r1**2 - t1**2) * (np.exp(1j * phi3)))
+        - (t1 * t3 * r2 * r4 * r5 * np.exp(1j * (phi2 + phi3 - phi1)))
+    )
+    denominator = (
+        1
+        - (t3 * t4 * t5 * np.exp(1j * phi4))
+        - (r2 * r3 * r4 * np.exp(1j * (phi2)))
+        - (t1 * t2 * t3 * t4 * np.exp(1j * (phi2 + phi4)))
+        - (t1 * t2 * t3 * np.exp(1j * phi1))
+        - (r1 * r3 * r5 * np.exp(1j * phi3))
+        + (r1 * r2 * r3 * r4 * np.exp(1j * (phi2 + phi3)))
     )
 
-    denominator = (r3 - np.exp(1j * phi3) * r1 * r5) * (
-        r3 - np.exp(1j * phi2) * r2 * r4
-    ) + (t3 + np.exp(1j * phi4) * t4 * t5) * (t3 + np.exp(1j * phi1) * t1 * t2)
+    # numerator = (r1 * t2 * (1 - np.exp(1j * phi4) * t3 * t4 * t5)) - (
+    #     np.exp(1j * phi3)
+    #     * r5
+    #     * (r3 * t2 + np.exp(1j * (phi2 - phi1)) * r2 * r4 * t1 * t3)
+    # )
+
+    # denominator = (r3 - np.exp(1j * phi3) * r1 * r5) * (
+    #     r3 - np.exp(1j * phi2) * r2 * r4
+    # ) + (t3 + np.exp(1j * phi4) * t4 * t5) * (t3 + np.exp(1j * phi1) * t1 * t2)
 
     t_prime = np.abs(
         numerator / np.where(np.abs(denominator) < 1e-12, np.nan + 0j, denominator)
@@ -65,9 +97,39 @@ def rg_iterations_for_fp(
     K: int,
     existing_distribution: Optional[Probability_Distribution] = None,
 ) -> tuple[Probability_Distribution, Probability_Distribution, list]:
-    """
-    Main factory that performs the RG steps until a fixed point distribution is obtained
-    Performs a maximum of K steps
+    """Perform repeated RG transformations to find the fixed point distribution.
+
+    This function implements the iterative RG procedure to find the fixed point
+    distribution Q*(z). Starting from either a provided distribution or the
+    default P(t)=2t, it applies the RG transformation repeatedly until either
+    convergence is detected or the maximum number of steps is reached.
+
+    The convergence criterion is based on the L2 distance between successive
+    distributions being less than 1e-3 for three consecutive iterations.
+
+    Parameters
+    ----------
+    N : int
+        Number of samples to use in each iteration.
+    bins : int
+        Number of bins for histogramming the distributions.
+    K : int
+        Maximum number of RG steps to perform.
+    existing_distribution : Probability_Distribution, optional
+        Starting distribution. If None, uses P(t)=2t.
+
+    Returns
+    -------
+    tuple[Probability_Distribution, Probability_Distribution, list]
+        A tuple containing:
+        - Q*(z): The (approximately) fixed point z-distribution
+        - P*(t): The corresponding t-distribution
+        - params: List of (step, distance, std) tuples tracking convergence
+
+    Notes
+    -----
+    The function also generates plots showing the evolution of both Q(z)
+    and P(t) distributions, saved to the plots directory.
     """
 
     # Generate initial P(t) = 2t distribution
@@ -82,7 +144,7 @@ def rg_iterations_for_fp(
     parameter_storage = []
     fig, (ax0, ax1) = plt.subplots(1, 2, figsize=(10, 4))
     ax0.set_xlim(-5, 5)
-    ax0.set_ylim(0.0, 0.25)
+    ax0.set_ylim(0.0, 0.3)
     ax0.set_xlabel("z")
     ax0.set_ylabel("Q(z)")
     ax0.set_title("Evolution of Q(z)")
@@ -135,6 +197,8 @@ def rg_iterations_for_fp(
                 num_convergences += 1
                 print(f"Converged at iteration #{_}")
                 if num_convergences == 3 or _ == K - 1:
+                    ax0.legend()
+                    ax1.legend()
                     plt.savefig(f"plots/converged_z_dist_with_{N}_iters.png", dpi=150)
                     print("Updated plot file with FP distribution")
                     print("-" * 100)
@@ -161,7 +225,28 @@ def rg_iterations_for_fp(
 
 
 def rg_iterator_for_nu(Qz: Probability_Distribution) -> Probability_Distribution:
-    """Factory to perform a single RG iteration without recentering, for critical exponent estimation"""
+    """Perform a single RG transformation step for critical exponent analysis.
+
+    This variant of the RG transformation is specifically designed for critical
+    exponent estimation. Unlike the fixed point iterator, it does not recenter
+    the distribution after transformation, preserving the absolute position of
+    peaks needed for tracking how perturbations evolve.
+
+    Parameters
+    ----------
+    Qz : Probability_Distribution
+        Current Q(z) distribution, typically a perturbed version of Q*(z).
+
+    Returns
+    -------
+    Probability_Distribution
+        The transformed distribution Q_{k+1}(z) without recentering.
+
+    Notes
+    -----
+    This function maintains the same bin structure as the input distribution
+    and uses the same sampling parameters N defined in config.
+    """
 
     z_sample = Qz.sample(N)
     g_values = convert_z_to_g(z_sample)

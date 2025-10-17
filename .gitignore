@@ -1,2 +1,8 @@
 /venv
 simplify.py
+/plots
+/params
+.env
+*.pyc
+*.json
+*.png
