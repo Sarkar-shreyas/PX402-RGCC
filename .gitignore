@@ -6,3 +6,4 @@ simplify.py
 *.pyc
 *.json
 *.png
+__pycache__/
