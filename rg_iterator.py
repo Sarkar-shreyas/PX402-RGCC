@@ -58,6 +58,7 @@ def generate_t_prime(t: np.ndarray, phi: np.ndarray) -> np.ndarray:
     r4 = np.sqrt(1 - t4 * t4)
     r5 = np.sqrt(1 - t5 * t5)
 
+    # Jack's Form from Shaw(Black)
     numerator = (
         (r1 * t2)
         + ((r1**2 - t1**2) * (np.exp(1j * phi3)))
@@ -73,6 +74,7 @@ def generate_t_prime(t: np.ndarray, phi: np.ndarray) -> np.ndarray:
         + (r1 * r2 * r3 * r4 * np.exp(1j * (phi2 + phi3)))
     )
 
+    # My matrix (Blue)
     # numerator = (r1 * t2 * (1 - np.exp(1j * phi4) * t3 * t4 * t5)) - (
     #     np.exp(1j * phi3)
     #     * r5
@@ -83,9 +85,28 @@ def generate_t_prime(t: np.ndarray, phi: np.ndarray) -> np.ndarray:
     #     r3 - np.exp(1j * phi2) * r2 * r4
     # ) + (t3 + np.exp(1j * phi4) * t4 * t5) * (t3 + np.exp(1j * phi1) * t1 * t2)
 
+    # Shaw's form (2023 thesis paper)
+    # numerator = (
+    #     -(np.exp(1j * (phi1 + phi4 - phi2)) * (r1 * r3 * r5 * t2 * t4))
+    #     + ((t2 * t4) * (np.exp(1j * (phi1 + phi4))))
+    #     - (np.exp(1j * phi4) * t1 * t3 * t4)
+    #     + (np.exp(1j * phi3) * r2 * r3 * r4 * t1 * t5)
+    #     - (np.exp(1j * phi1) * t2 * t3 * t5)
+    # )
+    # denominator = (
+    #     -1
+    #     - (r2 * r3 * r4 * np.exp(1j * (phi3)))
+    #     + (r1 * r3 * r5 * np.exp(1j * phi2))
+    #     + (r1 * r2 * r4 * r5 * np.exp(1j * (phi2 + phi3)))
+    #     + (t1 * t2 * t3 * np.exp(1j * phi1))
+    #     - (t1 * t2 * t4 * t5 * np.exp(1j * (phi1 + phi4)))
+    #     + (t3 * t4 * t5 * np.exp(1j * phi4))
+    # )
+
     t_prime = np.abs(
         numerator / np.where(np.abs(denominator) < 1e-12, np.nan + 0j, denominator)
     )
+    # t_prime = np.abs(numerator) / np.abs(denominator)
 
     return np.clip(t_prime, 0.0, 1.0 - 1e-15)
 
@@ -176,8 +197,8 @@ def rg_iterations_for_fp(
         print(f"t and z have been generated for iteration {_}")
 
         # Recenter z and initialise histogram
-        next_z = center_z_distribution(next_z)
         current_Qz = Probability_Distribution(next_z, bins)
+        current_Qz = center_z_distribution(current_Qz)
         if _ in set(range(1, K, 2)):
             z_centers = 0.5 * (current_Qz.bin_edges[:-1] + current_Qz.bin_edges[1:])
             ax0.plot(z_centers, current_Qz.histogram_values, label=f"Iteration {_}")
@@ -199,7 +220,9 @@ def rg_iterations_for_fp(
                 if num_convergences == 3 or _ == K - 1:
                     ax0.legend()
                     ax1.legend()
-                    plt.savefig(f"plots/converged_z_dist_with_{N}_iters.png", dpi=150)
+                    plt.savefig(
+                        f"plots/Jack_converged_z_dist_with_{N}_iters.png", dpi=150
+                    )
                     print("Updated plot file with FP distribution")
                     print("-" * 100)
                     return current_Qz, P_t, parameter_storage
@@ -220,7 +243,7 @@ def rg_iterations_for_fp(
     plt.tight_layout()
     print("Updated plot file without convergence")
     print("-" * 100)
-    plt.savefig(f"plots/z_dist_with_{N}_iters.png", dpi=150)
+    plt.savefig(f"plots/Jack_z_dist_with_{N}_iters.png", dpi=150)
     return previous_Qz, P_t, parameter_storage  # type: ignore
 
 

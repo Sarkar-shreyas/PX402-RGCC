@@ -54,27 +54,6 @@ def generate_initial_t_distribution(N: int) -> np.ndarray:
 
 
 # ---------- Sampling helpers ---------- #
-def center_z_distribution(Q_z: np.ndarray) -> np.ndarray:
-    """Center and symmetrize a Q(z) distribution.
-
-    Centers the distribution around its median and enforces the required
-    symmetry Q(z) = Q(-z) by including both positive and negative values.
-
-    Parameters
-    ----------
-    Q_z : numpy.ndarray
-        Array of z values from the current distribution.
-
-    Returns
-    -------
-    numpy.ndarray
-        Centered and symmetrized array of z values, twice the length of input.
-    """
-    centered_z = Q_z - np.median(Q_z)
-    new_z = np.concatenate([centered_z, -centered_z])
-    return new_z
-
-
 class Probability_Distribution:
     """A class for managing binned probability distributions in the RG analysis.
 
@@ -137,6 +116,32 @@ class Probability_Distribution:
         distance = float(np.sqrt(np.sum(integrand * dz)))
         return distance
 
+    def update(self, new_hist_values, new_bin_edges):
+        """Replace the stored histogram and recompute the CDF.
+
+        Parameters
+        ----------
+        new_hist_values : numpy.ndarray
+            Normalized histogram values for each bin (shape: (bins,)). The
+            values should represent a probability density over the bin widths.
+        new_bin_edges : numpy.ndarray
+            Bin edges corresponding to the histogram (shape: (bins+1,)).
+
+        Notes
+        -----
+        This method updates the distribution in-place and recomputes the
+        cumulative distribution function (CDF) from the provided histogram
+        values. If the provided histogram values are not normalized, the
+        computed CDF will be scaled by their cumulative sum (i.e. cdf[-1]).
+        The caller should ensure that the inputs are valid (non-negative and
+        consistent shapes) to avoid runtime errors.
+        """
+        self.histogram_values = new_hist_values
+        self.bin_edges = new_bin_edges
+        cdf = new_hist_values.cumsum()
+        cdf /= cdf[-1]
+        self.cdf = cdf
+
     def mean_and_std(self) -> tuple:
         """Calculate mean and standard deviation of the distribution.
 
@@ -187,6 +192,43 @@ class Probability_Distribution:
         return left_edge + fraction * (right_edge - left_edge)
 
 
+def center_z_distribution(Q_z: Probability_Distribution) -> Probability_Distribution:
+    """Symmetrize and renormalize a binned Q(z) distribution in-place.
+
+    The function enforces the physical symmetry Q(z) = Q(-z) by averaging the
+    histogram values with their reversed order and renormalising the result so
+    the histogram integrates to unity over the bin widths. The underlying
+    `Probability_Distribution` object is updated and returned.
+
+    Parameters
+    ----------
+    Q_z : Probability_Distribution
+        Distribution object whose histogram will be symmetrised and updated.
+
+    Returns
+    -------
+    Probability_Distribution
+        The same `Q_z` instance after its histogram and CDF have been
+        symmetrised and renormalised.
+
+    Notes
+    -----
+    The function assumes `Q_z.histogram_values` and `Q_z.bin_edges` are valid
+    and will call `Q_z.update` to replace the stored histogram with the
+    symmetrised version.
+    """
+    bin_edges = Q_z.bin_edges
+    dz = np.diff(bin_edges)
+
+    hist_values = Q_z.histogram_values
+    symmetrised_Qz = 0.5 * (hist_values + hist_values[::-1])
+    symmetrised_Qz /= np.sum(symmetrised_Qz * dz)
+    Q_z.update(symmetrised_Qz, bin_edges)
+    # centered_z = Q_z - np.median(Q_z)
+    # new_z = np.concatenate([centered_z, -centered_z])
+    return Q_z
+
+
 def extract_t_samples(P_t: Probability_Distribution, N: int) -> np.ndarray:
     """Generate a matrix of amplitude samples for the RG transformation.
 
@@ -210,5 +252,6 @@ def extract_t_samples(P_t: Probability_Distribution, N: int) -> np.ndarray:
     t3 = P_t.sample(N)
     t4 = P_t.sample(N)
     t5 = P_t.sample(N)
+
     t_sample = np.stack([t1, t2, t3, t4, t5], axis=1)
     return t_sample

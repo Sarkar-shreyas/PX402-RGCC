@@ -2,7 +2,7 @@ import numpy as np
 from rg_iterator import rg_iterator_for_nu
 from distribution_production import Probability_Distribution
 from config import N, K, Z_RANGE, BINS
-from scipy.stats import norm, linregress
+from scipy.stats import norm
 import time
 import matplotlib
 
@@ -177,7 +177,7 @@ def critical_exponent_estimation(
     plt.xlabel("z")
     plt.ylabel("Q(z)")
     plt.title("Q(z) vs z with z_0 = 0.007")
-    plt.xlim([-3, 10])
+    plt.xlim([-5, 10])
     plt.ylim([0, 0.3])
     for i, perturbation in enumerate(perturbation_list):
         z_sample = fixed_point_Qz.sample(N)
@@ -208,7 +208,7 @@ def critical_exponent_estimation(
         print("-" * 100)
     plt.legend()
     plt.tight_layout()
-    plt.savefig(f"plots/Q(z)_perturbed_by_0.007_with_{N}_iters.png", dpi=150)
+    plt.savefig(f"plots/Jack_Q(z)_perturbed_by_0.007_with_{N}_iters.png", dpi=150)
     print("-" * 100)
     print(
         f"z peaks have been found. Time elapsed to complete calculations: {time.time() - start_time:.3f}"
