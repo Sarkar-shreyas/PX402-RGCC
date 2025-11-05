@@ -9,8 +9,8 @@ The analysis uses parameters defined in config.py and saves results to the
 params directory, separated into fixed point and critical exponent data.
 """
 
-from rg_iterator import rg_iterations_for_fp
-from exponent_analysis import critical_exponent_estimation
+from src.rg_iterator import rg_iterations_for_fp
+from src.exponent_analysis import critical_exponent_estimation
 from config import N, K, T_BINS
 import time
 import json

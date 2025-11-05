@@ -1,6 +1,6 @@
 import numpy as np
-from rg_iterator import rg_iterator_for_nu
-from distribution_production import Probability_Distribution, center_z_distribution
+from .rg_iterator import rg_iterator_for_nu
+from .distribution_production import Probability_Distribution, center_z_distribution
 from config import N, K, EXPRESSION
 from scipy.stats import norm, linregress
 from numpy.polynomial import polynomial

@@ -6,8 +6,8 @@ from mpl_toolkits.axes_grid1 import inset_locator
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import time
-from utils import convert_t_to_z, convert_z_to_t
-from distribution_production import (
+from .utils import convert_t_to_z, convert_z_to_t
+from .distribution_production import (
     generate_initial_t_distribution,
     generate_random_phases,
     center_z_distribution,
