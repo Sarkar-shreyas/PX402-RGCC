@@ -48,7 +48,9 @@ def generate_initial_t_distribution(N: int) -> np.ndarray:
     numpy.ndarray
         Array of N amplitude values t = √g where g ~ U[0,1].
     """
-    g_sample = np.random.uniform(0, 1.0, N)
+    # lower_bound = np.sqrt(1.39e-11)
+    # g_sample = np.random.uniform(lower_bound, 1.0 - lower_bound, N)
+    g_sample = np.random.uniform(0.0, 1.0, N)
     t_dist = np.sqrt(g_sample)
     return t_dist
 
@@ -212,7 +214,9 @@ class Probability_Distribution:
         bin_width = np.diff(self.bin_edges)[0]
         num_bins = len(self.bin_centers)
         # Normalise the histogram manually
-        normed = self.histogram_values / np.sum(self.histogram_values * bin_width)
+
+        area = np.sum(self.histogram_values * bin_width)
+        normed = self.histogram_values / area
 
         # Store the max height of the bins
         max_height = np.max(normed)
