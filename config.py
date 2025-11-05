@@ -21,7 +21,7 @@ Expression Selection:
 - EXPRESSION: Which RG transformation to use ("Shaw", "Shreyas", "Cain", "Jack")
 """
 
-N: int = 1 * (10**6)
+N: int = 5 * (10**7)
 K: int = 9
 T_BINS: int = 1000
 Z_BINS: int = 50000
@@ -29,7 +29,7 @@ Z_RANGE: tuple = (-25.0, 25.0)
 Z_PERTURBATION: float = 0.007
 DIST_TOLERANCE: float = 0.001
 STD_TOLERANCE: float = 0.0005
-T_RANGE: tuple = (1.39e-11, 1.0 - 1.39e-11)
+T_RANGE: tuple = (0, 1.0)
 EXPRESSION: str = "Shaw"
 # EXPRESSION = "Shreyas"
 # EXPRESSION = "Cain"
