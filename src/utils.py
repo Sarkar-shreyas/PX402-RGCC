@@ -25,7 +25,7 @@ def convert_t_to_g(t: np.ndarray) -> np.ndarray:
     numpy.ndarray
         Array of squared amplitudes g, same shape as input.
     """
-    return np.abs(t) * np.abs(t)
+    return t * t
 
 
 def convert_g_to_z(g: np.ndarray) -> np.ndarray:
@@ -49,9 +49,9 @@ def convert_g_to_z(g: np.ndarray) -> np.ndarray:
     Input values are clipped to [1e-15, 1-1e-15] to ensure numerical stability
     of the logarithm.
     """
-    tolerance = 1e-15
-    g = np.clip(g, tolerance, 1 - tolerance)
-    return np.log((1.0 - g) / g)
+    # tolerance = 1e-15
+    # g = np.clip(g, tolerance, 1 - tolerance)
+    return np.log((1.0 / g) - 1.0)
 
 
 def convert_z_to_g(z: np.ndarray) -> np.ndarray:
@@ -75,7 +75,7 @@ def convert_z_to_g(z: np.ndarray) -> np.ndarray:
 def convert_z_to_t(z: np.ndarray) -> np.ndarray:
     """Converts z data to t data directly, clipped within bounds corresponding to t in [1.38e-11, 1-1.38e-11], as mentioned by Shaw."""
     z = np.clip(z, -25.0, 25.0)
-    return np.sqrt(1.0 / (1.0 + np.exp(z)))
+    return np.sqrt(1.0 / (np.exp(z) + 1.0))
 
 
 def convert_t_to_z(t: np.ndarray) -> np.ndarray:
@@ -94,5 +94,7 @@ def convert_t_to_z(t: np.ndarray) -> np.ndarray:
     numpy.ndarray
         Array of z values, same shape as input.
     """
-    t = np.clip(t, 1.39e-11, 1.0 - 1.39e-11)
-    return np.log((1.0 / (t**2.0)) - 1.0)
+    # t = np.clip(t, 1.38e-11, 1.0)
+    # g = t**2
+    # g = np.clip(g, 1.39e-11, 1.0 - 1.39e-11)
+    return np.log((1.0 / (t * t)) - 1.0)
