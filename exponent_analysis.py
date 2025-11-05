@@ -1,8 +1,9 @@
 import numpy as np
 from rg_iterator import rg_iterator_for_nu
-from distribution_production import Probability_Distribution
-from config import N, K, Z_RANGE, BINS
-from scipy.stats import norm
+from distribution_production import Probability_Distribution, center_z_distribution
+from config import N, K, EXPRESSION
+from scipy.stats import norm, linregress
+from numpy.polynomial import polynomial
 import time
 import matplotlib
 
@@ -11,92 +12,7 @@ import matplotlib.pyplot as plt
 
 
 # ---------- Distribution manipulation helpers ---------- #
-
-
-def get_peak_from_subset(z_subset: np.ndarray) -> float:
-    """Estimate the peak location of a Q(z) distribution subset using Shaw's method.
-
-    The function builds a histogram of the provided subset, identifies the histogram
-    bin with the maximum density, and grows a symmetric interval around that bin
-    until approximately 5% of the total probability mass (in that neighbourhood) is
-    captured. It then selects the raw z values that fall inside that interval and
-    fits a Gaussian to those "tip" values using ``scipy.stats.norm.fit``. The
-    returned value is the absolute value of the fitted mean (mu). If the fit
-    produces a non-finite mean, the function falls back to a weighted average of
-    the bin centres inside the selected interval.
-
-    Parameters
-    ----------
-    z_subset : numpy.ndarray
-        One-dimensional array of sampled z values representing a subset of the
-        full Q(z) distribution. The array may be empty or contain very few
-        elements; the function attempts to handle these cases gracefully.
-
-    Returns
-    -------
-    float
-        Estimated peak location (absolute value) for the subset. If the fit
-        fails or produces non-finite results, a weighted average of bin centres
-        is returned instead.
-    """
-    # Set up the histogram from the input subset
-    z_values, bin_edges = np.histogram(z_subset, bins=BINS, range=Z_RANGE, density=True)
-    dz = np.diff(bin_edges)
-
-    # Find bin weights
-    z_mass = z_values * dz
-
-    # Find the indexes that would sort the bins, without sorting in place
-    max_index = int(np.argmax(z_values))
-    left_index = max_index
-    right_index = max_index
-
-    # Store the cumulative sum to check whether we've hit 5%
-    cumulative_z_sum = z_mass[max_index]
-
-    # Grow around the maximum value until 5% of probability mass is stored
-    while cumulative_z_sum < 0.05 and (
-        left_index > 0 or right_index < len(z_values) - 1
-    ):
-        # Set conditional to move left
-        go_left = (right_index >= len(z_values) - 1) or (
-            left_index > 0 and z_values[left_index - 1] >= z_values[right_index + 1]
-        )
-
-        # Go along the higher direction
-        if go_left:
-            left_index -= 1
-            cumulative_z_sum += z_mass[left_index]
-        else:
-            right_index += 1
-            cumulative_z_sum += z_mass[right_index]
-
-    # Setup the slicing bounds for the z array
-    z_low = bin_edges[left_index]
-    z_high = bin_edges[right_index + 1]
-
-    # Use values from the raw subset, not histogram data
-    z_tip_values = z_subset[(z_subset >= z_low) & (z_subset < z_high)]
-
-    # Use scipy's norm fit to apply a gaussian fit
-    mu, _ = norm.fit(z_tip_values)
-    # return float(mu)
-    # Prevent infinite values messing up the log
-    if not np.isfinite(mu):
-        bin_centers = bin_edges[left_index : right_index + 1]
-        mu = float(
-            np.abs(
-                np.average(
-                    bin_centers,
-                    weights=np.maximum(z_mass[left_index : right_index + 1], 1e-100),
-                )
-            )
-        )
-
-    return float(np.abs(mu))
-
-
-def estimate_z_peak(z_sample: np.ndarray) -> float:
+def estimate_z_peak(Q_z: Probability_Distribution) -> float:
     """Estimate the average peak location for a full sample by aggregating subset peaks.
 
     The input sample is split into 10 equal (or near-equal) subsets. For each
@@ -116,10 +32,173 @@ def estimate_z_peak(z_sample: np.ndarray) -> float:
     float
         Arithmetic mean of the per-subset peak estimates.
     """
-    z_subsets = np.array_split(z_sample, 10)
-    mu_values = [get_peak_from_subset(z_subset) for z_subset in z_subsets]
+    # start = time.time()
+    # z_length = len(Q_z.histogram_values)
+    # top_ten_percent = int(0.1 * z_length)
+    # top_indices = np.argsort(Q_z.histogram_values)[-top_ten_percent:]
+    # print(f"Sorted sample created in {time.time() - start:.3f} seconds.")
 
-    return float(np.mean(mu_values))
+    # bin_values = Q_z.bin_centers[top_indices]
+    # y_values = Q_z.histogram_values[top_indices]
+    # if len(y_values) == 0:
+    #     raise ValueError("The y values array is empty.")
+
+    # length = np.random.permutation(len(y_values))
+    # needed = np.array_split(length, 10)
+    # subsets = [bin_values[needed[i]] for i in range(10)]
+
+    # print("Fitting subsets")
+    # params = [norm.fit(x) for x in subsets]
+    # print(f"Fitting done in {time.time() - start:.3f} seconds")
+    # if len(params) == 0:
+    #     raise ValueError("No parameters were stored from the fit in estimate_z_peak.")
+
+    # mus = [i for i, j in params]
+    # return float(np.sum(mus) / 10)
+
+    # Different approach, grows about center peak till 5% of probability mass is obtained. Used this in previous get_peak_from_subset code.
+    bin_widths = np.diff(Q_z.bin_edges)  # Get widths
+    bin_masses = Q_z.histogram_values * bin_widths  # Get masses
+
+    # Check total mass, then calculate what 5% of that is.
+    total_mass = np.sum(bin_masses)
+    # print(f"Total bin mass of Q_z is {total_mass:.3f}")
+    top_5_percent = 0.05 * total_mass
+
+    # Store the bin indexes we care about - center and the 2 sides for later growth
+    peak_bin = np.argmax(Q_z.histogram_values)
+    left_bin = peak_bin
+    right_bin = peak_bin
+    final_bin = len(Q_z.histogram_values) - 1
+    # Hold the mass of our current bin, will grow until 5%
+    current_bin_mass = bin_masses[peak_bin]
+
+    # We keep going until we hit 5%, or we hit the tails for whatever reason [thats a different problem then].
+    while current_bin_mass < top_5_percent and (left_bin > 0 or right_bin < final_bin):
+        # Now we decide whether to go left, or right. Check with some booleans
+        move_left = left_bin > 0
+        move_right = right_bin < final_bin
+
+        # If both directions are safe, we'll decide by values.
+        if move_left and move_right:
+            left_val = Q_z.histogram_values[left_bin - 1]
+            right_val = Q_z.histogram_values[right_bin + 1]
+            # If left has higher or equivalent value, we'll move left. Slight bias choosing to go left if equivalent, but shouldn't matter too much.
+            if left_val >= right_val:
+                left_bin -= 1
+                current_bin_mass += bin_masses[left_bin]
+            else:
+                right_bin += 1
+                current_bin_mass += bin_masses[right_bin]
+        elif move_left:
+            # If only left is safe, of course we go left
+            left_bin -= 1
+            current_bin_mass += bin_masses[left_bin]
+        else:
+            # If only right is safe, of course we go right
+            right_bin += 1
+            current_bin_mass += bin_masses[right_bin]
+
+    # print(f"{current_bin_mass:.3f} percent of bin mass accumulated.")
+
+    # Now that we know which bins matter, we get their centers, and the z values at those edges.
+    leftmost_bin = Q_z.bin_edges[left_bin]
+    rightmost_bin = Q_z.bin_edges[right_bin + 1]
+    # Use a sample from the distribution to prevent us from storing absurdly large amounts of raw data, maybe inaccurate but we'll see.
+    samples = Q_z.sample(1 * (10**7))
+    # And now we slice out the z values we need
+    hist_mask = np.logical_and((samples >= leftmost_bin), (samples < rightmost_bin))
+    top_5_percent_values = samples[hist_mask]
+    # print(len(top_5_percent_values))
+    # Shuffle the data so its randomly ordered
+    np.random.shuffle(top_5_percent_values)
+    # Now we split it into 10 equal sized subsets, shuffling before hand lets array_splits order slicing be fine.
+    subsets = np.array_split(top_5_percent_values, 10)
+    mu_guesses = [np.mean(subset) for subset in subsets]
+    sigma_guesses = []
+    fitted_mus = []
+    for i in range(len(mu_guesses)):
+        sigma_guesses.append(np.var(subsets[i], mean=mu_guesses[i]))
+
+    for i in range(len(mu_guesses)):
+        fitted_mus.append(
+            norm.fit(subsets[i], loc=mu_guesses[i], scale=sigma_guesses[i])
+        )
+
+    # print(fitted_mus)
+    return float(np.mean(fitted_mus))
+
+
+# ---------- Fitting helper ---------- #
+def fit_z_peaks(x: np.ndarray, y: np.ndarray, method: str = "ls") -> tuple:
+    """Fit a linear relationship between x and y data using different methods.
+
+    Parameters
+    ----------
+    x : numpy.ndarray
+        Independent variable data.
+    y : numpy.ndarray
+        Dependent variable data.
+    method : str, optional
+        Fitting method to use, by default "ls". Options are:
+        - "ls": Custom least squares implementation
+        - "linear": scipy.stats.linregress
+        - "poly": numpy.polynomial.polynomial.Polynomial.fit
+
+    Returns
+    -------
+    tuple
+        A tuple containing (slope, r_squared):
+        - slope: absolute value of the fitted slope
+        - r_squared: coefficient of determination (R²)
+
+    Raises
+    ------
+    KeyError
+        If an invalid fitting method is specified.
+
+    Notes
+    -----
+    All methods perform linear regression but use different implementations:
+    - "ls" uses a manual least squares calculation
+    - "linear" uses scipy's implementation
+    - "poly" uses numpy's polynomial fitting
+    """
+    if method == "ls":
+        x_mean = np.mean(x)
+        y_mean = np.mean(y)
+        slope = np.sum((x_mean - x) * (y_mean - y)) / np.sum(
+            (x_mean - x) * (x_mean - x)
+        )
+        intercept = y_mean - slope * x_mean
+        residual = y - slope * x - intercept
+        ssr = float(np.dot(residual, residual))
+        sst = float(np.dot(y - y_mean, y - y_mean))
+        r2 = 1 - (ssr / sst)
+        return float(np.abs(slope)), float(r2)
+
+    elif method == "linear":
+        result = linregress(x, y)
+        slope = result.slope  # type: ignore
+        r2 = result.rvalue**2  # type: ignore
+        return float(np.abs(slope)), float(r2)
+    elif method == "poly":
+        passns, p = polynomial.Polynomial.fit(x, y, deg=1, full=True)
+        resid = p[0]
+        sst = float(np.dot(y, y))
+        r2 = 1 - (resid / sst)  # type:ignore
+        coef = np.polyfit(x, y, 1)
+        return float(np.abs(coef[0])), float(r2)
+    else:
+        raise KeyError("An invalid fitting method was requested.")
+
+
+# ---------- Nu calculator ---------- #
+def calculate_nu(slope: float, rg_steps: int = K) -> float:
+    """Calculate critical exponent nu with the formula nu = ln(2^k)/ln(|slope|), where slope is calculated from fit_z_peaks, and k is the RG step number."""
+    nu = np.log(2**rg_steps) / np.log(np.abs(slope))
+
+    return float(nu)
 
 
 # ---------- Critical Exponent estimation factory ---------- #
@@ -163,52 +242,80 @@ def critical_exponent_estimation(
     Progress and timing information is printed to stdout during execution.
     """
     # Set up list of perturbations to try
-    perturbation_list = np.array([4e-4, 5e-4, 6e-4, 7e-4, 8e-4, 9e-4, 1e-3, 11e-4])
+    perturbation_list = np.array([0.003, 0.005, 0.007, 0.009, 0.011])
     num_perturbations = len(perturbation_list)
 
     # Set up an empty array to track z peaks
     z_peaks = np.zeros((K + 1, num_perturbations)).astype(float)
+    unperturbed_z_peak = estimate_z_peak(fixed_point_Qz)
 
     print("-" * 100)
     print("Beginning z peak calculations")
     start_time = time.time()
     # Set up a perturbed sample of Z from the initial fixed point distribution
-    plt.figure(figsize=(7, 4))
-    plt.xlabel("z")
-    plt.ylabel("Q(z)")
-    plt.title("Q(z) vs z with z_0 = 0.007")
-    plt.xlim([-5, 10])
-    plt.ylim([0, 0.3])
+    fig, (ax0, ax1) = plt.subplots(1, 2, figsize=(10, 4))
+    ax0.set_ylim([0, 0.3])
+    # ax0.set_xlim([-8, 8])
+    ax0.set_xlabel("z")
+    ax0.set_ylabel("Q(z)")
+    ax0.set_title("Q(z) vs z with z_0 = 0.007")
+
+    # Plot unperturbed distribution
+    ax0.plot(
+        fixed_point_Qz.bin_centers, fixed_point_Qz.histogram_values, label="Unperturbed"
+    )
+
+    ax1.set_xlim([0, max(perturbation_list)])
+    # ax1.set_ylim([0, 0.1])
+    ax1.set_xlabel("z_0")
+    ax1.set_ylabel("z_peak")
+    ax1.set_title("z_peak vs z_0")
+
+    z_sample = fixed_point_Qz.sample(N)
+
     for i, perturbation in enumerate(perturbation_list):
-        z_sample = fixed_point_Qz.sample(N)
         perturbed_z = z_sample + perturbation
-        perturbed_Qz = Probability_Distribution(perturbed_z, BINS)
+        sampled_Qz = fixed_point_Qz
+        perturbed_Qz = Probability_Distribution(perturbed_z)
 
         # Store the first peak prior to any RG steps for each perturbation
-        z_peaks[0, i] = estimate_z_peak(perturbed_Qz.sample(N))
+        z_peaks[0, i] = np.abs(estimate_z_peak(perturbed_Qz) - unperturbed_z_peak)
 
         print(f"Performing RG step on perturbation {i}, z_0 = {perturbation:.5f}")
         # Perform RG iterations for the specific perturbation
         for n in range(1, K + 1):
+            next_sampled_Qz = rg_iterator_for_nu(sampled_Qz)
+            next_sampled_peak = estimate_z_peak(next_sampled_Qz)
             next_Qz = rg_iterator_for_nu(perturbed_Qz)
-            next_z_sample = next_Qz.sample(N)
-            z_peaks[n, i] = estimate_z_peak(next_z_sample)
+            peak = estimate_z_peak(next_Qz)
+            peak_diff = peak - next_sampled_peak
+            abs_peak_diff = np.abs(peak_diff)
+            # next_z_sample = next_Qz.sample(N)
+            print(
+                f"Sampled peak: {next_sampled_peak:.5f}, Perturbed peak: {peak:.5f}, Absolute diff with perturbed peak: {abs_peak_diff:.5f}, Diff with sign: {peak_diff:.5f}"
+            )
+            z_peaks[n, i] = abs_peak_diff
             print(f"RG Step #{n} done for perturbation {i}")
             print(
                 f"Time elapsed since analysis began: {time.time() - start_time:.3f} seconds"
             )
-            if perturbation == 7e-4 and n % 2 == 1:
+            if perturbation == 0.007 and n % 2 == 1:
                 centers = 0.5 * (next_Qz.bin_edges[:-1] + next_Qz.bin_edges[1:])
-                plt.plot(centers, next_Qz.histogram_values, label=f"RG step {n}")
-            perturbed_Qz = next_Qz
+                ax0.plot(
+                    centers[::100],
+                    next_Qz.histogram_values[::100],
+                    label=f"RG step {n}",
+                )
+            # perturbed_Qz = next_Qz
+            # sampled_Qz = next_sampled_Qz
+            perturbed_Qz = center_z_distribution(next_Qz)
+            sampled_Qz = center_z_distribution(next_sampled_Qz)
 
         print(
             f"All RG steps done for perturbation {i}. Time elapsed: {time.time() - start_time:.3f} seconds since beginning z peak calculations"
         )
         print("-" * 100)
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(f"plots/Jack_Q(z)_perturbed_by_0.007_with_{N}_iters.png", dpi=150)
+
     print("-" * 100)
     print(
         f"z peaks have been found. Time elapsed to complete calculations: {time.time() - start_time:.3f}"
@@ -243,47 +350,33 @@ def critical_exponent_estimation(
         mask = np.isfinite(x) & np.isfinite(y)
         x = x[mask]
         y = y[mask]
-
-        x_y = np.dot(x, y)
-        x_x = np.dot(x, x)
+        if n in set([1, 2, 5, 8]):
+            ax1.scatter(perturbation_list, y, label=f"RG{n}")
+        slope, r2 = fit_z_peaks(x, y, method="poly")
         # result = linregress(x, y)
         # slope = result.slope  # type: ignore
         # r2 = result.rvalue**2  # type: ignore
-        slope = x_y / x_x
-        residual = y - slope * x
-        sse = float(np.dot(residual, residual))
-        sst = float(np.dot(y, y))
-        r2 = 1 - (sse / sst)
-
-        # Handle negative or infinite slopes
-        if not np.isfinite(slope) or slope <= 0:
-            nu_estimate = float("nan")
-            nu_estimates.append(float(nu_estimate))
-            # params.append(
-            #     {"RG": n, "Slope": float(slope), "R2": float(result.rvalue**2)}  # type: ignore
-            # )  # type: ignore
-            params.append(
-                {"RG": n, "Slope": float(slope), "R2": float(r2)}  # type: ignore
-            )  # type: ignore
-        else:
-            # Estimate nu = log(2^n)/log(z_n/z_0) with slope = z_n/z_0
-            nu_estimate = float(n * np.log(2) / np.log(slope))
-            nu_estimates.append(float(nu_estimate))
-            # params.append({"RG": n, "Slope": slope, "R2": float(result.rvalue**2)})  # type: ignore
-            params.append({"RG": n, "Slope": slope, "R2": float(r2)})  # type: ignore
-
-    start = 5
-    end = 12
-    nu_mean = float(np.mean(nu_estimates[start:end]))
-    nu_median = float(np.median(nu_estimates[start:end]))
-    nu_data = {"mean": nu_mean, "median": nu_median, "start": start, "end": end}
+        nu = calculate_nu(slope, n)
+        nu_estimates.append(nu)
+        params.append({"Slope": slope, "R2": r2, "Nu": nu})
+    ax0.legend()
+    ax1.legend()
+    plt.savefig(
+        f"plots/{EXPRESSION}_Q(z)_perturbed_by_0.007_with_{N}_iters.png", dpi=150
+    )
+    plt.close()
+    system_size = [2**i for i in range(len(nu_estimates))]
+    plt.xlabel("2^n")
+    plt.ylabel("Nu")
+    plt.scatter(system_size, nu_estimates)
+    plt.title("Nu against system size")
+    plt.savefig(f"plots/{EXPRESSION}_Nu_{N}_iters.png", dpi=150)
     print("=" * 100)
     print(
         f"Analysis completed after {time.time() - current_time:.3f} seconds, returning results"
     )
     return {
         "Nu_values": nu_estimates,
-        "Nu_data": nu_data,
         "parameters": params,
         "z_peaks": z_peaks.tolist(),
         "perturbations": perturbation_list.tolist(),
