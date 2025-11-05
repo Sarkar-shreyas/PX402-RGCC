@@ -72,6 +72,12 @@ def convert_z_to_g(z: np.ndarray) -> np.ndarray:
     return 1.0 / (1.0 + np.exp(z))
 
 
+def convert_z_to_t(z: np.ndarray) -> np.ndarray:
+    """Converts z data to t data directly, clipped within bounds corresponding to t in [1.38e-11, 1-1.38e-11], as mentioned by Shaw."""
+    z = np.clip(z, -25.0, 25.0)
+    return np.sqrt(1.0 / (1.0 + np.exp(z)))
+
+
 def convert_t_to_z(t: np.ndarray) -> np.ndarray:
     """Convert amplitude t directly to RG flow parameter z.
 
@@ -88,4 +94,5 @@ def convert_t_to_z(t: np.ndarray) -> np.ndarray:
     numpy.ndarray
         Array of z values, same shape as input.
     """
-    return convert_g_to_z(convert_t_to_g(t))
+    t = np.clip(t, 1.39e-11, 1.0 - 1.39e-11)
+    return np.log((1.0 / (t**2.0)) - 1.0)
