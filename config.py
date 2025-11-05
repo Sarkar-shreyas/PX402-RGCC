@@ -1,13 +1,36 @@
-import os
-from dotenv import load_dotenv
+"""Configuration parameters for RG flow analysis.
 
-load_dotenv()
+This module defines the key numerical parameters used throughout the analysis:
 
-N = int(os.getenv("NUMBER_OF_ITERATIONS", 1e8))
-K = int(os.getenv("NUMBER_OF_RG_STEPS", 50))
-BINS = int(os.getenv("NUMBER_OF_BINS", 1e3))
-Z_RANGE = (float(os.getenv("Z_MIN", -10.0)), float(os.getenv("Z_MAX", 10.0)))
-Z_PERTURBATION = float(os.getenv("Z_PERTURBATION", 5e-4))
-DIST_TOLERANCE = float(os.getenv("DIST_TOLERANCE", 1e-3))
-STD_TOLERANCE = float(os.getenv("STD_TOLERANCE", 5e-4))
-T_RANGE = (float(os.getenv("T_MIN", 0.0)), float(os.getenv("T_MAX", 1.0)))
+Simulation Parameters:
+- N: Number of samples per distribution (default 100,000)
+- K: Number of RG steps to perform (default 9)
+
+Distribution Parameters:
+- T_BINS: Number of bins for t-space histograms (default 1000)
+- Z_BINS: Number of bins for z-space histograms (default 2000)
+- T_RANGE: Range for t-space binning (default (0,1))
+- Z_RANGE: Range for z-space binning (default (-25,25))
+
+RG Parameters:
+- Z_PERTURBATION: Size of perturbation around fixed point (default 0.007)
+- DIST_TOLERANCE: L2 distance threshold for convergence (default 0.001)
+- STD_TOLERANCE: Standard deviation change threshold (default 0.0005)
+
+Expression Selection:
+- EXPRESSION: Which RG transformation to use ("Shaw", "Shreyas", "Cain", "Jack")
+"""
+
+N: int = 1 * (10**6)
+K: int = 9
+T_BINS: int = 1000
+Z_BINS: int = 50000
+Z_RANGE: tuple = (-25.0, 25.0)
+Z_PERTURBATION: float = 0.007
+DIST_TOLERANCE: float = 0.001
+STD_TOLERANCE: float = 0.0005
+T_RANGE: tuple = (1.39e-11, 1.0 - 1.39e-11)
+EXPRESSION: str = "Shaw"
+# EXPRESSION = "Shreyas"
+# EXPRESSION = "Cain"
+# EXPRESSION = "Jack"
