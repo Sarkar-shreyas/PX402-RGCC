@@ -13,10 +13,14 @@ from src.rg_iterator import rg_iterations_for_fp
 from src.exponent_analysis import critical_exponent_estimation
 from config import N, K, T_BINS
 import time
+from datetime import datetime, timezone
 import json
 
 if __name__ == "__main__":
     start_time = time.time()
+    print(
+        f"Running program at {datetime.now(tz=timezone.utc).strftime('%Y-%m-%d %H:%M')}"
+    )
     fixed_point_Qz, fixed_point_Pt, params = rg_iterations_for_fp(N, T_BINS, K)
     final_params = list(params[-1])
     data = "".join(
@@ -56,3 +60,6 @@ if __name__ == "__main__":
     print("=" * 100)
     end_time = time.time()
     print(f"Program took {end_time - start_time:.3f} seconds")
+    print(
+        f"Finished running program at {datetime.now(tz=timezone.utc).strftime('%Y-%m-%d %H:%M')}"
+    )
