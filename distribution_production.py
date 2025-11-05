@@ -7,7 +7,7 @@ maintaining probability distribution invariants.
 """
 
 import numpy as np
-from config import Z_RANGE, BINS
+from config import Z_RANGE, Z_BINS
 
 
 # ---------- Initial distribution helpers ---------- #
@@ -48,7 +48,7 @@ def generate_initial_t_distribution(N: int) -> np.ndarray:
     numpy.ndarray
         Array of N amplitude values t = √g where g ~ U[0,1].
     """
-    g_sample = np.random.uniform(0, 1.0 + 1e-15, N)
+    g_sample = np.random.uniform(0, 1.0, N)
     t_dist = np.sqrt(g_sample)
     return t_dist
 
@@ -81,13 +81,17 @@ class Probability_Distribution:
         Cumulative distribution function, shape (bins,).
     """
 
-    def __init__(self, values, bins=BINS, range=Z_RANGE):
+    def __init__(self, values, bins=Z_BINS, range=Z_RANGE):
         histogram_values, bin_edges = np.histogram(
             values, bins=bins, range=range, density=True
         )
         cdf = histogram_values.cumsum()
         cdf = cdf / cdf[-1]
         self.bin_edges = bin_edges
+        self.domain_min = min(range)
+        self.domain_max = max(range)
+        self.domain_width = np.abs(self.domain_min) + np.abs(self.domain_max)
+        self.bin_centers = 0.5 * (bin_edges[1:] + bin_edges[:-1])
         self.histogram_values = histogram_values
         self.cdf = cdf
 
@@ -178,18 +182,88 @@ class Probability_Distribution:
         numpy.ndarray
             Array of N samples drawn from the distribution.
         """
-        u = np.random.uniform(0, 1 + 1e-15, N)
-        index = np.searchsorted(self.cdf, u)
-        index = np.clip(index, 0, len(self.cdf) - 1)
-        left_edge = self.bin_edges[index]
-        right_edge = self.bin_edges[index + 1]
+        # Inverse CDF method
+        # u = np.random.uniform(0, 1.0, N)  # Uniform sample from 0 to 1
+        # index = np.searchsorted(
+        #     self.cdf, u
+        # )  # Map it into our cdf histogram, will work fine because our cdf is normalised on initialisation.
+        # index = np.clip(index, 0, len(self.cdf) - 1)  # Ensure we're within bounds
+        # left_edge = self.bin_edges[
+        #     index
+        # ]  # Find the leftmost bin, could probably just set bin_edges[0]?
+        # right_edge = self.bin_edges[
+        #     index + 1
+        # ]  # Find the rightmost bin, could probably just set bin_edges[-1]?
 
-        left_cdf = np.where(index == 0, 0.0, self.cdf[index - 1])
-        right_cdf = self.cdf[index]
+        # left_cdf = np.where(
+        #     index == 0, 0.0, self.cdf[index - 1]
+        # )  # Starting from the left, just set the first bin to 0 then move
+        # right_cdf = self.cdf[index]  # Starting from the right, just follow indexing
 
-        denominator = np.maximum(right_cdf - left_cdf, 1e-15)
-        fraction = (u - left_cdf) / denominator
-        return left_edge + fraction * (right_edge - left_edge)
+        # # Add a guard in the denominator for extremely small values
+        # denominator = np.maximum(right_cdf - left_cdf, 1e-15)
+        # # Check how close to the right bin the value is
+        # fraction = (u - left_cdf) / denominator
+        # # Return the values mapped within their respective bins
+        # return left_edge + fraction * (right_edge - left_edge)
+
+        # Launder a.k.a rejection method
+        # Get the bin widths, and total number of bins
+        bin_width = np.diff(self.bin_edges)[0]
+        num_bins = len(self.bin_centers)
+        # Normalise the histogram manually
+        normed = self.histogram_values / np.sum(self.histogram_values * bin_width)
+
+        # Store the max height of the bins
+        max_height = np.max(normed)
+        # print(max_height)
+        # Vectorise with numpy, run using reasonable batch sizes
+        min_batch_size = 10000
+        max_batch_size = 1000000
+        # Track how many samples we've accepted and still need to be produced
+        filled = 0
+        remaining = N - filled
+        # Placeholder array initialised early so we can just update values
+        accepted = np.empty(N, dtype=float)
+        num_iters = 0
+        # Runs until we've got N samples
+        while filled < N:
+            num_iters += 1
+            # Set the batch size to be between 10000 and 1000000, but use remaining if its in the bounds
+            batch_size = max(min_batch_size, min(remaining, max_batch_size))
+            # Random x and y draws within the domains of the existing dataset
+            x = np.random.uniform(self.domain_min, self.domain_max, batch_size)
+            y = np.random.uniform(0, max_height, batch_size)
+
+            # Check which bin the x value falls into
+            bin_number = np.ceil((x - self.domain_min) / bin_width).astype(int) - 1
+            # Guard if we hit the boundaries
+            bin_number = np.clip(bin_number, 0, num_bins - 1)
+
+            # Store the heights at that bin
+            heights = normed[bin_number]
+
+            # Setup the y mask and slice the values to accept
+            mask = y <= heights
+            acceptable = x[mask]
+
+            # Just try again if none are acceptable
+            if len(acceptable) == 0:
+                continue
+
+            if num_iters % 1000 == 0:
+                print(
+                    f"Still laundering, Accepted: {len(acceptable)}, Remaining: {remaining}, batch size: {batch_size}"
+                )
+            # Only add how many we need, since we want exactly N samples
+            to_accept = min(len(acceptable), remaining)
+            # Fill the placeholder at those indices with the new accepted values
+            # print(filled, to_accept)
+            accepted[filled : filled + to_accept] = acceptable[:to_accept]
+            filled += to_accept
+            remaining -= to_accept
+
+        return accepted
 
 
 def center_z_distribution(Q_z: Probability_Distribution) -> Probability_Distribution:
@@ -229,7 +303,7 @@ def center_z_distribution(Q_z: Probability_Distribution) -> Probability_Distribu
     return Q_z
 
 
-def extract_t_samples(P_t: Probability_Distribution, N: int) -> np.ndarray:
+def extract_t_samples(t: np.ndarray, N: int) -> np.ndarray:
     """Generate a matrix of amplitude samples for the RG transformation.
 
     Draws 5 independent sets of N samples from the given P(t) distribution
@@ -247,11 +321,6 @@ def extract_t_samples(P_t: Probability_Distribution, N: int) -> np.ndarray:
     numpy.ndarray
         Array of shape (N, 5) containing the sampled amplitude values.
     """
-    t1 = P_t.sample(N)
-    t2 = P_t.sample(N)
-    t3 = P_t.sample(N)
-    t4 = P_t.sample(N)
-    t5 = P_t.sample(N)
+    t_sample = t[np.random.randint(0, N, size=(N, 5))]
 
-    t_sample = np.stack([t1, t2, t3, t4, t5], axis=1)
     return t_sample
