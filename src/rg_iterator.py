@@ -48,11 +48,11 @@ def generate_t_prime(t: np.ndarray, phi: np.ndarray) -> np.ndarray:
     """
     phi1, phi2, phi3, phi4 = phi.T
     t1, t2, t3, t4, t5 = t.T
-    t1 = np.clip(t1, 0, 1)
-    t2 = np.clip(t2, 0, 1)
-    t3 = np.clip(t3, 0, 1)
-    t4 = np.clip(t4, 0, 1)
-    t5 = np.clip(t5, 0, 1)
+    # t1 = np.clip(t1, 0, 1)
+    # t2 = np.clip(t2, 0, 1)
+    # t3 = np.clip(t3, 0, 1)
+    # t4 = np.clip(t4, 0, 1)
+    # t5 = np.clip(t5, 0, 1)
     r1 = np.sqrt(1 - t1 * t1)
     r2 = np.sqrt(1 - t2 * t2)
     r3 = np.sqrt(1 - t3 * t3)
