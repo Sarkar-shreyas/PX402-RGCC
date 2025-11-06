@@ -20,6 +20,7 @@ if __name__ == "__main__":
     date = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M")
     if process == 0:
         # Then we launder
+        print("-" * 100)
         print(f"Laundering began at {date}")
         input_data = np.load(input_file)
         input_hist = input_data["histval"]
@@ -32,9 +33,10 @@ if __name__ == "__main__":
         np.savetxt(output_file, laundered_t)
         print(f"Laundering completed in {time() - start:.3f} seconds")
         print(f"Data in {input_file} laundered and saved to {output_file}")
-
+        print("-" * 100)
     else:
         # Then we symmetrise a histogram
+        print("-" * 100)
         print(f"Symmetrisation began at {date}")
         input_data = np.load(input_file)
         input_hist = input_data["histval"]
@@ -44,6 +46,6 @@ if __name__ == "__main__":
         save_data(symmetrized_data, input_bin_edges, input_bin_centers, output_file)
         print(f"Symmetrisation completed in {time() - start:.3f} seconds")
         print(f"Data in {input_file} symmetrised and saved to {output_file}")
-
+        print("-" * 100)
     # Delete old files once done to prevent buildup
-    os.remove(input_file)
+    # os.remove(input_file)

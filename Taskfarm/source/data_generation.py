@@ -34,6 +34,8 @@ if __name__ == "__main__":
             "Usage: histogram_manager.py ARRAY_SIZE OUTPUT_DIR INITIAL RG_STEP [EXISTING_T_FILE]"
         )
 
+    print("-" * 100)
+    print(f"Beginning data generation for RG step {rg_step}")
     if initial == 1:
         t = generate_initial_t_distribution(array_size)
     else:
@@ -59,6 +61,7 @@ if __name__ == "__main__":
     print(f"g data generated for RG step {rg_step} and saved to {g_filename}")
     print(f"z data generated for RG step {rg_step} and saved to {z_filename}")
 
-    if existing_t_file is not None and os.path.exists(existing_t_file):
-        # Delete old files once done to prevent buildup
-        os.remove(existing_t_file)
+    # if existing_t_file is not None and os.path.exists(existing_t_file):
+    #     # Delete old files once done to prevent buildup
+    #     os.remove(existing_t_file)
+    print("-" * 100)

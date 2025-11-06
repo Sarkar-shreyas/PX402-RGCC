@@ -75,7 +75,7 @@ if __name__ == "__main__":
         output_g_file = sys.argv[7].strip()
         output_z_file = sys.argv[8].strip()
         rg_step = int(sys.argv[9].strip())
-    elif len(sys.argv) == 14:
+    elif len(sys.argv) == 13:
         # If there are already existing histograms, we need to append the new data into them.
         array_size = int(sys.argv[1].strip())
         process = int(sys.argv[2].strip())
@@ -88,8 +88,7 @@ if __name__ == "__main__":
         output_t_file = sys.argv[9].strip()
         output_g_file = sys.argv[10].strip()
         output_z_file = sys.argv[11].strip()
-        output_dir = sys.argv[12].strip()
-        rg_step = int(sys.argv[13].strip())
+        rg_step = int(sys.argv[12].strip())
     else:
         raise SystemExit(
             "Usage: histogram_manager.py ARRAY_SIZE PROCESS INPUT_T_FILE INPUT_Z_FILE INPUT_G_FILE EXISTING_T_FILE EXISTING_G_FILE EXISTING_Z_FILE OUTPUT_T_FILE OUTPUT_G_FILE OUTPUT_Z_FILE RG_STEP"
@@ -97,17 +96,22 @@ if __name__ == "__main__":
 
     if process == 0:
         # This means we're going to be creating the first histograms of t and z
+        print("-" * 100)
+        print(f"Constructing initial histograms for RG step {rg_step}")
         construct_initial_histogram(input_t_file, output_t_file, T_BINS, T_RANGE, False)
         print(f"t histogram saved to {output_t_file}")
         construct_initial_histogram(input_g_file, output_g_file, T_BINS, T_RANGE, False)
         print(f"g histogram saved to {output_g_file}")
         construct_initial_histogram(input_z_file, output_z_file, Z_BINS, Z_RANGE, False)
         print(f"z histogram saved to {output_z_file}")
-        os.remove(input_t_file)
-        os.remove(input_g_file)
-        os.remove(input_z_file)
+        # os.remove(input_t_file)
+        # os.remove(input_g_file)
+        # os.remove(input_z_file)
+        print("-" * 100)
     elif process == 1:
         # This means we're just going to be appending the t data to the existing histograms
+        print("-" * 100)
+        print(f"Appending data to existing histograms for RG step {rg_step}")
         append_to_histogram(input_t_file, existing_t_file, output_t_file, T_RANGE)
         print(f"t histogram saved to {output_t_file}")
         append_to_histogram(input_g_file, existing_g_file, output_g_file, T_RANGE)
@@ -116,9 +120,10 @@ if __name__ == "__main__":
         print(f"z histogram saved to {output_z_file}")
 
         # Delete old files once done to prevent buildup
-        os.remove(input_t_file)
-        os.remove(input_g_file)
-        os.remove(input_z_file)
+        # os.remove(input_t_file)
+        # os.remove(input_g_file)
+        # os.remove(input_z_file)
         # os.remove(existing_t_file)
         # os.remove(existing_g_file)
         # os.remove(existing_z_file)
+        print("-" * 100)
