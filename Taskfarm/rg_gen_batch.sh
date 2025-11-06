@@ -19,10 +19,12 @@ BATCH_SIZE=$(( N / NUM_BATCHES ))
 TASK_ID=${SLURM_ARRAY_TASK_ID}
 # Placeholder for later steps
 EXISTING_T_FILE="$3"
+set -euo pipefail
 
 # Libraries needed
 module purge
 module load GCC/13.3.0 SciPy-bundle/2024.05
+
 
 # Directories we're using
 

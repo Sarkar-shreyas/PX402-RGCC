@@ -15,7 +15,7 @@ RG_STEP="$2" # Step counter
 NUM_BATCHES=10 # Number of batches to split this into, same as array size
 BATCH_SIZE=$(( N / NUM_BATCHES ))
 
-# Placeholder for later steps
+set -euo pipefail
 
 
 # Directories we're using
@@ -70,7 +70,7 @@ for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
     echo " z dir: $batch_z"
 
     # 2 choices depending on whether its the first histogram or not
-    if [[ ! -f "$OUTPUT_T" ]]; then
+    if [[ ! -f "$OUTPUT_T" || ! -f "$OUTPUT_G" || ! -f "$OUTPUT_Z" ]]; then
         python -m "source.histogram_manager" \
             "$BATCH_SIZE" \
             0 \
