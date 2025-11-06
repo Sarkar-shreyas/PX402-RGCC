@@ -7,3 +7,4 @@ simplify.py
 *.json
 *.png
 __pycache__/
+/Data from taskfarm
