@@ -1,0 +1,1 @@
+An improved version of the original master script, with laundering implemented and the peak finding algorithm fixed. Added a refactoring to make it batch-friendly, and some preliminary slurm scripts to try sending into taskfarm.
