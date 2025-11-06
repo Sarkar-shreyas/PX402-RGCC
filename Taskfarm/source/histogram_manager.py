@@ -1,0 +1,124 @@
+#!/usr/bin/env python
+"""
+This file is in charge of taking in new data arrays and appending their histograms to the existing global histogram. The histograms are constructed using counts for ease of joining.
+"""
+
+import numpy as np
+
+from .utilities import (
+    T_BINS,
+    T_RANGE,
+    Z_BINS,
+    Z_RANGE,
+    Probability_Distribution,
+    save_data,
+)
+import os
+import sys
+
+
+def construct_initial_histogram(
+    data_file: str,
+    output_filename: str,
+    bins: int,
+    range: tuple,
+    density: bool = False,
+) -> None:
+    """A function to construct the initial histogram for any type of data"""
+    data = np.loadtxt(data_file)
+    if data.size == 0:
+        raise FileNotFoundError(f"Could not load data from {data_file}")
+
+    distribution = Probability_Distribution(data, bins, range, density)
+    save_data(
+        distribution.histogram_values,
+        distribution.bin_edges,
+        distribution.bin_centers,
+        output_filename,
+    )
+
+
+def append_to_histogram(
+    input_file: str,
+    existing_file,
+    output_file: str,
+    range: tuple,
+) -> None:
+    """A function to append the input data to an input histogram"""
+    # Load the input data, should be a .txt file
+    data = np.loadtxt(input_file)
+
+    # Load the target file, should be an .npz file
+    existing_data = np.load(existing_file, allow_pickle=False)
+    existing_vals = existing_data["histval"]
+    existing_bin_edges = existing_data["binedges"]
+    existing_bin_centers = existing_data["bincenters"]
+    # t_hist = t_data["histval"]
+    # t_bin_edges = t_data["binedges"]
+    # t_bin_centers = t_data["bincenters"]
+
+    data_counts, _ = np.histogram(data, existing_bin_edges, range, density=False)
+    assert data_counts.size == existing_vals.size
+    existing_vals += data_counts
+    save_data(existing_vals, existing_bin_edges, existing_bin_centers, output_file)
+
+
+if __name__ == "__main__":
+    if len(sys.argv) == 10:
+        # This is if this is the first time we're making the histogram - no existing t or z histogram files
+        array_size = int(sys.argv[1].strip())
+        process = int(sys.argv[2].strip())
+        input_t_file = sys.argv[3].strip()
+        input_g_file = sys.argv[4].strip()
+        input_z_file = sys.argv[5].strip()
+        output_t_file = sys.argv[6].strip()
+        output_g_file = sys.argv[7].strip()
+        output_z_file = sys.argv[8].strip()
+        rg_step = int(sys.argv[9].strip())
+    elif len(sys.argv) == 14:
+        # If there are already existing histograms, we need to append the new data into them.
+        array_size = int(sys.argv[1].strip())
+        process = int(sys.argv[2].strip())
+        input_t_file = sys.argv[3].strip()
+        input_g_file = sys.argv[4].strip()
+        input_z_file = sys.argv[5].strip()
+        existing_t_file = sys.argv[6].strip()
+        existing_g_file = sys.argv[7].strip()
+        existing_z_file = sys.argv[8].strip()
+        output_t_file = sys.argv[9].strip()
+        output_g_file = sys.argv[10].strip()
+        output_z_file = sys.argv[11].strip()
+        output_dir = sys.argv[12].strip()
+        rg_step = int(sys.argv[13].strip())
+    else:
+        raise SystemExit(
+            "Usage: histogram_manager.py ARRAY_SIZE PROCESS INPUT_T_FILE INPUT_Z_FILE INPUT_G_FILE EXISTING_T_FILE EXISTING_G_FILE EXISTING_Z_FILE OUTPUT_T_FILE OUTPUT_G_FILE OUTPUT_Z_FILE RG_STEP"
+        )
+
+    if process == 0:
+        # This means we're going to be creating the first histograms of t and z
+        construct_initial_histogram(input_t_file, output_t_file, T_BINS, T_RANGE, False)
+        print(f"t histogram saved to {output_t_file}")
+        construct_initial_histogram(input_g_file, output_g_file, T_BINS, T_RANGE, False)
+        print(f"g histogram saved to {output_g_file}")
+        construct_initial_histogram(input_z_file, output_z_file, Z_BINS, Z_RANGE, False)
+        print(f"z histogram saved to {output_z_file}")
+        os.remove(input_t_file)
+        os.remove(input_g_file)
+        os.remove(input_z_file)
+    elif process == 1:
+        # This means we're just going to be appending the t data to the existing histograms
+        append_to_histogram(input_t_file, existing_t_file, output_t_file, T_RANGE)
+        print(f"t histogram saved to {output_t_file}")
+        append_to_histogram(input_g_file, existing_g_file, output_g_file, T_RANGE)
+        print(f"g histogram saved to {output_g_file}")
+        append_to_histogram(input_z_file, existing_z_file, output_z_file, Z_RANGE)
+        print(f"z histogram saved to {output_z_file}")
+
+        # Delete old files once done to prevent buildup
+        os.remove(input_t_file)
+        os.remove(input_g_file)
+        os.remove(input_z_file)
+        # os.remove(existing_t_file)
+        # os.remove(existing_g_file)
+        # os.remove(existing_z_file)
