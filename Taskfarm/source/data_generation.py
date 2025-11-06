@@ -1,0 +1,64 @@
+#!/usr/bin/env python
+"""
+This file will handle the data generation for every RG step. It will generate arrays in batches of size N, looped within the slurm script
+"""
+
+import os
+import sys
+import numpy as np
+from .utilities import (
+    generate_initial_t_distribution,
+    generate_random_phases,
+    generate_t_prime,
+    extract_t_samples,
+    convert_t_to_g,
+    convert_t_to_z,
+)
+
+if __name__ == "__main__":
+    # Load input params, checking if we're starting RG steps or continuing from an input sample
+    if len(sys.argv) == 5:
+        array_size = int(sys.argv[1].strip())
+        output_dir = sys.argv[2].strip()
+        initial = int(sys.argv[3].strip())
+        rg_step = int(sys.argv[4].strip())
+        existing_t_file = "None"
+    elif len(sys.argv) == 6:
+        array_size = int(sys.argv[1].strip())
+        output_dir = sys.argv[2].strip()
+        initial = int(sys.argv[3].strip())
+        rg_step = int(sys.argv[4].strip())
+        existing_t_file = sys.argv[5].strip()
+    else:
+        raise SystemExit(
+            "Usage: histogram_manager.py ARRAY_SIZE OUTPUT_DIR INITIAL RG_STEP [EXISTING_T_FILE]"
+        )
+
+    if initial == 1:
+        t = generate_initial_t_distribution(array_size)
+    else:
+        t = np.loadtxt(existing_t_file)
+    phases = generate_random_phases(array_size)
+    t_array = extract_t_samples(t, array_size)
+    t_prime = generate_t_prime(t_array, phases)
+    g = convert_t_to_g(t_prime)
+    z = convert_t_to_z(t_prime)
+    t_filename = os.path.join(
+        output_dir, f"t_data_RG{rg_step}_{array_size}_samples.txt"
+    )
+    g_filename = os.path.join(
+        output_dir, f"g_data_RG{rg_step}_{array_size}_samples.txt"
+    )
+    z_filename = os.path.join(
+        output_dir, f"z_data_RG{rg_step}_{array_size}_samples.txt"
+    )
+    np.savetxt(t_filename, t_prime)
+    np.savetxt(g_filename, g)
+    np.savetxt(z_filename, z)
+    print(f"t data generated for RG step {rg_step} and saved to {t_filename}")
+    print(f"g data generated for RG step {rg_step} and saved to {g_filename}")
+    print(f"z data generated for RG step {rg_step} and saved to {z_filename}")
+
+    if existing_t_file is not None and os.path.exists(existing_t_file):
+        # Delete old files once done to prevent buildup
+        os.remove(existing_t_file)
