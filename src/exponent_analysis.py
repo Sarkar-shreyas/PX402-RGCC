@@ -118,12 +118,10 @@ def estimate_z_peak(Q_z: Probability_Distribution) -> float:
     sigma_guesses = []
     fitted_mus = []
     for i in range(len(mu_guesses)):
-        sigma_guesses.append(np.var(subsets[i], mean=mu_guesses[i]))
+        sigma_guesses.append(np.var(subsets[i]))
 
     for i in range(len(mu_guesses)):
-        fitted_mus.append(
-            norm.fit(subsets[i], loc=mu_guesses[i], scale=sigma_guesses[i])
-        )
+        fitted_mus.append(norm.fit(subsets[i]))
 
     # print(fitted_mus)
     return float(np.mean(fitted_mus))
@@ -255,7 +253,7 @@ def critical_exponent_estimation(
     # Set up a perturbed sample of Z from the initial fixed point distribution
     fig, (ax0, ax1) = plt.subplots(1, 2, figsize=(10, 4))
     ax0.set_ylim([0, 0.3])
-    # ax0.set_xlim([-8, 8])
+    # ax0.set_xlim([-5, 5])
     ax0.set_xlabel("z")
     ax0.set_ylabel("Q(z)")
     ax0.set_title("Q(z) vs z with z_0 = 0.007")
@@ -306,10 +304,10 @@ def critical_exponent_estimation(
                     next_Qz.histogram_values[::100],
                     label=f"RG step {n}",
                 )
-            # perturbed_Qz = next_Qz
-            # sampled_Qz = next_sampled_Qz
-            perturbed_Qz = center_z_distribution(next_Qz)
-            sampled_Qz = center_z_distribution(next_sampled_Qz)
+            perturbed_Qz = next_Qz
+            sampled_Qz = next_sampled_Qz
+            # perturbed_Qz = center_z_distribution(next_Qz)
+            # sampled_Qz = center_z_distribution(next_sampled_Qz)
 
         print(
             f"All RG steps done for perturbation {i}. Time elapsed: {time.time() - start_time:.3f} seconds since beginning z peak calculations"
