@@ -125,7 +125,7 @@ def generate_t_prime(t: np.ndarray, phi: np.ndarray) -> np.ndarray:
     # )
     t_prime = np.abs(numerator) / np.abs(denominator)
     return t_prime
-    return np.clip(t_prime, 1.38e-11, 1 - 1.38e-11)
+    # return np.clip(t_prime, 1.38e-11, 1 - 1.38e-11)
 
 
 # ---------- RG Factories ---------- #
@@ -203,6 +203,7 @@ def rg_iterations_for_fp(
     print("Beginning procedure")
     num_convergences = 0
     # RG procedure, breaks early if convergence reached
+    laundered_t = P_t.sample(N)
     for _ in range(K):
         current_time = time.time()
         print(
@@ -210,7 +211,8 @@ def rg_iterations_for_fp(
         )
 
         # Generate t and phi samples with updated distributions
-        t_sample = extract_t_samples(initial_t, N)
+
+        t_sample = extract_t_samples(laundered_t, N)
         phi_sample = generate_random_phases(N)
 
         # Generate t' and z distribution values
@@ -262,8 +264,8 @@ def rg_iterations_for_fp(
 
         # next_g = convert_z_to_g(current_Qz.sample(N))
         next_t = convert_z_to_t(current_Qz.sample(N))
-        initial_t = next_t
-        P_t = Probability_Distribution(next_t, bins, range=T_RANGE)
+        laundered_t = next_t
+        P_t = Probability_Distribution(laundered_t, bins, range=T_RANGE)
         previous_Qz = current_Qz
 
     # If it didn't converge, return the final set of data
