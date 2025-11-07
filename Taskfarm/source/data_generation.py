@@ -36,9 +36,13 @@ if __name__ == "__main__":
 
     print("-" * 100)
     print(f"Beginning data generation for RG step {rg_step}")
+
     if initial == 1:
         t = generate_initial_t_distribution(array_size)
+        t_initial_mean = np.mean(t)
+        print(f"Generated initial t distribution with mean: {t_initial_mean}")
     else:
+        print(f"Using t data from {existing_t_file}")
         t = np.loadtxt(existing_t_file)
     phases = generate_random_phases(array_size)
     t_array = extract_t_samples(t, array_size)
