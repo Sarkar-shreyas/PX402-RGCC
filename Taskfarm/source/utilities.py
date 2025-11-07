@@ -629,9 +629,15 @@ def l2_distance(old_hist_val, new_hist_val, old_bins, new_bins) -> float:
     float
         L2 distance between the distributions.
     """
-    integrand = (old_hist_val - new_hist_val) ** 2
+    old_density = get_density(old_hist_val, old_bins)
+    new_density = get_density(new_hist_val, new_bins)
+    integrand = (new_density - old_density) ** 2
+    # integrand = np.abs(new_density**2 - old_density**2)
+    # num_bins = len(old_hist_val)
     dz = np.diff(new_bins)
-    distance = float(np.sqrt(np.sum(integrand * dz)))
+    bin_sum = np.sum(dz)
+    # distance = float(np.sum(np.sqrt(integrand) * dz))
+    distance = float(np.sqrt(np.sum(integrand * dz) / bin_sum))
     return distance
 
 
