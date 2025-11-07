@@ -9,7 +9,7 @@
 #SBATCH --error=../job_logs/bootstrap/%x_%A.err
 
 # Config variables
-VERSION=1.1 # A version number to help me track where we're at
+VERSION=1.2 # A version number to help me track where we're at
 N="$1" # Target number of samples
 RG_STEP="$2" # Step counter
 NUM_BATCHES=8 # Number of batches to split this into, same as array size

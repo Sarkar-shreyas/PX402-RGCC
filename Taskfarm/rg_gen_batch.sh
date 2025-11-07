@@ -10,7 +10,7 @@
 #SBATCH --error=../job_logs/bootstrap/%x_%A_%a.err
 
 # Config variables
-VERSION=1.1 # A version =number to help me track where we're at
+VERSION=1.2 # A version =number to help me track where we're at
 N="$1" # Target number of samples
 RG_STEP="$4" # Step counter
 INITIAL="$2" # This is the first run, need initial distribution
