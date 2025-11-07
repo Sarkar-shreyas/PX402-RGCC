@@ -9,7 +9,6 @@ import sys
 from time import time
 from datetime import datetime, timezone
 from .utilities import save_data, launder, center_z_distribution, convert_z_to_t
-import os
 
 if __name__ == "__main__":
     process = int(sys.argv[1].strip())
