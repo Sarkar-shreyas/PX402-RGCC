@@ -5,12 +5,12 @@
 #SBATCH --cpus-per-task=1
 #SBATCH --array=0-7
 #SBATCH --time=08:00:00
-#SBATCH --job-name=rg_gen_batches
+#SBATCH --job-name=rg_gen
 #SBATCH --output=../job_outputs/bootstrap/%x_%A_%a.out
 #SBATCH --error=../job_logs/bootstrap/%x_%A_%a.err
 
 # Config variables
-VERSION=1.1 # A version number to help me track where we're at
+VERSION=1.1 # A version =number to help me track where we're at
 N="$1" # Target number of samples
 RG_STEP="$4" # Step counter
 INITIAL="$2" # This is the first run, need initial distribution
@@ -25,6 +25,16 @@ set -euo pipefail
 module purge
 module load GCC/13.3.0 SciPy-bundle/2024.05
 
+echo "==================================================="
+echo "                  SLURM JOB INFO "
+echo "---------------------------------------------------"
+echo " Job Name         : $SLURM_JOB_NAME"
+echo " Job ID           : $SLURM_JOB_ID"
+echo " Array Task ID    : ${SLURM_ARRAY_TASK_ID:-N/A}"
+echo " Submitted from   : $SLURM_SUBMIT_DIR"
+echo " Current dir      : $(pwd)"
+echo "=================================================="
+echo ""
 
 # Directories we're using
 
@@ -40,15 +50,22 @@ batchsubdir="$batchdir/batch_${TASK_ID}"
 mkdir -p "$outputdir" "$logsdir" "$jobsdir" # Make these now so that it does it every time we run this job
 mkdir -p "$joboutdir" "$jobdatadir" "$batchdir" "$batchsubdir"
 
-exec > >(tee -a "$joboutdir/RG_${RG_STEP}.out")
-exec 2> >(tee -a "$logsdir/RG_${RG_STEP}.err" >&2)
-# Print out the config we're at right now (aligned to look nicer :D)
-echo "RG step:         $RG_STEP"
-echo "Total samples:   $N"
-echo "No. of batches:  $NUM_BATCHES"
-echo "Batch size:      $BATCH_SIZE"
-echo "Batch directory: $batchdir"
 
+exec > >(tee -a "$joboutdir/RG_${RG_STEP}_JOB${SLURM_JOB_ID}.out")
+exec 2> >(tee -a "$logsdir/RG_${RG_STEP}_JOB${SLURM_JOB_ID}.err" >&2)
+
+# Print out the config we're at right now (aligned to look nicer :D)
+
+echo "==================================================="
+echo "      Config for data gen of RG step $RG_STEP "
+echo "---------------------------------------------------"
+echo "RG step           : $RG_STEP"
+echo "Total samples     : $N"
+echo "No. of batches    : $NUM_BATCHES"
+echo "Batch size        : $BATCH_SIZE"
+echo "Batch directory   : $batchdir"
+echo "==================================================="
+echo ""
 
 # cd to code directory for paths
 export PYTHONPATH="$codedir:$PYTHONPATH"

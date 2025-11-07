@@ -4,7 +4,7 @@
 #SBATCH --mem-per-cpu=3988
 #SBATCH --cpus-per-task=1
 #SBATCH --time=08:00:00
-#SBATCH --job-name=rg_hist_manager
+#SBATCH --job-name=rg_hist
 #SBATCH --output=../job_outputs/bootstrap/%x_%A_%a.out
 #SBATCH --error=../job_logs/bootstrap/%x_%A_%a.err
 
@@ -12,11 +12,19 @@
 VERSION=1.1 # A version number to help me track where we're at
 N="$1" # Target number of samples
 RG_STEP="$2" # Step counter
-NUM_BATCHES=10 # Number of batches to split this into, same as array size
+NUM_BATCHES=8 # Number of batches to split this into, same as array size
 BATCH_SIZE=$(( N / NUM_BATCHES ))
-
 set -euo pipefail
 
+echo "==================================================="
+echo "                  SLURM JOB INFO "
+echo "---------------------------------------------------"
+echo " Job Name         : $SLURM_JOB_NAME"
+echo " Job ID           : $SLURM_JOB_ID"
+echo " Submitted from   : $SLURM_SUBMIT_DIR"
+echo " Current dir      : $(pwd)"
+echo "=================================================="
+echo ""
 
 # Directories we're using
 basedir="$(cd "$SLURM_SUBMIT_DIR/.."&&pwd)" # Root, fyp for now
@@ -41,8 +49,22 @@ else
     PREV_Z_HIST="$jobdatadir/RG${PREV_RG}/hist/z_hist_RG${PREV_RG}_sym.npz"
 fi
 
-exec > >(tee -a "$joboutdir/RG_${RG_STEP}.out")
-exec 2> >(tee -a "$logsdir/RG_${RG_STEP}.err" >&2)
+exec > >(tee -a "$joboutdir/RG_${RG_STEP}_JOB${SLURM_JOB_ID}.out")
+exec 2> >(tee -a "$logsdir/RG_${RG_STEP}_JOB${SLURM_JOB_ID}.err" >&2)
+
+echo "==================================================="
+echo "      Config for hist gen of RG step $RG_STEP "
+echo "---------------------------------------------------"
+echo "RG step           : $RG_STEP"
+echo "Total samples     : $N"
+echo "No. of batches    : $NUM_BATCHES"
+echo "Batch size        : $BATCH_SIZE"
+echo "Batch directory   : $batchdir"
+echo "Hist directory    : $histdir"
+echo "Stats directory   : $statsdir"
+echo "==================================================="
+echo ""
+
 # Libraries needed
 module purge
 module load GCC/13.3.0 SciPy-bundle/2024.05
@@ -129,6 +151,8 @@ python -m "source.rg" \
 
 echo "Moments of histogram for $N samples written to $stats."
 
+INPUT_T="$histdir/input_t_hist_RG${RG_STEP}.npz"
+
 for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
     launderbatch="$laundereddir/t_laundered_RG${RG_STEP}_batch_${batch}.txt"
 
@@ -139,6 +163,28 @@ for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
         "$launderbatch"
 
     echo "Batch $batch of t data laundered from Q(z) saved to $launderbatch"
+
+    echo "Building histogram for input t data of RG${RG_STEP}"
+    if [[ ! -f "$INPUT_T" ]]; then
+        python -m "source.t_laundered_hist_manager" \
+            "$BATCH_SIZE" \
+            0 \
+            "$launderbatch" \
+            "$INPUT_T" \
+            "$RG_STEP"
+    else
+        python -m "source.t_laundered_hist_manager" \
+            "$BATCH_SIZE" \
+            1 \
+            "$launderbatch" \
+            "$INPUT_T" \
+            "$INPUT_T" \
+            "$RG_STEP"
+    fi
+
 done
+
+echo "Input t histogram for RG${RG_STEP} built at ${INPUT_T}"
+
 
 
