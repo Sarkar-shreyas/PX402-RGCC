@@ -2,9 +2,12 @@
 simplify.py
 /plots
 /params
+/test_plots
 .env
 *.pyc
 *.json
-*.png
+.png
 __pycache__/
-/Data from taskfarm
+*.npz
+*.out
+*.err
