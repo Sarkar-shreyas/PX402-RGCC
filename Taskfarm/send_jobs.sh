@@ -3,10 +3,10 @@
 #SBATCH --output=../job_outputs/bootstrap/%x_%A_%a.out
 #SBATCH --error=../job_logs/bootstrap/%x_%A_%a.err
 
-N=100000000
-NUM_RG_ITERS=10
+N=120000000
+NUM_RG_ITERS=8
 
-VERSION=1
+VERSION=1.1
 INITIAL=1
 EXISTING_T=""
 prev_hist_job=""

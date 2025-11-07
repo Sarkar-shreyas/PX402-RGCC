@@ -3,14 +3,14 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --mem-per-cpu=3988
 #SBATCH --cpus-per-task=1
-#SBATCH --array=0-9
+#SBATCH --array=0-7
 #SBATCH --time=08:00:00
 #SBATCH --job-name=rg_gen_batches
 #SBATCH --output=../job_outputs/bootstrap/%x_%A_%a.out
 #SBATCH --error=../job_logs/bootstrap/%x_%A_%a.err
 
 # Config variables
-VERSION=1 # A version number to help me track where we're at
+VERSION=1.1 # A version number to help me track where we're at
 N="$1" # Target number of samples
 RG_STEP="$4" # Step counter
 INITIAL="$2" # This is the first run, need initial distribution
