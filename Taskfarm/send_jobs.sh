@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=send_jobs
-#SBATCH --output=../job_outputs/bootstrap/%x_%A_%a.out
-#SBATCH --error=../job_logs/bootstrap/%x_%A_%a.err
+#SBATCH --output=../job_outputs/bootstrap/%x_%A.out
+#SBATCH --error=../job_logs/bootstrap/%x_%A.err
 
 N=120000000
 NUM_RG_ITERS=8
@@ -28,8 +28,8 @@ echo " Current dir      : $(pwd)"
 echo "=================================================="
 echo ""
 
-exec > >(tee -a "$joboutdir/JOB${SLURM_JOB_ID}.out")
-exec 2> >(tee -a "$logsdir/JOB${SLURM_JOB_ID}.err" >&2)
+exec > >(tee -a "$joboutdir/${SLURM_JOB_NAME}_JOB${SLURM_JOB_ID}.out")
+exec 2> >(tee -a "$logsdir/${SLURM_JOB_NAME}_JOB${SLURM_JOB_ID}.err" >&2)
 for step in $(seq 0 $(( NUM_RG_ITERS - 1 ))); do
     echo "[$(date '+%H:%M:%S')]: Proceeding with RG step $step"
     laundereddir="$datadir/RG${step}/laundered"
@@ -62,8 +62,8 @@ for step in $(seq 0 $(( NUM_RG_ITERS - 1 ))); do
     echo "---------------------------------------------------"
     hist_job=$(sbatch --parsable \
         --dependency=afterok:${gen_job} \
-        --output=../job_outputs/bootstrap/rg_hist_RG${step}_%A_%a.out \
-        --error=../job_logs/bootstrap/rg_hist_RG${step}_%A_%a.err \
+        --output=../job_outputs/bootstrap/rg_hist_RG${step}_%A.out \
+        --error=../job_logs/bootstrap/rg_hist_RG${step}_%A.err \
         "$scriptsdir/rg_hist_manager.sh" \
         "$N" "$step")
     echo "---------------------------------------------------"

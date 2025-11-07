@@ -5,8 +5,8 @@
 #SBATCH --cpus-per-task=1
 #SBATCH --time=08:00:00
 #SBATCH --job-name=rg_hist
-#SBATCH --output=../job_outputs/bootstrap/%x_%A_%a.out
-#SBATCH --error=../job_logs/bootstrap/%x_%A_%a.err
+#SBATCH --output=../job_outputs/bootstrap/%x_%A.out
+#SBATCH --error=../job_logs/bootstrap/%x_%A.err
 
 # Config variables
 VERSION=1.1 # A version number to help me track where we're at
@@ -49,8 +49,8 @@ else
     PREV_Z_HIST="$jobdatadir/RG${PREV_RG}/hist/z_hist_RG${PREV_RG}_sym.npz"
 fi
 
-exec > >(tee -a "$joboutdir/RG_${RG_STEP}_JOB${SLURM_JOB_ID}.out")
-exec 2> >(tee -a "$logsdir/RG_${RG_STEP}_JOB${SLURM_JOB_ID}.err" >&2)
+exec > >(tee -a "$joboutdir/rg_hist_RG_${RG_STEP}_JOB${SLURM_JOB_ID}.out")
+exec 2> >(tee -a "$logsdir/rg_hist_RG_${RG_STEP}_JOB${SLURM_JOB_ID}.err" >&2)
 
 echo "==================================================="
 echo "      Config for hist gen of RG step $RG_STEP "
