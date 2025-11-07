@@ -10,6 +10,7 @@ from Taskfarm.source.utilities import (
 import os
 import sys
 from collections import defaultdict
+import json
 
 DATA_DIR = "C:/Users/ssark/Desktop/Uni/Year 4 Courses/Physics Final Year Project/Project Code/Data from taskfarm"
 
@@ -106,16 +107,28 @@ if __name__ == "__main__":
         plt.plot(map["z"][i][2], map["z"][i][0], label=f"RG{i}")
     plt.legend()
     plt.savefig(f"{plots_dir}/z_truncated.png", dpi=150)
-
-    for i in range(num_steps - 1):
-        print(f"L2 distance between RG{i} and RG{i + 1} = {dist[i]}")
-        if dist[i] <= DIST_TOLERANCE:
-            print(f"The histogram converged for L2 distance by RG step {i + 1}!")
-
+    stats_data = defaultdict(dict)
     for i in range(num_steps):
         mean, std = moments[i]
-        print(f"Mean and STD for RG{i}: Mean = {mean:.7f}, STD = {std:.7f}")
+        stats_data[f"RG_{i}"]["mean"] = mean
+        stats_data[f"RG_{i}"]["std"] = std
+        # print(f"Mean and STD for RG{i}: Mean = {mean:.7f}, STD = {std:.7f}")
         if i > 0:
             _, prev_std = moments[i - 1]
             if np.abs(std - prev_std) <= STD_TOLERANCE:
-                print(f"The histogram converged for STD by RG step {i}")
+                stats_data[f"RG_{i}"]["std_converged"] = True
+            else:
+                stats_data[f"RG_{i}"]["std_converged"] = False
+
+    for i in range(1, num_steps):
+        # print(f"L2 distance between RG{i - 1} and RG{i} = {dist[i - 1]}")
+        stats_data[f"RG_{i}"][f"L2 distance with RG_{i - 1}"] = dist[i - 1]
+        if dist[i - 1] <= DIST_TOLERANCE:
+            stats_data[f"RG_{i}"]["L2_converged"] = True
+        else:
+            stats_data[f"RG_{i}"]["L2_converged"] = False
+
+    file = f"{stats_dir}/stats.json"
+
+    with open(file, "w") as f:
+        json.dump(stats_data, f, indent=2)
