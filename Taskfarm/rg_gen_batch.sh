@@ -40,6 +40,8 @@ batchsubdir="$batchdir/batch_${TASK_ID}"
 mkdir -p "$outputdir" "$logsdir" "$jobsdir" # Make these now so that it does it every time we run this job
 mkdir -p "$joboutdir" "$jobdatadir" "$batchdir" "$batchsubdir"
 
+exec > >(tee -a "$joboutdir/RG_${RG_STEP}.out")
+exec 2> >(tee -a "$logsdir/RG_${RG_STEP}.err" >&2)
 # Print out the config we're at right now (aligned to look nicer :D)
 echo "RG step:         $RG_STEP"
 echo "Total samples:   $N"
@@ -47,8 +49,7 @@ echo "No. of batches:  $NUM_BATCHES"
 echo "Batch size:      $BATCH_SIZE"
 echo "Batch directory: $batchdir"
 
-exec > >(tee -a "$joboutdir/RG_${RG_STEP}.out")
-exec 2> >(tee -a "$logsdir/RG_${RG_STEP}.err" >&2)
+
 # cd to code directory for paths
 export PYTHONPATH="$codedir:$PYTHONPATH"
 cd "$codedir"
