@@ -5,7 +5,7 @@ simplify.py
 /test_plots
 .env
 *.pyc
-*.json
+/data
 .png
 __pycache__/
 *.npz
