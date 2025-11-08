@@ -6,17 +6,16 @@
 N=120000000
 NUM_RG_ITERS=12
 
-VERSION=1.21
+VERSION=1.22
 INITIAL=1
 EXISTING_T=""
 prev_hist_job=""
 
 basedir="$(cd "$SLURM_SUBMIT_DIR/.."&&pwd)" # Root, fyp for now
-joboutdir="$basedir/job_outputs/v${VERSION}/output"
-datadir="$basedir/job_outputs/v${VERSION}/data"
+joboutdir="$basedir/job_outputs/v${VERSION}"
 scriptsdir="$basedir/scripts"
 logsdir="$basedir/job_logs/v${VERSION}"
-mkdir -p "$datadir" "$logsdir" "$joboutdir"
+mkdir -p "$logsdir" "$joboutdir"
 
 exec > >(tee -a "$joboutdir/${SLURM_JOB_NAME}_JOB${SLURM_JOB_ID}.out")
 exec 2> >(tee -a "$logsdir/${SLURM_JOB_NAME}_JOB${SLURM_JOB_ID}.err" >&2)

@@ -9,7 +9,7 @@
 #SBATCH --error=../job_logs/bootstrap/%x_%A.err
 
 # Config variables
-VERSION=1.21 # A version number to help me track where we're at
+VERSION=1.22 # A version number to help me track where we're at
 N="$1" # Target number of samples
 RG_STEP="$2" # Step counter
 NUM_BATCHES=8 # Number of batches to split this into, same as array size
@@ -21,13 +21,15 @@ basedir="$(cd "$SLURM_SUBMIT_DIR/.."&&pwd)" # Root, fyp for now
 codedir="$basedir/code" # Where the code lives
 jobsdir="$basedir/jobs/v${VERSION}" # Where metadata will be
 logsdir="$basedir/job_logs/v${VERSION}/${SLURM_JOB_NAME}" # Where logs will be sent
-outputdir="$basedir/job_outputs/v${VERSION}" # Where the outputs will live
-joboutdir="$outputdir/output/${SLURM_JOB_NAME}" # General output directory
+outputdir="$basedir/job_outputs/v${VERSION}/${SLURM_JOB_NAME}" # Where the outputs will live
+joboutdir="$outputdir/output" # General output directory
 jobdatadir="$outputdir/data" # Where the data will go
 batchdir="$jobdatadir/RG${RG_STEP}/batches" # Make a folder for the batches, combined can stay out later
 histdir="$jobdatadir/RG${RG_STEP}/hist" # Make a folder for the histograms
 statsdir="$jobdatadir/RG${RG_STEP}/stats"
 laundereddir="$jobdatadir/RG${RG_STEP}/laundered"
+mkdir -p "$outputdir" "$logsdir" "$jobsdir" # Make these now so that it does it every time we run this job
+mkdir -p "$joboutdir" "$jobdatadir" "$batchdir" "$histdir" "$statsdir" "$laundereddir"
 
 exec > >(tee -a "$joboutdir/RG_${RG_STEP}_JOB${SLURM_JOB_ID}.out")
 exec 2> >(tee -a "$logsdir/RG_${RG_STEP}_JOB${SLURM_JOB_ID}.err" >&2)
@@ -42,8 +44,7 @@ echo " Current dir      : $(pwd)"
 echo "=================================================="
 echo ""
 
-mkdir -p "$outputdir" "$logsdir" "$jobsdir" # Make these now so that it does it every time we run this job
-mkdir -p "$joboutdir" "$jobdatadir" "$batchdir" "$histdir" "$statsdir" "$laundereddir"
+
 
 PREV_RG=$(( RG_STEP - 1 )) # Store prev iter number for moments later
 if [[ $RG_STEP -eq 0 ]]; then
