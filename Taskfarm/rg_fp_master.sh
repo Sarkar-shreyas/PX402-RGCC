@@ -1,12 +1,12 @@
 #!/bin/bash
-#SBATCH --job-name=send_jobs
+#SBATCH --job-name=rg_fp_master
 #SBATCH --output=../job_outputs/bootstrap/%x_%A.out
 #SBATCH --error=../job_logs/bootstrap/%x_%A.err
 
 N=120000000
-NUM_RG_ITERS=8
+NUM_RG_ITERS=12
 
-VERSION=1.2
+VERSION=1.21
 INITIAL=1
 EXISTING_T=""
 prev_hist_job=""

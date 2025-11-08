@@ -10,7 +10,7 @@
 #SBATCH --error=../job_logs/bootstrap/%x_%A_%a.err
 
 # Config variables
-VERSION=1.2 # A version =number to help me track where we're at
+VERSION=1.21 # A version =number to help me track where we're at
 N="$1" # Target number of samples
 RG_STEP="$4" # Step counter
 INITIAL="$2" # This is the first run, need initial distribution
@@ -25,8 +25,21 @@ set -euo pipefail
 module purge
 module load GCC/13.3.0 SciPy-bundle/2024.05
 
-exec > >(tee -a "$joboutdir/${SLURM_JOB_NAME}_RG_${RG_STEP}_JOB${SLURM_JOB_ID}.out")
-exec 2> >(tee -a "$logsdir/${SLURM_JOB_NAME}_RG_${RG_STEP}_JOB${SLURM_JOB_ID}.err" >&2)
+# Directories we're using
+basedir="$(cd "$SLURM_SUBMIT_DIR/.."&&pwd)" # Root, fyp for now
+codedir="$basedir/code" # Where the code lives
+jobsdir="$basedir/jobs/v${VERSION}" # Where metadata will be
+logsdir="$basedir/job_logs/v${VERSION}/${SLURM_JOB_NAME}" # Where logs will be sent
+outputdir="$basedir/job_outputs/v${VERSION}/${SLURM_JOB_NAME}" # Where the outputs will live
+joboutdir="$outputdir/output"
+jobdatadir="$outputdir/data"
+batchdir="$jobdatadir/RG${RG_STEP}/batches" # Make a folder for the batches, combined can stay out later
+batchsubdir="$batchdir/batch_${TASK_ID}"
+mkdir -p "$outputdir" "$logsdir" "$jobsdir" # Make these now so that it does it every time we run this job
+mkdir -p "$joboutdir" "$jobdatadir" "$batchdir" "$batchsubdir"
+
+exec > >(tee -a "$joboutdir/RG_${RG_STEP}_JOB${SLURM_JOB_ID}.out")
+exec 2> >(tee -a "$logsdir/RG_${RG_STEP}_JOB${SLURM_JOB_ID}.err" >&2)
 
 echo "==================================================="
 echo "                  SLURM JOB INFO "
@@ -36,22 +49,9 @@ echo " Job ID           : $SLURM_JOB_ID"
 echo " Array Task ID    : ${SLURM_ARRAY_TASK_ID:-N/A}"
 echo " Submitted from   : $SLURM_SUBMIT_DIR"
 echo " Current dir      : $(pwd)"
+echo " Date of job      : [$(date '+%H:%M:%S')]"
 echo "=================================================="
 echo ""
-
-# Directories we're using
-
-basedir="$(cd "$SLURM_SUBMIT_DIR/.."&&pwd)" # Root, fyp for now
-codedir="$basedir/code" # Where the code lives
-jobsdir="$basedir/jobs/v${VERSION}" # Where metadata will be
-logsdir="$basedir/job_logs/v${VERSION}" # Where logs will be sent
-outputdir="$basedir/job_outputs/v${VERSION}" # Where the outputs will live
-joboutdir="$outputdir/output"
-jobdatadir="$outputdir/data"
-batchdir="$jobdatadir/RG${RG_STEP}/batches" # Make a folder for the batches, combined can stay out later
-batchsubdir="$batchdir/batch_${TASK_ID}"
-mkdir -p "$outputdir" "$logsdir" "$jobsdir" # Make these now so that it does it every time we run this job
-mkdir -p "$joboutdir" "$jobdatadir" "$batchdir" "$batchsubdir"
 
 # Print out the config we're at right now (aligned to look nicer :D)
 
@@ -100,3 +100,7 @@ else
     "$RG_STEP"
 fi
 
+echo "==================================================================================="
+echo "Data gen job ${SLURM_JOB_ID} for RG${RG_STEP} completed on : [$(date '+%H:%M:%S')]"
+echo "==================================================================================="
+echo ""
