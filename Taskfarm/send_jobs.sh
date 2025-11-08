@@ -18,6 +18,9 @@ scriptsdir="$basedir/scripts"
 logsdir="$basedir/job_logs/v${VERSION}"
 mkdir -p "$datadir" "$logsdir" "$joboutdir"
 
+exec > >(tee -a "$joboutdir/${SLURM_JOB_NAME}_JOB${SLURM_JOB_ID}.out")
+exec 2> >(tee -a "$logsdir/${SLURM_JOB_NAME}_JOB${SLURM_JOB_ID}.err" >&2)
+
 echo "==================================================="
 echo "                  SLURM JOB INFO "
 echo "---------------------------------------------------"
@@ -28,8 +31,6 @@ echo " Current dir      : $(pwd)"
 echo "=================================================="
 echo ""
 
-exec > >(tee -a "$joboutdir/${SLURM_JOB_NAME}_JOB${SLURM_JOB_ID}.out")
-exec 2> >(tee -a "$logsdir/${SLURM_JOB_NAME}_JOB${SLURM_JOB_ID}.err" >&2)
 for step in $(seq 0 $(( NUM_RG_ITERS - 1 ))); do
     echo "[$(date '+%H:%M:%S')]: Proceeding with RG step $step"
     laundereddir="$datadir/RG${step}/laundered"

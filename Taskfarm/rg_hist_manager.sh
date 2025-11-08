@@ -16,6 +16,9 @@ NUM_BATCHES=8 # Number of batches to split this into, same as array size
 BATCH_SIZE=$(( N / NUM_BATCHES ))
 set -euo pipefail
 
+exec > >(tee -a "$joboutdir/${SLURM_JOB_NAME}_RG_${RG_STEP}_JOB${SLURM_JOB_ID}.out")
+exec 2> >(tee -a "$logsdir/${SLURM_JOB_NAME}_RG_${RG_STEP}_JOB${SLURM_JOB_ID}.err" >&2)
+
 echo "==================================================="
 echo "                  SLURM JOB INFO "
 echo "---------------------------------------------------"
@@ -48,9 +51,6 @@ if [[ $RG_STEP -eq 0 ]]; then
 else
     PREV_Z_HIST="$jobdatadir/RG${PREV_RG}/hist/z_hist_RG${PREV_RG}_sym.npz"
 fi
-
-exec > >(tee -a "$joboutdir/rg_hist_RG_${RG_STEP}_JOB${SLURM_JOB_ID}.out")
-exec 2> >(tee -a "$logsdir/rg_hist_RG_${RG_STEP}_JOB${SLURM_JOB_ID}.err" >&2)
 
 echo "==================================================="
 echo "      Config for hist gen of RG step $RG_STEP "

@@ -25,6 +25,9 @@ set -euo pipefail
 module purge
 module load GCC/13.3.0 SciPy-bundle/2024.05
 
+exec > >(tee -a "$joboutdir/${SLURM_JOB_NAME}_RG_${RG_STEP}_JOB${SLURM_JOB_ID}.out")
+exec 2> >(tee -a "$logsdir/${SLURM_JOB_NAME}_RG_${RG_STEP}_JOB${SLURM_JOB_ID}.err" >&2)
+
 echo "==================================================="
 echo "                  SLURM JOB INFO "
 echo "---------------------------------------------------"
@@ -49,10 +52,6 @@ batchdir="$jobdatadir/RG${RG_STEP}/batches" # Make a folder for the batches, com
 batchsubdir="$batchdir/batch_${TASK_ID}"
 mkdir -p "$outputdir" "$logsdir" "$jobsdir" # Make these now so that it does it every time we run this job
 mkdir -p "$joboutdir" "$jobdatadir" "$batchdir" "$batchsubdir"
-
-
-exec > >(tee -a "$joboutdir/RG_${RG_STEP}_JOB${SLURM_JOB_ID}.out")
-exec 2> >(tee -a "$logsdir/RG_${RG_STEP}_JOB${SLURM_JOB_ID}.err" >&2)
 
 # Print out the config we're at right now (aligned to look nicer :D)
 
