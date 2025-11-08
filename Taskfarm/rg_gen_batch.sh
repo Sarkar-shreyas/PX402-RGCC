@@ -10,7 +10,7 @@
 #SBATCH --error=../job_logs/bootstrap/%x_%A_%a.err
 
 # Config variables
-VERSION=1.22 # A version =number to help me track where we're at
+VERSION=1.24 # A version =number to help me track where we're at
 N="$1" # Target number of samples
 RG_STEP="$4" # Step counter
 INITIAL="$2" # This is the first run, need initial distribution
@@ -29,41 +29,41 @@ module load GCC/13.3.0 SciPy-bundle/2024.05
 basedir="$(cd "$SLURM_SUBMIT_DIR/.."&&pwd)" # Root, fyp for now
 codedir="$basedir/code" # Where the code lives
 jobsdir="$basedir/jobs/v${VERSION}" # Where metadata will be
-logsdir="$basedir/job_logs/v${VERSION}/${SLURM_JOB_NAME}" # Where logs will be sent
-outputdir="$basedir/job_outputs/v${VERSION}/${SLURM_JOB_NAME}" # Where the outputs will live
-joboutdir="$outputdir/output"
+logsdir="$basedir/job_logs/v${VERSION}/${SLURM_JOB_NAME}/RG${RG_STEP}" # Where logs will be sent
+outputdir="$basedir/job_outputs/v${VERSION}" # Where the outputs will live
+joboutdir="$outputdir/output/${SLURM_JOB_NAME}/RG${RG_STEP}"
 jobdatadir="$outputdir/data"
 batchdir="$jobdatadir/RG${RG_STEP}/batches" # Make a folder for the batches, combined can stay out later
 batchsubdir="$batchdir/batch_${TASK_ID}"
 mkdir -p "$outputdir" "$logsdir" "$jobsdir" # Make these now so that it does it every time we run this job
 mkdir -p "$joboutdir" "$jobdatadir" "$batchdir" "$batchsubdir"
 
-exec > >(tee -a "$joboutdir/RG_${RG_STEP}_JOB${SLURM_JOB_ID}.out")
-exec 2> >(tee -a "$logsdir/RG_${RG_STEP}_JOB${SLURM_JOB_ID}.err" >&2)
+exec > >(tee -a "$joboutdir/RG_${RG_STEP}_JOB${SLURM_ARRAY_JOB_ID}_TASK${TASK_ID}.out")
+exec 2> >(tee -a "$logsdir/RG_${RG_STEP}_JOB${SLURM_ARRAY_JOB_ID}_TASK${TASK_ID}.err" >&2)
 
 echo "==================================================="
 echo "                  SLURM JOB INFO "
 echo "---------------------------------------------------"
 echo " Job Name         : $SLURM_JOB_NAME"
-echo " Job ID           : $SLURM_JOB_ID"
-echo " Array Task ID    : ${SLURM_ARRAY_TASK_ID:-N/A}"
+echo " Array Job ID     : $SLURM_ARRAY_JOB_ID"
+echo " Array Task ID    : $SLURM_ARRAY_TASK_ID"
 echo " Submitted from   : $SLURM_SUBMIT_DIR"
 echo " Current dir      : $(pwd)"
-echo " Date of job      : [$(date '+%Y-%m-%d %H:%M:%S')]"
+echo " Date of job      : [$(date '+%Y-%m-%d %H:%M:%S')] "
 echo "==================================================="
 echo ""
 
 # Print out the config we're at right now (aligned to look nicer :D)
 
-echo "==================================================="
-echo "      Config for data gen of RG step $RG_STEP "
-echo "---------------------------------------------------"
-echo "RG step           : $RG_STEP"
-echo "Total samples     : $N"
-echo "No. of batches    : $NUM_BATCHES"
-echo "Batch size        : $BATCH_SIZE"
-echo "Batch directory   : $batchdir"
-echo "==================================================="
+echo "====================================================================="
+echo "      Config for data gen of batch no. $TASK_ID for RG step $RG_STEP "
+echo "---------------------------------------------------------------------"
+echo " RG step           : $RG_STEP"
+echo " Total samples     : $N"
+echo " No. of batches    : $NUM_BATCHES"
+echo " Batch size        : $BATCH_SIZE"
+echo " Batch directory   : $batchdir"
+echo "====================================================================="
 echo ""
 
 # cd to code directory for paths
@@ -100,7 +100,7 @@ else
     "$RG_STEP"
 fi
 
-echo "==========================================================================================="
-echo "Data gen job ${SLURM_JOB_ID} for RG${RG_STEP} completed on : [$(date '+%Y-%m-%d %H:%M:%S')]"
-echo "==========================================================================================="
+echo "============================================================================================="
+echo " Data gen job ${SLURM_JOB_ID} for RG${RG_STEP} completed on : [$(date '+%Y-%m-%d %H:%M:%S')] "
+echo "============================================================================================="
 echo ""

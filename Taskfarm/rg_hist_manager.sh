@@ -9,7 +9,7 @@
 #SBATCH --error=../job_logs/bootstrap/%x_%A.err
 
 # Config variables
-VERSION=1.22 # A version number to help me track where we're at
+VERSION=1.24 # A version number to help me track where we're at
 N="$1" # Target number of samples
 RG_STEP="$2" # Step counter
 NUM_BATCHES=8 # Number of batches to split this into, same as array size
@@ -20,9 +20,9 @@ set -euo pipefail
 basedir="$(cd "$SLURM_SUBMIT_DIR/.."&&pwd)" # Root, fyp for now
 codedir="$basedir/code" # Where the code lives
 jobsdir="$basedir/jobs/v${VERSION}" # Where metadata will be
-logsdir="$basedir/job_logs/v${VERSION}/${SLURM_JOB_NAME}" # Where logs will be sent
-outputdir="$basedir/job_outputs/v${VERSION}/${SLURM_JOB_NAME}" # Where the outputs will live
-joboutdir="$outputdir/output" # General output directory
+logsdir="$basedir/job_logs/v${VERSION}/${SLURM_JOB_NAME}/RG${RG_STEP}" # Where logs will be sent
+outputdir="$basedir/job_outputs/v${VERSION}" # Where the outputs will live
+joboutdir="$outputdir/output/${SLURM_JOB_NAME}/RG${RG_STEP}" # General output directory
 jobdatadir="$outputdir/data" # Where the data will go
 batchdir="$jobdatadir/RG${RG_STEP}/batches" # Make a folder for the batches, combined can stay out later
 histdir="$jobdatadir/RG${RG_STEP}/hist" # Make a folder for the histograms
@@ -53,9 +53,9 @@ else
     PREV_Z_HIST="$jobdatadir/RG${PREV_RG}/hist/z_hist_RG${PREV_RG}_sym.npz"
 fi
 
-echo "==================================================="
+echo "===================================================="
 echo "      Config for hist gen of RG step $RG_STEP "
-echo "---------------------------------------------------"
+echo "----------------------------------------------------"
 echo " RG step           : $RG_STEP"
 echo " Total samples     : $N"
 echo " No. of batches    : $NUM_BATCHES"
@@ -63,8 +63,8 @@ echo " Batch size        : $BATCH_SIZE"
 echo " Batch directory   : $batchdir"
 echo " Hist directory    : $histdir"
 echo " Stats directory   : $statsdir"
-echo " Date of job       : [$(date '+%Y-%m-%d %H:%M:%S')]"
-echo "==================================================="
+echo " Date of job       : [$(date '+%Y-%m-%d %H:%M:%S')] "
+echo "===================================================="
 echo ""
 
 # Libraries needed
@@ -79,7 +79,7 @@ OUTPUT_T="$histdir/t_hist_RG${RG_STEP}.npz"
 OUTPUT_G="$histdir/g_hist_RG${RG_STEP}.npz"
 OUTPUT_Z="$histdir/z_hist_RG${RG_STEP}.npz"
 
-echo "Making histograms for RG step $RG_STEP from $NUM_BATCHES batches"
+echo " Making histograms for RG step $RG_STEP from $NUM_BATCHES batches "
 
 for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
     BATCH_DIR="$batchdir/batch_${batch}"
@@ -122,11 +122,10 @@ for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
     fi
 done
 
-echo "Made histograms at:"
-echo "T: $OUTPUT_T"
-echo "G: $OUTPUT_G"
-echo "Z: $OUTPUT_Z"
-
+echo " Made histograms at: "
+echo " T: $OUTPUT_T "
+echo " G: $OUTPUT_G "
+echo " Z: $OUTPUT_Z "
 
 symmetrised_z="$histdir/z_hist_RG${RG_STEP}_sym.npz"
 python -m "source.helpers" \
@@ -134,6 +133,8 @@ python -m "source.helpers" \
     "$N" \
     "$OUTPUT_Z" \
     "$symmetrised_z"
+
+echo " Symmetrised z histogram saved to: $symmetrised_z "
 
 # Analyse the moments
 
@@ -151,7 +152,7 @@ python -m "source.rg" \
     "$OUTPUT_Z" \
     "$stats"
 
-echo "Moments of histogram for $N samples written to $stats."
+echo " Moments of histogram for $N samples written to $stats. "
 
 INPUT_T="$histdir/input_t_hist_RG${RG_STEP}.npz"
 
@@ -164,9 +165,9 @@ for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
         "$symmetrised_z" \
         "$launderbatch"
 
-    echo "Batch $batch of t data laundered from Q(z) saved to $launderbatch"
+    echo " Batch $batch of t data laundered from Q(z) saved to $launderbatch "
 
-    echo "Building histogram for input t data of RG${RG_STEP}"
+    echo " Building histogram for input t data of RG${RG_STEP} "
     if [[ ! -f "$INPUT_T" ]]; then
         python -m "source.t_laundered_hist_manager" \
             "$BATCH_SIZE" \
@@ -186,10 +187,10 @@ for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
 
 done
 
-echo "Input t histogram for RG${RG_STEP} built at ${INPUT_T}"
-echo "============================================================================================"
-echo "Histogram job ${SLURM_JOB_ID} for RG${RG_STEP} completed on : [$(date '+%Y-%m-%d %H:%M:%S')]"
-echo "============================================================================================"
+echo " Input t histogram for RG${RG_STEP} built at ${INPUT_T} "
+echo "=============================================================================================="
+echo " Histogram job ${SLURM_JOB_ID} for RG${RG_STEP} completed on : [$(date '+%Y-%m-%d %H:%M:%S')] "
+echo "=============================================================================================="
 echo ""
 
 
