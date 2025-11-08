@@ -28,11 +28,12 @@ echo " Job Name         : $SLURM_JOB_NAME"
 echo " Job ID           : $SLURM_JOB_ID"
 echo " Submitted from   : $SLURM_SUBMIT_DIR"
 echo " Current dir      : $(pwd)"
-echo "=================================================="
+echo " Date of job      : [$(date '+%Y-%m-%d %H:%M:%S')]"
+echo "==================================================="
 echo ""
 
 for step in $(seq 0 $(( NUM_RG_ITERS - 1 ))); do
-    echo "[$(date '+%H:%M:%S')]: Proceeding with RG step $step"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')]: Proceeding with RG step $step"
     laundereddir="$datadir/RG${step}/laundered"
 
     if [ "$step" -eq 0 ]; then
@@ -49,7 +50,7 @@ for step in $(seq 0 $(( NUM_RG_ITERS - 1 ))); do
         "$scriptsdir/rg_gen_batch.sh"\
             "$N" "$INITIAL" "$EXISTING_T" "$step")
 
-        echo "[$(date '+%H:%M:%S')]: Submitted generation job for RG step $step : $gen_job"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')]: Submitted generation job for RG step $step : $gen_job"
     else
         gen_job=$(sbatch --parsable \
         --dependency=afterok:${prev_hist_job} \
@@ -58,7 +59,7 @@ for step in $(seq 0 $(( NUM_RG_ITERS - 1 ))); do
         "$scriptsdir/rg_gen_batch.sh"\
             "$N" "$INITIAL" "$EXISTING_T" "$step")
 
-        echo "[$(date '+%H:%M:%S')]: Submitted generation job for RG step $step : $gen_job (after ${prev_hist_job})"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')]: Submitted generation job for RG step $step : $gen_job (after ${prev_hist_job})"
     fi
     echo "---------------------------------------------------"
     hist_job=$(sbatch --parsable \
@@ -68,7 +69,7 @@ for step in $(seq 0 $(( NUM_RG_ITERS - 1 ))); do
         "$scriptsdir/rg_hist_manager.sh" \
         "$N" "$step")
     echo "---------------------------------------------------"
-    echo "[$(date '+%H:%M:%S')]: Submitted histogram job for RG step $step  : $hist_job (after ${gen_job})"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')]: Submitted histogram job for RG step $step  : $hist_job (after ${gen_job})"
 
     prev_hist_job="$hist_job"
     INITIAL=0

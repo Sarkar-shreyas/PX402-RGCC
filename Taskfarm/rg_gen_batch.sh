@@ -49,8 +49,8 @@ echo " Job ID           : $SLURM_JOB_ID"
 echo " Array Task ID    : ${SLURM_ARRAY_TASK_ID:-N/A}"
 echo " Submitted from   : $SLURM_SUBMIT_DIR"
 echo " Current dir      : $(pwd)"
-echo " Date of job      : [$(date '+%H:%M:%S')]"
-echo "=================================================="
+echo " Date of job      : [$(date '+%Y-%m-%d %H:%M:%S')]"
+echo "==================================================="
 echo ""
 
 # Print out the config we're at right now (aligned to look nicer :D)
@@ -100,7 +100,7 @@ else
     "$RG_STEP"
 fi
 
-echo "==================================================================================="
-echo "Data gen job ${SLURM_JOB_ID} for RG${RG_STEP} completed on : [$(date '+%H:%M:%S')]"
-echo "==================================================================================="
+echo "==========================================================================================="
+echo "Data gen job ${SLURM_JOB_ID} for RG${RG_STEP} completed on : [$(date '+%Y-%m-%d %H:%M:%S')]"
+echo "==========================================================================================="
 echo ""

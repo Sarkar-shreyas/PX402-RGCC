@@ -62,7 +62,7 @@ echo " Batch size        : $BATCH_SIZE"
 echo " Batch directory   : $batchdir"
 echo " Hist directory    : $histdir"
 echo " Stats directory   : $statsdir"
-echo " Date of job       : [$(date '+%H:%M:%S')]"
+echo " Date of job       : [$(date '+%Y-%m-%d %H:%M:%S')]"
 echo "==================================================="
 echo ""
 
@@ -186,9 +186,9 @@ for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
 done
 
 echo "Input t histogram for RG${RG_STEP} built at ${INPUT_T}"
-echo "==================================================================================="
-echo "Histogram job ${SLURM_JOB_ID} for RG${RG_STEP} completed on : [$(date '+%H:%M:%S')]"
-echo "==================================================================================="
+echo "============================================================================================"
+echo "Histogram job ${SLURM_JOB_ID} for RG${RG_STEP} completed on : [$(date '+%Y-%m-%d %H:%M:%S')]"
+echo "============================================================================================"
 echo ""
 
 
