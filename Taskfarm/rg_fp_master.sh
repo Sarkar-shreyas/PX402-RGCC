@@ -5,17 +5,17 @@
 
 N=120000000
 NUM_RG_ITERS=8
-
-VERSION=1.24
+VERSION=1.31
+TYPE="FP"
 INITIAL=1
 EXISTING_T=""
 prev_hist_job=""
 
 basedir="$(cd "$SLURM_SUBMIT_DIR/.."&&pwd)" # Root, fyp for now
-joboutdir="$basedir/job_outputs/v${VERSION}"
-datadir="$basedir/job_outputs/v${VERSION}/data"
+joboutdir="$basedir/job_outputs/v${VERSION}/$TYPE"
+datadir="$basedir/job_outputs/v${VERSION}/$TYPE/data"
 scriptsdir="$basedir/scripts"
-logsdir="$basedir/job_logs/v${VERSION}"
+logsdir="$basedir/job_logs/v${VERSION}/$TYPE"
 mkdir -p "$logsdir" "$joboutdir"
 
 exec > >(tee -a "$joboutdir/${SLURM_JOB_NAME}_JOB${SLURM_JOB_ID}.out")
@@ -27,6 +27,7 @@ echo "---------------------------------------------------"
 echo " Job Name         : $SLURM_JOB_NAME"
 echo " Job ID           : $SLURM_JOB_ID"
 echo " Submitted from   : $SLURM_SUBMIT_DIR"
+echo " Type             : $TYPE"
 echo " Current dir      : $(pwd)"
 echo " Date of job      : [$(date '+%Y-%m-%d %H:%M:%S')] "
 echo "==================================================="
@@ -49,7 +50,7 @@ for step in $(seq 0 $(( NUM_RG_ITERS - 1 ))); do
         --output=../job_outputs/bootstrap/rg_gen_RG${step}_%x_%A_%a.out \
         --error=../job_logs/bootstrap/rg_gen_RG${step}_%x_%A_%a.err \
         "$scriptsdir/rg_gen_batch.sh"\
-            "$N" "$INITIAL" "$EXISTING_T" "$step")
+            "$N" "$INITIAL" "$EXISTING_T" "$step" "$VERSION" "$TYPE")
 
         echo " [$(date '+%Y-%m-%d %H:%M:%S')]: Submitted generation job for RG step $step : $gen_job "
     else
@@ -58,7 +59,7 @@ for step in $(seq 0 $(( NUM_RG_ITERS - 1 ))); do
         --output=../job_outputs/bootstrap/rg_gen_RG${step}_%A_%a.out \
         --error=../job_logs/bootstrap/rg_gen_RG${step}_%A_%a.err \
         "$scriptsdir/rg_gen_batch.sh"\
-            "$N" "$INITIAL" "$EXISTING_T" "$step")
+            "$N" "$INITIAL" "$EXISTING_T" "$step" "$VERSION" "$TYPE")
 
         echo " [$(date '+%Y-%m-%d %H:%M:%S')]: Submitted generation job for RG step $step : $gen_job (after ${prev_hist_job}) "
     fi
@@ -68,7 +69,7 @@ for step in $(seq 0 $(( NUM_RG_ITERS - 1 ))); do
         --output=../job_outputs/bootstrap/rg_hist_RG${step}_%A.out \
         --error=../job_logs/bootstrap/rg_hist_RG${step}_%A.err \
         "$scriptsdir/rg_hist_manager.sh" \
-        "$N" "$step")
+        "$N" "$step" "$TYPE" "$VERSION")
     echo "----------------------------------------------------------------------------------------------------------------"
     echo " [$(date '+%Y-%m-%d %H:%M:%S')]: Submitted histogram job for RG step $step  : $hist_job (after ${gen_job}) "
 

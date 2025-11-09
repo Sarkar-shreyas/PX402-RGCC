@@ -4,13 +4,15 @@
 #SBATCH --mem-per-cpu=3988
 #SBATCH --cpus-per-task=1
 #SBATCH --array=0-7
-#SBATCH --time=08:00:00
+#SBATCH --time=04:00:00
 #SBATCH --job-name=rg_gen
 #SBATCH --output=../job_outputs/bootstrap/%x_%A_%a.out
 #SBATCH --error=../job_logs/bootstrap/%x_%A_%a.err
 
 # Config variables
-VERSION=1.24 # A version =number to help me track where we're at
+VERSION="$5" # A version =number to help me track where we're at
+TYPE="$6"
+SHIFT="${7-}"
 N="$1" # Target number of samples
 RG_STEP="$4" # Step counter
 INITIAL="$2" # This is the first run, need initial distribution
@@ -28,13 +30,23 @@ module load GCC/13.3.0 SciPy-bundle/2024.05
 # Directories we're using
 basedir="$(cd "$SLURM_SUBMIT_DIR/.."&&pwd)" # Root, fyp for now
 codedir="$basedir/code" # Where the code lives
-jobsdir="$basedir/jobs/v${VERSION}" # Where metadata will be
-logsdir="$basedir/job_logs/v${VERSION}/${SLURM_JOB_NAME}/RG${RG_STEP}" # Where logs will be sent
-outputdir="$basedir/job_outputs/v${VERSION}" # Where the outputs will live
+if [[ -n "${SHIFT}" ]]; then
+    jobsdir="$basedir/jobs/v${VERSION}/$TYPE/shift_${SHIFT}" # Where metadata will be
+    logsdir="$basedir/job_logs/v${VERSION}/$TYPE/shift_${SHIFT}/${SLURM_JOB_NAME}/RG${RG_STEP}" # Where logs will be sent
+    outputdir="$basedir/job_outputs/v${VERSION}/$TYPE/shift_${SHIFT}" # Where the outputs will live
+else
+    jobsdir="$basedir/jobs/v${VERSION}/$TYPE" # Where metadata will be
+    logsdir="$basedir/job_logs/v${VERSION}/$TYPE/${SLURM_JOB_NAME}/RG${RG_STEP}" # Where logs will be sent
+    outputdir="$basedir/job_outputs/v${VERSION}/$TYPE" # Where the outputs will live
+fi
+
 joboutdir="$outputdir/output/${SLURM_JOB_NAME}/RG${RG_STEP}"
 jobdatadir="$outputdir/data"
 batchdir="$jobdatadir/RG${RG_STEP}/batches" # Make a folder for the batches, combined can stay out later
 batchsubdir="$batchdir/batch_${TASK_ID}"
+
+
+
 mkdir -p "$outputdir" "$logsdir" "$jobsdir" # Make these now so that it does it every time we run this job
 mkdir -p "$joboutdir" "$jobdatadir" "$batchdir" "$batchsubdir"
 
@@ -100,7 +112,7 @@ else
     "$RG_STEP"
 fi
 
-echo "============================================================================================="
-echo " Data gen job ${SLURM_JOB_ID} for RG${RG_STEP} completed on : [$(date '+%Y-%m-%d %H:%M:%S')] "
-echo "============================================================================================="
+echo "==================================================================================================="
+echo " Data gen job ${SLURM_ARRAY_JOB_ID} for RG${RG_STEP} completed on : [$(date '+%Y-%m-%d %H:%M:%S')] "
+echo "==================================================================================================="
 echo ""
