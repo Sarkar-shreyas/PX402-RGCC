@@ -63,34 +63,32 @@ def append_to_histogram(
 
 
 if __name__ == "__main__":
-    if len(sys.argv) == 10:
+    if len(sys.argv) == 9:
         # This is if this is the first time we're making the histogram - no existing t or z histogram files
-        array_size = int(sys.argv[1].strip())
-        process = int(sys.argv[2].strip())
-        input_t_file = sys.argv[3].strip()
-        input_g_file = sys.argv[4].strip()
-        input_z_file = sys.argv[5].strip()
-        output_t_file = sys.argv[6].strip()
-        output_g_file = sys.argv[7].strip()
-        output_z_file = sys.argv[8].strip()
-        rg_step = int(sys.argv[9].strip())
-    elif len(sys.argv) == 13:
+        process = int(sys.argv[1].strip())
+        input_t_file = sys.argv[2].strip()
+        input_g_file = sys.argv[3].strip()
+        input_z_file = sys.argv[4].strip()
+        output_t_file = sys.argv[5].strip()
+        output_g_file = sys.argv[6].strip()
+        output_z_file = sys.argv[7].strip()
+        rg_step = int(sys.argv[8].strip())
+    elif len(sys.argv) == 12:
         # If there are already existing histograms, we need to append the new data into them.
-        array_size = int(sys.argv[1].strip())
-        process = int(sys.argv[2].strip())
-        input_t_file = sys.argv[3].strip()
-        input_g_file = sys.argv[4].strip()
-        input_z_file = sys.argv[5].strip()
-        existing_t_file = sys.argv[6].strip()
-        existing_g_file = sys.argv[7].strip()
-        existing_z_file = sys.argv[8].strip()
-        output_t_file = sys.argv[9].strip()
-        output_g_file = sys.argv[10].strip()
-        output_z_file = sys.argv[11].strip()
-        rg_step = int(sys.argv[12].strip())
+        process = int(sys.argv[1].strip())
+        input_t_file = sys.argv[2].strip()
+        input_g_file = sys.argv[3].strip()
+        input_z_file = sys.argv[4].strip()
+        existing_t_file = sys.argv[5].strip()
+        existing_g_file = sys.argv[6].strip()
+        existing_z_file = sys.argv[7].strip()
+        output_t_file = sys.argv[8].strip()
+        output_g_file = sys.argv[9].strip()
+        output_z_file = sys.argv[10].strip()
+        rg_step = int(sys.argv[11].strip())
     else:
         raise SystemExit(
-            "Usage: histogram_manager.py ARRAY_SIZE PROCESS INPUT_T_FILE INPUT_Z_FILE INPUT_G_FILE EXISTING_T_FILE EXISTING_G_FILE EXISTING_Z_FILE OUTPUT_T_FILE OUTPUT_G_FILE OUTPUT_Z_FILE RG_STEP"
+            "Usage: histogram_manager.py PROCESS INPUT_T_FILE INPUT_Z_FILE INPUT_G_FILE EXISTING_T_FILE EXISTING_G_FILE EXISTING_Z_FILE OUTPUT_T_FILE OUTPUT_G_FILE OUTPUT_Z_FILE RG_STEP SHIFT"
         )
 
     if process == 0:
@@ -126,3 +124,5 @@ if __name__ == "__main__":
         # os.remove(existing_g_file)
         # os.remove(existing_z_file)
         print("-" * 100)
+    else:
+        raise ValueError("Invalid Process: enter 0, 1, 2 or 3.")

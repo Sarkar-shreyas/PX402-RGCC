@@ -61,24 +61,22 @@ def append_to_histogram(
 
 
 if __name__ == "__main__":
-    if len(sys.argv) == 6:
+    if len(sys.argv) == 5:
         # This is if this is the first time we're making the histogram - no existing t or z histogram files
-        array_size = int(sys.argv[1].strip())
-        process = int(sys.argv[2].strip())
-        input_t_file = sys.argv[3].strip()
+        process = int(sys.argv[1].strip())
+        input_t_file = sys.argv[2].strip()
+        output_t_file = sys.argv[3].strip()
+        rg_step = int(sys.argv[4].strip())
+    elif len(sys.argv) == 6:
+        # If there are already existing histograms, we need to append the new data into them.
+        process = int(sys.argv[1].strip())
+        input_t_file = sys.argv[2].strip()
+        existing_t_file = sys.argv[3].strip()
         output_t_file = sys.argv[4].strip()
         rg_step = int(sys.argv[5].strip())
-    elif len(sys.argv) == 7:
-        # If there are already existing histograms, we need to append the new data into them.
-        array_size = int(sys.argv[1].strip())
-        process = int(sys.argv[2].strip())
-        input_t_file = sys.argv[3].strip()
-        existing_t_file = sys.argv[4].strip()
-        output_t_file = sys.argv[5].strip()
-        rg_step = int(sys.argv[6].strip())
     else:
         raise SystemExit(
-            "Usage: t_laundered_histogram_manager.py ARRAY_SIZE PROCESS INPUT_T_FILE EXISTING_T_FILE OUTPUT_T_FILE RG_STEP"
+            "Usage: t_laundered_histogram_manager.py PROCESS INPUT_T_FILE EXISTING_T_FILE OUTPUT_T_FILE RG_STEP"
         )
 
     if process == 0:
