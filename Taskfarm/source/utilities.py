@@ -274,7 +274,7 @@ def convert_z_to_g(z: np.ndarray) -> np.ndarray:
 
 def convert_z_to_t(z: np.ndarray) -> np.ndarray:
     """Converts z data to t data directly, clipped within bounds corresponding to t in [1.38e-11, 1-1.38e-11], as mentioned by Shaw."""
-    z = np.clip(z, -25.0, 25.0)
+    # z = np.clip(z, -25.0, 25.0)
     return np.sqrt(1.0 / (1.0 + np.exp(z)))
 
 
@@ -564,7 +564,7 @@ def launder(
 
         if num_iters % 1000 == 0:
             print(
-                f"Still laundering, Accepted: {len(acceptable)}, Remaining: {remaining}, batch size: {batch_size}"
+                f"Launder iteration {num_iters} - Accepted: {len(acceptable)}, Remaining: {remaining}, batch size: {batch_size}"
             )
         # Only add how many we need, since we want exactly N samples
         to_accept = min(len(acceptable), remaining)
@@ -786,7 +786,7 @@ def estimate_z_peak(
 
 
 # ---------- Fitting helper ---------- #
-def fit_z_peaks(x: np.ndarray, y: np.ndarray, method: str = "ls") -> tuple:
+def fit_z_peaks(x: np.ndarray, y: np.ndarray) -> tuple:
     """Fit a linear relationship between x and y data using different methods.
 
     Parameters
