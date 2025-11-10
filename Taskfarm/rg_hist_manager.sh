@@ -42,7 +42,7 @@ T_DIR="$histdir/t"
 G_DIR="$histdir/g"
 Z_DIR="$histdir/z"
 INPUT_DIR="$histdir/input"
-SYM_DIR="$histdir/sym"
+SYM_DIR="$histdir/sym_z"
 
 mkdir -p "$T_DIR" "$G_DIR" "$Z_DIR" "$INPUT_DIR" "$SYM_DIR"
 mkdir -p "$outputdir" "$logsdir" "$jobsdir" # Make these now so that it does it every time we run this job
@@ -70,7 +70,7 @@ if [[ $RG_STEP -eq 0 ]]; then
     PREV_Z_HIST=""
 else
     if [[ "$TYPE" == "FP" ]]; then
-        PREV_Z_HIST="$jobdatadir/RG${PREV_RG}/hist/sym/sym_z_hist_RG${PREV_RG}.npz"
+        PREV_Z_HIST="$jobdatadir/RG${PREV_RG}/hist/sym_z/sym_z_hist_RG${PREV_RG}.npz"
     else
         PREV_Z_HIST="$jobdatadir/RG${PREV_RG}/hist/z/z_hist_RG${PREV_RG}.npz"
     fi

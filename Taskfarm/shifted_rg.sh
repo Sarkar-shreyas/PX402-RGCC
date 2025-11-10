@@ -38,15 +38,15 @@ echo " Date of job      : [$(date '+%Y-%m-%d %H:%M:%S')] "
 echo "==================================================="
 echo ""
 
-FP_dist="$basedir/job_outputs/v${VERSION}/FP/data/RG${last_step}/hist/sym/sym_z_hist_RG${last_step}.npz"
+FP_dist="$basedir/job_outputs/v${VERSION}/FP/data/RG${last_step}/hist/sym_z/sym_z_hist_RG${last_step}.npz"
 
 
 echo "============================================================================"
 echo " [$(date '+%Y-%m-%d %H:%M:%S')]: Generating initial data for shift ${shift} "
 
 shift_job=$(sbatch --parsable \
-    --output=../job_outputs/bootstrap/gen_shift_${shift}_%x_%A_%a.out \
-    --error=../job_logs/bootstrap/gen_shift_${shift}_%x_%A_%a.out \
+    --output=../job_outputs/bootstrap/gen_shift_${shift}_%A_%a.out \
+    --error=../job_logs/bootstrap/gen_shift_${shift}_%A_%a.out \
     "$scriptsdir/gen_shifted_data.sh" \
         "$SAMPLE_SIZE" "$VERSION" "$FP_dist" "Initial" "$shift")
 
