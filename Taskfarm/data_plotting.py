@@ -8,11 +8,14 @@ from source.utilities import (
     DIST_TOLERANCE,
 )
 import os
-import sys
 from collections import defaultdict
 import json
+from typing import Optional
 
 DATA_DIR = "C:/Users/ssark/Desktop/Uni/Year 4 Courses/Physics Final Year Project/Project Code/Taskfarm/Data from taskfarm"
+CURRENT_VERSION = 1.31
+TYPE = "FP"
+NUM_RG = 8
 
 
 def load_hist_data(filename: str) -> tuple:
@@ -33,69 +36,133 @@ def load_moments(filename: str) -> tuple:
     return (l2, mean, std, conv)
 
 
+def construct_moments_dict(
+    filename: str,
+    moments: defaultdict | list,
+    distances: Optional[list] = None,
+    rg_steps: int = NUM_RG,
+):
+    data = defaultdict(dict)
+    if not distances:
+        for i in range(rg_steps):
+            mean = moments[i][1]
+            std = moments[i][2]
+            data[f"RG_{i}"]["mean"] = mean
+            data[f"RG_{i}"]["std"] = std
+            if i > 0:
+                prev_std = moments[i - 1][2]
+                if np.abs(std - prev_std) <= STD_TOLERANCE:
+                    data[f"RG_{i}"]["std_converged"] = True
+                else:
+                    data[f"RG_{i}"]["std_converged"] = False
+        for i in range(1, rg_steps):
+            l2 = moments[i][0]
+            data[f"RG_{i}"][f"L2 distance with RG_{i - 1}"] = l2
+            if l2 <= DIST_TOLERANCE:
+                data[f"RG_{i}"]["L2_converged"] = True
+            else:
+                data[f"RG_{i}"]["L2_converged"] = False
+    else:
+        for i in range(rg_steps):
+            mean, std = moments[i]
+            data[f"RG_{i}"]["mean"] = mean
+            data[f"RG_{i}"]["std"] = std
+            if i > 0:
+                _, prev_std = moments[i - 1]
+                if np.abs(std - prev_std) <= STD_TOLERANCE:
+                    data[f"RG_{i}"]["std_converged"] = True
+                else:
+                    data[f"RG_{i}"]["std_converged"] = False
+        for i in range(1, rg_steps):
+            data[f"RG_{i}"][f"L2 distance with RG_{i - 1}"] = distances[i - 1]
+            if distances[i - 1] <= DIST_TOLERANCE:
+                data[f"RG_{i}"]["L2_converged"] = True
+            else:
+                data[f"RG_{i}"]["L2_converged"] = False
+
+    with open(filename, "w") as f:
+        json.dump(data, f, indent=2)
+
+    print(f"Data has been saved to {filename}")
+
+
 if __name__ == "__main__":
-    version = 1.1
+    # Load constants
+    version = CURRENT_VERSION
     N = 120000000
-    var_names = ["t", "g", "z", "input_t"]
-    hist_dir = f"{DATA_DIR}/v{version}/hist"
-    stats_dir = f"{DATA_DIR}/v{version}/stats"
-    plots_dir = f"{DATA_DIR}/v{version}/plots"
+    var_names = ["t", "g", "z", "input_t", "sym_z"]
+    hist_dir = f"{DATA_DIR}/v{version}/{TYPE}/hist"
+    stats_dir = f"{DATA_DIR}/v{version}/{TYPE}/stats"
+    plots_dir = f"{DATA_DIR}/v{version}/{TYPE}/plots"
     t_folder = f"{hist_dir}/t"
     g_folder = f"{hist_dir}/g"
     z_folder = f"{hist_dir}/z"
     input_folder = f"{hist_dir}/input"
-    sym_folder = f"{DATA_DIR}/v{version}/hist/sym"
+    sym_folder = f"{hist_dir}/sym_z"
     folder_names = {
+        "hist": hist_dir,
+        "stats": stats_dir,
+        "plots": plots_dir,
         "t": t_folder,
         "g": g_folder,
         "z": z_folder,
         "input_t": input_folder,
-        "sym": sym_folder,
+        "sym_z": sym_folder,
     }
-    num_steps = 8
+    for folder in folder_names:
+        os.makedirs(folder_names[folder], exist_ok=True)
+    print("Folders created")
+
+    # Load histogram data
     map = defaultdict(list)
     for var in var_names:
-        for i in range(num_steps):
+        for i in range(NUM_RG):
             file = f"{folder_names[var]}/{var}_hist_RG{i}.npz"
             counts, bins, centers = load_hist_data(file)
             densities = get_density(counts, bins)
-            map[var].append([densities, bins, centers])
+            map[var].append([counts, bins, centers, densities])
+    print("All histograms have been loaded")
 
-    for i in range(num_steps):
-        file = f"{folder_names['sym']}/z_hist_RG{i}_sym.npz"
-        counts, bins, centers = load_hist_data(file)
-        densities = get_density(counts, bins)
-        map["sym"].append([densities, bins, centers])
+    # Plot the other 3 variables without clipping bounds
+    other_vars = ["t", "g", "input_t"]
+    for var in other_vars:
+        plt.figure()
+        plt.title(f"Histogram of dataset {var}")
+        plt.xlabel(f"{var}")
+        plt.ylabel(f"P({var})")
+        for i in range(NUM_RG):
+            plt.plot(map[var][i][2], map[var][i][3], label=f"RG{i}")
+        plt.legend()
+        plt.savefig(f"{plots_dir}/{var}_histogram.png", dpi=150)
+    print("Plots for t, g and input t data have been made")
 
-    # print(len(map["t"][0]))
-    # for key in map:
-    #     plt.figure()
-    #     plt.title(f"Histogram of dataset {key}")
-    #     plt.xlabel(f"{key}")
-    #     plt.ylabel(f"P({key})")
-    #     for i in range(num_steps):
-    #         plt.plot(map[key][i][1], map[key][i][0], label=f"RG{i}")
-    #     plt.legend()
-    #     plt.savefig(f"{DATA_DIR}/v{version}/plots/{key}_histogram", dpi=150)
-
+    # Store the moments calculated by the script
     moments = defaultdict(list)
-    for i in range(num_steps):
+    for i in range(NUM_RG):
         file = f"{stats_dir}/z_moments_RG{i}_{N}_samples.npz"
         l2, mean, std, converged = load_moments(file)
-        moments[i].append([l2, mean, std, converged])
-
+        moments[i] = [float(l2), float(mean), float(std), bool(converged)]
+    print("Stats from the script have been stored")
     # print(moments)
-    plt.figure()
-    plt.title("Histogram of Unymmetrised z data")
-    plt.xlabel("z")
-    plt.ylabel("Q(z)")
-    plt.xlim([-2, 4])
-    plt.ylim([0, 0.3])
-    dist = []
-    moments = []
-    for i in range(num_steps):
+    # print(moments)
+
+    # Plot the unsymmetrised z data
+    fig, (ax0, ax1) = plt.subplots(1, 2, figsize=(10, 4))
+    ax0.set_xlim([-25.0, 25.0])
+    ax0.set_ylim([0.0, 0.3])
+    ax0.set_title("Unclipped histogram of Unsymmetrised z data")
+    ax0.set_xlabel("z")
+    ax0.set_ylabel("Q(z)")
+    ax1.set_title("Clipped histogram of Unsymmetrised z data")
+    ax1.set_xlabel("z")
+    ax1.set_ylabel("Q(z)")
+    ax1.set_xlim([-4, 4])
+    ax1.set_ylim([0, 0.3])
+    z_dist = []
+    z_moments = []
+    for i in range(NUM_RG):
         if i > 0:
-            dist.append(
+            z_dist.append(
                 l2_distance(
                     map["z"][i][0],
                     map["z"][i - 1][0],
@@ -103,34 +170,54 @@ if __name__ == "__main__":
                     map["z"][i - 1][1],
                 )
             )
-        moments.append(hist_moments(map["z"][i][0], map["z"][i][1]))
-        plt.plot(map["z"][i][2], map["z"][i][0], label=f"RG{i}")
+        z_moments.append(hist_moments(map["z"][i][0], map["z"][i][1]))
+        ax0.plot(map["z"][i][2], map["z"][i][3], label=f"RG{i}")
+        ax1.plot(map["z"][i][2], map["z"][i][3], label=f"RG{i}")
     plt.legend()
-    plt.savefig(f"{plots_dir}/z_truncated.png", dpi=150)
-    stats_data = defaultdict(dict)
-    for i in range(num_steps):
-        mean, std = moments[i]
-        stats_data[f"RG_{i}"]["mean"] = mean
-        stats_data[f"RG_{i}"]["std"] = std
-        # print(f"Mean and STD for RG{i}: Mean = {mean:.7f}, STD = {std:.7f}")
+    plt.savefig(f"{plots_dir}/z_histogram.png", dpi=150)
+    print("Data plot made for unsymmetrised z")
+    plt.close()
+
+    # Plot the symmetrised z data
+    fig, (ax2, ax3) = plt.subplots(1, 2, figsize=(10, 4))
+    ax2.set_xlim([-25.0, 25.0])
+    ax2.set_ylim([0.0, 0.3])
+    ax2.set_title("Unclipped histogram of Unsymmetrised z data")
+    ax2.set_xlabel("z")
+    ax2.set_ylabel("Q(z)")
+    ax3.set_title("Clipped histogram of Unsymmetrised z data")
+    ax3.set_xlabel("z")
+    ax3.set_ylabel("Q(z)")
+    ax3.set_xlim([-4, 4])
+    ax3.set_ylim([0, 0.3])
+    sym_z_dist = []
+    sym_z_moments = []
+    for i in range(NUM_RG):
         if i > 0:
-            _, prev_std = moments[i - 1]
-            if np.abs(std - prev_std) <= STD_TOLERANCE:
-                stats_data[f"RG_{i}"]["std_converged"] = True
-            else:
-                stats_data[f"RG_{i}"]["std_converged"] = False
+            sym_z_dist.append(
+                l2_distance(
+                    map["sym_z"][i][0],
+                    map["sym_z"][i - 1][0],
+                    map["sym_z"][i][1],
+                    map["sym_z"][i - 1][1],
+                )
+            )
+        sym_z_moments.append(hist_moments(map["sym_z"][i][0], map["sym_z"][i][1]))
+        ax2.plot(map["sym_z"][i][2], map["sym_z"][i][3], label=f"RG{i}")
+        ax3.plot(map["sym_z"][i][2], map["sym_z"][i][3], label=f"RG{i}")
+    plt.legend()
+    plt.savefig(f"{plots_dir}/sym_z_histogram.png", dpi=150)
+    print("Data plot made for symmetrised z")
 
-    for i in range(1, num_steps):
-        # print(f"L2 distance between RG{i - 1} and RG{i} = {dist[i - 1]}")
-        stats_data[f"RG_{i}"][f"L2 distance with RG_{i - 1}"] = dist[i - 1]
-        if dist[i - 1] <= DIST_TOLERANCE:
-            stats_data[f"RG_{i}"]["L2_converged"] = True
-        else:
-            stats_data[f"RG_{i}"]["L2_converged"] = False
-
-    file = f"{stats_dir}/stats.json"
-
-    with open(file, "w") as f:
-        json.dump(stats_data, f, indent=2)
+    # Manually calculate statistics to compare
+    retrieved_file = f"{stats_dir}/retrieved_stats.json"
+    z_file = f"{stats_dir}/z_stats.json"
+    sym_z_file = f"{stats_dir}/sym_stats.json"
+    construct_moments_dict(z_file, z_moments, z_dist)
+    construct_moments_dict(sym_z_file, sym_z_moments, sym_z_dist)
+    construct_moments_dict(
+        retrieved_file,
+        moments,
+    )
 
     print("Analysis done.")
