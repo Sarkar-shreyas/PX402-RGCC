@@ -3,11 +3,11 @@ from numpy.polynomial import polynomial
 from scipy.stats import norm
 
 # ---------- Constants ---------- #
-N: int = 1 * (10**6)
+# N: int = 1 * (10**6)
 K: int = 9
 T_BINS: int = 1000
-Z_BINS: int = 50000
-Z_RANGE: tuple = (-25.0, 25.0)
+Z_BINS: int = 100000
+Z_RANGE: tuple = (-50.0, 50.0)
 Z_PERTURBATION: float = 0.007
 DIST_TOLERANCE: float = 0.001
 STD_TOLERANCE: float = 0.0005
