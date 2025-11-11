@@ -24,7 +24,7 @@ def construct_initial_histogram(
     density: bool = False,
 ) -> None:
     """A function to construct the initial histogram for any type of data"""
-    data = np.loadtxt(data_file)
+    data = np.load(data_file)
     if data.size == 0:
         raise FileNotFoundError(f"Could not load data from {data_file}")
 
@@ -44,8 +44,8 @@ def append_to_histogram(
     range: tuple,
 ) -> None:
     """A function to append the input data to an input histogram"""
-    # Load the input data, should be a .txt file
-    data = np.loadtxt(input_file)
+    # Load the input data, should be a .npy file
+    data = np.load(input_file)
 
     # Load the target file, should be an .npz file
     existing_data = np.load(existing_file, allow_pickle=False)

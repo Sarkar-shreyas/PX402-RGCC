@@ -87,7 +87,7 @@ PREV_RG=$(( RG_STEP - 1 ))
 # If we passed in a directory, it'll run through each file.
 if [[ "$INITIAL" -eq 0 ]]; then
     if [[ -d "$EXISTING_T_FILE" ]]; then
-        T_INPUT="$EXISTING_T_FILE/t_laundered_RG${PREV_RG}_batch_${TASK_ID}.txt"
+        T_INPUT="$EXISTING_T_FILE/t_laundered_RG${PREV_RG}_batch_${TASK_ID}.npy"
     else
         T_INPUT="$EXISTING_T_FILE"
     fi

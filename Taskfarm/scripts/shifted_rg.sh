@@ -60,7 +60,7 @@ for step in $(seq 0 $(( NUM_RG_ITERS - 1 ))); do
     if [ "$step" -eq 0 ]; then
         INITIAL=0
         gen_job_dep="$shift_job"
-        EXISTING_T="$datadir/Initial/perturbed_t_shift_${shift}.txt"
+        EXISTING_T="$datadir/Initial/perturbed_t_shift_${shift}.npy"
     else
         prev_step=$(( $step - 1 ))
         gen_job_dep="$prev_hist_job"

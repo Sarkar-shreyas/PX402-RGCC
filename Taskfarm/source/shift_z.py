@@ -26,7 +26,7 @@ if __name__ == "__main__":
     shifted_t = convert_z_to_t(shifted_sample)
 
     print(f"Shifted laundered sample by {perturbation}")
-    np.savetxt(output_file, shifted_t)
+    np.save(output_file, shifted_t)
 
     print(f"Shifted t sample has been saved to {output_file}")
 

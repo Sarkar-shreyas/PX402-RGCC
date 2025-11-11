@@ -29,7 +29,7 @@ if __name__ == "__main__":
             array_size, input_hist, input_bin_edges, input_bin_centers
         )
         laundered_t = convert_z_to_t(laundered_data)
-        np.savetxt(output_file, laundered_t)
+        np.save(output_file, laundered_t)
         print(f"Laundering completed in {time() - start:.3f} seconds")
         print(f"Data in {input_file} laundered and saved to {output_file}")
         print("-" * 100)
@@ -57,7 +57,7 @@ if __name__ == "__main__":
         laundered_t = launder(
             array_size, input_hist, input_bin_edges, input_bin_centers
         )
-        np.savetxt(output_file, laundered_t)
+        np.save(output_file, laundered_t)
         print(f"Laundering completed in {time() - start:.3f} seconds")
         print(f"Data in {input_file} laundered and saved to {output_file}")
         print("-" * 100)

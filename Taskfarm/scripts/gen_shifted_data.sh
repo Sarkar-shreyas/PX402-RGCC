@@ -61,7 +61,7 @@ export PYTHONPATH="$codedir:$PYTHONPATH"
 cd "$codedir"
 SRC_DIR="$codedir/source" # This is where the actual code lives
 
-OUTPUT_FILE="$jobdatadir/${STEP}/perturbed_t_shift_${shift}.txt"
+OUTPUT_FILE="$jobdatadir/${STEP}/perturbed_t_shift_${shift}.npy"
 
 python -m "source.shift_z" \
     "$N" \

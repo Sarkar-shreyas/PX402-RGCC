@@ -108,9 +108,9 @@ echo " Making histograms for RG step $RG_STEP from $NUM_BATCHES batches "
 for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
     BATCH_DIR="$batchdir/batch_${batch}"
 
-    batch_t=$(ls "$BATCH_DIR"/t_data_RG${RG_STEP}_${BATCH_SIZE}_samples.txt)
-    batch_g=$(ls "$BATCH_DIR"/g_data_RG${RG_STEP}_${BATCH_SIZE}_samples.txt)
-    batch_z=$(ls "$BATCH_DIR"/z_data_RG${RG_STEP}_${BATCH_SIZE}_samples.txt)
+    batch_t=$(ls "$BATCH_DIR"/t_data_RG${RG_STEP}_${BATCH_SIZE}_samples.npy)
+    batch_g=$(ls "$BATCH_DIR"/g_data_RG${RG_STEP}_${BATCH_SIZE}_samples.npy)
+    batch_z=$(ls "$BATCH_DIR"/z_data_RG${RG_STEP}_${BATCH_SIZE}_samples.npy)
 
     echo " Adding batch $batch:"
     echo " t dir: $batch_t"
@@ -189,7 +189,7 @@ fi
 INPUT_T="$INPUT_DIR/input_t_hist_RG${RG_STEP}.npz"
 
 for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
-    launderbatch="$laundereddir/t_laundered_RG${RG_STEP}_batch_${batch}.txt"
+    launderbatch="$laundereddir/t_laundered_RG${RG_STEP}_batch_${batch}.npy"
 
     if [[ "$TYPE" == "FP" ]]; then
         python -m "source.helpers" \
