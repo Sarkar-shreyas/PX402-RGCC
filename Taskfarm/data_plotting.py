@@ -14,7 +14,7 @@ import json
 from typing import Optional
 
 DATA_DIR = "C:/Users/ssark/Desktop/Uni/Year 4 Courses/Physics Final Year Project/Project Code/Taskfarm/Data from taskfarm"
-CURRENT_VERSION = 1.4
+CURRENT_VERSION = "1.53S"
 TYPE = "FP"
 NUM_RG = 8
 
@@ -90,7 +90,7 @@ def construct_moments_dict(
 if __name__ == "__main__":
     # Load constants
     version = CURRENT_VERSION
-    N = 120000000
+    N = 80000000
     var_names = ["t", "g", "z", "input_t", "sym_z"]
     hist_dir = f"{DATA_DIR}/v{version}/{TYPE}/hist"
     stats_dir = f"{DATA_DIR}/v{version}/{TYPE}/stats"
@@ -98,7 +98,7 @@ if __name__ == "__main__":
     t_folder = f"{hist_dir}/t"
     g_folder = f"{hist_dir}/g"
     z_folder = f"{hist_dir}/z"
-    input_folder = f"{hist_dir}/input"
+    input_folder = f"{hist_dir}/input_t"
     sym_folder = f"{hist_dir}/sym_z"
     folder_names = {
         "hist": hist_dir,
