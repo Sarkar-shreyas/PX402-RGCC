@@ -297,9 +297,9 @@ def convert_t_to_z(t: np.ndarray) -> np.ndarray:
         Array of z values, same shape as input.
     """
     # t = np.clip(t, 1.39e-11, 1.0 - 1.39e-11)
-    g = convert_t_to_g(t)
-    return convert_g_to_z(g)
-    # return np.log((1.0 / (t**2.0)) - 1.0)
+    # g = convert_t_to_g(t)
+    # return convert_g_to_z(g)
+    return np.log((1.0 / (t**2.0)) - 1.0)
 
 
 # ---------- Histogram construction helper ---------- #
