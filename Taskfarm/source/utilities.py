@@ -779,7 +779,8 @@ def estimate_z_peak(
         sigma_guesses.append(np.var(subsets[i]))
 
     for i in range(len(mu_guesses)):
-        fitted_mus.append(norm.fit(subsets[i]))
+        mu, sigma = norm.fit(subsets[i])
+        fitted_mus.append(float(mu))
 
     # print(fitted_mus)
     return float(np.mean(fitted_mus))
