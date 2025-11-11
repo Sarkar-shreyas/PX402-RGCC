@@ -99,7 +99,9 @@ def extract_t_samples(t: np.ndarray, N: int) -> np.ndarray:
 
 
 # ---------- t prime definition ---------- #
-def generate_t_prime(t: np.ndarray, phi: np.ndarray) -> np.ndarray:
+def generate_t_prime(
+    t: np.ndarray, phi: np.ndarray, expression: str = EXPRESSION
+) -> np.ndarray:
     """Generate next-step amplitudes using the RG transformation.
 
     Implements the core RG transformation that maps five input amplitudes and
@@ -140,7 +142,7 @@ def generate_t_prime(t: np.ndarray, phi: np.ndarray) -> np.ndarray:
     r4 = np.sqrt(1 - t4 * t4)
     r5 = np.sqrt(1 - t5 * t5)
 
-    if EXPRESSION == "Jack":
+    if expression == "Jack":
         numerator = (
             -np.exp(1j * phi2) * r3 * t1 * t4
             - np.exp(1j * (phi3 + phi2)) * t2 * t4
@@ -158,7 +160,7 @@ def generate_t_prime(t: np.ndarray, phi: np.ndarray) -> np.ndarray:
             - np.exp(1j * phi2) * r3 * t4 * t5
             - np.exp(1j * (phi2 + phi3)) * t1 * t2 * t4 * t5
         )
-    elif EXPRESSION == "Shreyas":
+    elif expression == "Shreyas":
         # My matrix (Blue)
         numerator = (r1 * t2 * (1 - np.exp(1j * phi4) * t3 * t4 * t5)) - (
             np.exp(1j * phi3)
@@ -169,7 +171,7 @@ def generate_t_prime(t: np.ndarray, phi: np.ndarray) -> np.ndarray:
         denominator = (r3 - np.exp(1j * phi3) * r1 * r5) * (
             r3 - np.exp(1j * phi2) * r2 * r4
         ) + (t3 + np.exp(1j * phi4) * t4 * t5) * (t3 + np.exp(1j * phi1) * t1 * t2)
-    elif EXPRESSION == "Cain":
+    elif expression == "Cain":
         numerator = (
             +t1 * t5 * (r2 * r3 * r4 * np.exp(1j * phi3) - 1)
             + t2
@@ -295,7 +297,9 @@ def convert_t_to_z(t: np.ndarray) -> np.ndarray:
         Array of z values, same shape as input.
     """
     # t = np.clip(t, 1.39e-11, 1.0 - 1.39e-11)
-    return np.log((1.0 / (t**2.0)) - 1.0)
+    g = convert_t_to_g(t)
+    return convert_g_to_z(g)
+    # return np.log((1.0 / (t**2.0)) - 1.0)
 
 
 # ---------- Histogram construction helper ---------- #
@@ -605,12 +609,9 @@ def l2_distance(old_hist_val, new_hist_val, old_bins, new_bins) -> float:
     """
     old_density = get_density(old_hist_val, old_bins)
     new_density = get_density(new_hist_val, new_bins)
-    shaw_density_integrand = np.abs(new_density**2 - old_density**2)
-    num_bins = len(old_hist_val)
+    shaw_density_integrand = (new_density - old_density) ** 2
     old_dz = np.diff(old_bins)
-    density_shaw_distance = float(
-        np.sum(np.sqrt(shaw_density_integrand) * old_dz) / num_bins
-    )
+    density_shaw_distance = float(np.sqrt(np.sum(shaw_density_integrand * old_dz)))
     return density_shaw_distance
 
 
@@ -690,100 +691,97 @@ def estimate_z_peak(
     float
         Arithmetic mean of the per-subset peak estimates.
     """
-    # start = time.time()
-    # z_length = len(Q_z.histogram_values)
-    # top_ten_percent = int(0.1 * z_length)
-    # top_indices = np.argsort(Q_z.histogram_values)[-top_ten_percent:]
-    # print(f"Sorted sample created in {time.time() - start:.3f} seconds.")
+    z_length = len(z_hist)
+    top_ten_percent = int(0.01 * z_length)
+    top_indices = np.argsort(z_hist)[-top_ten_percent:]
 
-    # bin_values = Q_z.bin_centers[top_indices]
-    # y_values = Q_z.histogram_values[top_indices]
-    # if len(y_values) == 0:
-    #     raise ValueError("The y values array is empty.")
+    bin_values = z_bin_centers[top_indices]
+    y_values = z_hist[top_indices]
+    if len(y_values) == 0:
+        raise ValueError("The y values array is empty.")
 
-    # length = np.random.permutation(len(y_values))
-    # needed = np.array_split(length, 10)
+    length = np.random.permutation(len(y_values))
+    subsets = np.array_split(bin_values[length], 10)
     # subsets = [bin_values[needed[i]] for i in range(10)]
 
-    # print("Fitting subsets")
-    # params = [norm.fit(x) for x in subsets]
-    # print(f"Fitting done in {time.time() - start:.3f} seconds")
-    # if len(params) == 0:
-    #     raise ValueError("No parameters were stored from the fit in estimate_z_peak.")
+    print("Fitting subsets")
+    params = [norm.fit(x) for x in subsets]
+    if len(params) == 0:
+        raise ValueError("No parameters were stored from the fit in estimate_z_peak.")
 
-    # mus = [i for i, j in params]
-    # return float(np.sum(mus) / 10)
+    mus = [i for i, j in params]
+    return float(np.sum(mus) / 10)
 
     # Different approach, grows about center peak till 5% of probability mass is obtained. Used this in previous get_peak_from_subset code.
-    bin_widths = np.diff(z_bins)  # Get widths
-    bin_masses = z_hist * bin_widths  # Get masses
+    # bin_widths = np.diff(z_bins)  # Get widths
+    # bin_masses = z_hist * bin_widths  # Get masses
 
-    # Check total mass, then calculate what 5% of that is.
-    total_mass = np.sum(bin_masses)
-    # print(f"Total bin mass of Q_z is {total_mass:.3f}")
-    top_5_percent = 0.05 * total_mass
+    # # Check total mass, then calculate what 5% of that is.
+    # total_mass = np.sum(bin_masses)
+    # # print(f"Total bin mass of Q_z is {total_mass:.3f}")
+    # top_5_percent = 0.05 * total_mass
 
-    # Store the bin indexes we care about - center and the 2 sides for later growth
-    peak_bin = np.argmax(z_hist)
-    left_bin = peak_bin
-    right_bin = peak_bin
-    final_bin = len(z_hist) - 1
-    # Hold the mass of our current bin, will grow until 5%
-    current_bin_mass = bin_masses[peak_bin]
+    # # Store the bin indexes we care about - center and the 2 sides for later growth
+    # peak_bin = np.argmax(z_hist)
+    # left_bin = peak_bin
+    # right_bin = peak_bin
+    # final_bin = len(z_hist) - 1
+    # # Hold the mass of our current bin, will grow until 5%
+    # current_bin_mass = bin_masses[peak_bin]
 
-    # We keep going until we hit 5%, or we hit the tails for whatever reason [thats a different problem then].
-    while current_bin_mass < top_5_percent and (left_bin > 0 or right_bin < final_bin):
-        # Now we decide whether to go left, or right. Check with some booleans
-        move_left = left_bin > 0
-        move_right = right_bin < final_bin
+    # # We keep going until we hit 5%, or we hit the tails for whatever reason [thats a different problem then].
+    # while current_bin_mass < top_5_percent and (left_bin > 0 or right_bin < final_bin):
+    #     # Now we decide whether to go left, or right. Check with some booleans
+    #     move_left = left_bin > 0
+    #     move_right = right_bin < final_bin
 
-        # If both directions are safe, we'll decide by values.
-        if move_left and move_right:
-            left_val = z_hist[left_bin - 1]
-            right_val = z_hist[right_bin + 1]
-            # If left has higher or equivalent value, we'll move left. Slight bias choosing to go left if equivalent, but shouldn't matter too much.
-            if left_val >= right_val:
-                left_bin -= 1
-                current_bin_mass += bin_masses[left_bin]
-            else:
-                right_bin += 1
-                current_bin_mass += bin_masses[right_bin]
-        elif move_left:
-            # If only left is safe, of course we go left
-            left_bin -= 1
-            current_bin_mass += bin_masses[left_bin]
-        else:
-            # If only right is safe, of course we go right
-            right_bin += 1
-            current_bin_mass += bin_masses[right_bin]
+    #     # If both directions are safe, we'll decide by values.
+    #     if move_left and move_right:
+    #         left_val = z_hist[left_bin - 1]
+    #         right_val = z_hist[right_bin + 1]
+    #         # If left has higher or equivalent value, we'll move left. Slight bias choosing to go left if equivalent, but shouldn't matter too much.
+    #         if left_val >= right_val:
+    #             left_bin -= 1
+    #             current_bin_mass += bin_masses[left_bin]
+    #         else:
+    #             right_bin += 1
+    #             current_bin_mass += bin_masses[right_bin]
+    #     elif move_left:
+    #         # If only left is safe, of course we go left
+    #         left_bin -= 1
+    #         current_bin_mass += bin_masses[left_bin]
+    #     else:
+    #         # If only right is safe, of course we go right
+    #         right_bin += 1
+    #         current_bin_mass += bin_masses[right_bin]
 
-    # print(f"{current_bin_mass:.3f} percent of bin mass accumulated.")
+    # # print(f"{current_bin_mass:.3f} percent of bin mass accumulated.")
 
-    # Now that we know which bins matter, we get their centers, and the z values at those edges.
-    leftmost_bin = z_bins[left_bin]
-    rightmost_bin = z_bins[right_bin + 1]
-    # Use a sample from the distribution to prevent us from storing absurdly large amounts of raw data, maybe inaccurate but we'll see.
-    samples = launder(1 * 10**7, z_hist, z_bins, z_bin_centers)
-    # And now we slice out the z values we need
-    hist_mask = np.logical_and((samples >= leftmost_bin), (samples < rightmost_bin))
-    top_5_percent_values = samples[hist_mask]
-    # print(len(top_5_percent_values))
-    # Shuffle the data so its randomly ordered
-    np.random.shuffle(top_5_percent_values)
-    # Now we split it into 10 equal sized subsets, shuffling before hand lets array_splits order slicing be fine.
-    subsets = np.array_split(top_5_percent_values, 10)
-    mu_guesses = [np.mean(subset) for subset in subsets]
-    sigma_guesses = []
-    fitted_mus = []
-    for i in range(len(mu_guesses)):
-        sigma_guesses.append(np.var(subsets[i]))
+    # # Now that we know which bins matter, we get their centers, and the z values at those edges.
+    # leftmost_bin = z_bins[left_bin]
+    # rightmost_bin = z_bins[right_bin + 1]
+    # # Use a sample from the distribution to prevent us from storing absurdly large amounts of raw data, maybe inaccurate but we'll see.
+    # samples = launder(1 * 10**7, z_hist, z_bins, z_bin_centers)
+    # # And now we slice out the z values we need
+    # hist_mask = np.logical_and((samples >= leftmost_bin), (samples < rightmost_bin))
+    # top_5_percent_values = samples[hist_mask]
+    # # print(len(top_5_percent_values))
+    # # Shuffle the data so its randomly ordered
+    # np.random.shuffle(top_5_percent_values)
+    # # Now we split it into 10 equal sized subsets, shuffling before hand lets array_splits order slicing be fine.
+    # subsets = np.array_split(top_5_percent_values, 10)
+    # mu_guesses = [np.mean(subset) for subset in subsets]
+    # sigma_guesses = []
+    # fitted_mus = []
+    # for i in range(len(mu_guesses)):
+    #     sigma_guesses.append(np.var(subsets[i]))
 
-    for i in range(len(mu_guesses)):
-        mu, sigma = norm.fit(subsets[i])
-        fitted_mus.append(float(mu))
+    # for i in range(len(mu_guesses)):
+    #     mu, sigma = norm.fit(subsets[i])
+    #     fitted_mus.append(float(mu))
 
-    # print(fitted_mus)
-    return float(np.mean(fitted_mus))
+    # # print(fitted_mus)
+    # return float(np.mean(fitted_mus))
 
 
 # ---------- Fitting helper ---------- #
@@ -834,4 +832,4 @@ def calculate_nu(slope: float, rg_steps: int = K) -> float:
     """Calculate critical exponent nu with the formula nu = ln(2^k)/ln(|slope|), where slope is calculated from fit_z_peaks, and k is the RG step number."""
     nu = np.log(2**rg_steps) / np.log(np.abs(slope))
 
-    return float(nu)
+    return float(np.abs(nu))
