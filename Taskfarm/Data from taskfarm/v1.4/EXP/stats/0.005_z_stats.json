@@ -1,48 +1,48 @@
 {
   "RG_0": {
-    "mean": 1.148015466115323,
-    "std": 1.7846903794461497
+    "mean": 1.1483604452953489,
+    "std": 1.7848218878176683
   },
   "RG_1": {
-    "mean": 2.2648495424614894,
-    "std": 1.9595971689409544,
+    "mean": 2.265020967847257,
+    "std": 1.9597272343176708,
     "std_converged": false,
-    "L2 distance with RG_0": 9.627503834314372e-06,
-    "L2_converged": true
+    "L2 distance with RG_0": 0.18717827483293295,
+    "L2_converged": false
   },
   "RG_2": {
-    "mean": 3.747584249958425,
-    "std": 2.3357860591103004,
+    "mean": 3.7476648964907704,
+    "std": 2.335774537453474,
     "std_converged": false,
-    "L2 distance with RG_1": 1.016219697597965e-05,
-    "L2_converged": true
+    "L2 distance with RG_1": 0.19285642894156957,
+    "L2_converged": false
   },
   "RG_3": {
-    "mean": 5.986045194534019,
-    "std": 2.913171436916835,
+    "mean": 5.986986509163889,
+    "std": 2.913415025292614,
     "std_converged": false,
-    "L2 distance with RG_2": 1.1093597270785705e-05,
-    "L2_converged": true
+    "L2 distance with RG_2": 0.20376379739303982,
+    "L2_converged": false
   },
   "RG_4": {
-    "mean": 9.715200281090592,
-    "std": 3.731780132361551,
+    "mean": 9.716016890199125,
+    "std": 3.7321580059910344,
     "std_converged": false,
-    "L2 distance with RG_3": 1.2550072469595061e-05,
-    "L2_converged": true
+    "L2 distance with RG_3": 0.22462234993493946,
+    "L2_converged": false
   },
   "RG_5": {
-    "mean": 16.386590237759737,
-    "std": 4.8130444339272005,
+    "mean": 16.387039384509766,
+    "std": 4.812892749478709,
     "std_converged": false,
-    "L2 distance with RG_4": 1.4546007407180368e-05,
-    "L2_converged": true
+    "L2 distance with RG_4": 0.25283956488156306,
+    "L2_converged": false
   },
   "RG_6": {
-    "mean": 28.856989706520718,
-    "std": 6.141730288850482,
+    "mean": 28.85794926837443,
+    "std": 6.141641391396043,
     "std_converged": false,
-    "L2 distance with RG_5": 1.6907479403666595e-05,
-    "L2_converged": true
+    "L2 distance with RG_5": 0.27768754802329987,
+    "L2_converged": false
   }
 }
