@@ -3,7 +3,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --mem-per-cpu=3988
 #SBATCH --cpus-per-task=1
-#SBATCH --time=04:00:00
+#SBATCH --time=08:00:00
 #SBATCH --job-name=rg_hist
 #SBATCH --output=../job_outputs/bootstrap/%x_%A.out
 #SBATCH --error=../job_logs/bootstrap/%x_%A.err
@@ -41,7 +41,7 @@ laundereddir="$jobdatadir/RG${RG_STEP}/laundered"
 T_DIR="$histdir/t"
 G_DIR="$histdir/g"
 Z_DIR="$histdir/z"
-INPUT_DIR="$histdir/input"
+INPUT_DIR="$histdir/input_t"
 SYM_DIR="$histdir/sym_z"
 
 mkdir -p "$T_DIR" "$G_DIR" "$Z_DIR" "$INPUT_DIR" "$SYM_DIR"

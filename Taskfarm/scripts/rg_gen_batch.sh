@@ -4,7 +4,7 @@
 #SBATCH --mem-per-cpu=3988
 #SBATCH --cpus-per-task=1
 #SBATCH --array=0-7
-#SBATCH --time=04:00:00
+#SBATCH --time=08:00:00
 #SBATCH --job-name=rg_gen
 #SBATCH --output=../job_outputs/bootstrap/%x_%A_%a.out
 #SBATCH --error=../job_logs/bootstrap/%x_%A_%a.err
