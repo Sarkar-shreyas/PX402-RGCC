@@ -33,7 +33,7 @@ if __name__ == "__main__":
         print(f"Laundering completed in {time() - start:.3f} seconds")
         print(f"Data in {input_file} laundered and saved to {output_file}")
         print("-" * 100)
-    else:
+    elif process == 1:
         # Then we symmetrise a histogram
         print("-" * 100)
         print(f"Symmetrisation began at {date}")
@@ -46,5 +46,22 @@ if __name__ == "__main__":
         print(f"Symmetrisation completed in {time() - start:.3f} seconds")
         print(f"Data in {input_file} symmetrised and saved to {output_file}")
         print("-" * 100)
+    elif process == 2:
+        # Then we're laundering from a t histogram
+        print("-" * 100)
+        print(f"Laundering began at {date}")
+        input_data = np.load(input_file)
+        input_hist = input_data["histval"]
+        input_bin_edges = input_data["binedges"]
+        input_bin_centers = input_data["bincenters"]
+        laundered_t = launder(
+            array_size, input_hist, input_bin_edges, input_bin_centers
+        )
+        np.savetxt(output_file, laundered_t)
+        print(f"Laundering completed in {time() - start:.3f} seconds")
+        print(f"Data in {input_file} laundered and saved to {output_file}")
+        print("-" * 100)
+    else:
+        raise SystemExit("Usage: helpers.py PROCESS ARRAY_SIZE INPUT_FILE OUTPUT_FILE")
     # Delete old files once done to prevent buildup
     # os.remove(input_file)
