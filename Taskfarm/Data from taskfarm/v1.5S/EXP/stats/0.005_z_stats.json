@@ -1,0 +1,55 @@
+{
+  "RG_0": {
+    "mean": 1.1486905861592753,
+    "std": 1.7851394169897528
+  },
+  "RG_1": {
+    "mean": 2.2656521823338442,
+    "std": 1.9601168063160699,
+    "std_converged": false,
+    "L2 distance with RG_0": 0.1872365702674723,
+    "L2_converged": false
+  },
+  "RG_2": {
+    "mean": 3.74846152353792,
+    "std": 2.336134419357213,
+    "std_converged": false,
+    "L2 distance with RG_1": 0.19286324756192483,
+    "L2_converged": false
+  },
+  "RG_3": {
+    "mean": 5.988805494179328,
+    "std": 2.913717512962603,
+    "std_converged": false,
+    "L2 distance with RG_2": 0.20384372102798298,
+    "L2_converged": false
+  },
+  "RG_4": {
+    "mean": 9.720277260250686,
+    "std": 3.7337029410025804,
+    "std_converged": false,
+    "L2 distance with RG_3": 0.2246735066224874,
+    "L2_converged": false
+  },
+  "RG_5": {
+    "mean": 16.3885036188909,
+    "std": 4.81480239845576,
+    "std_converged": false,
+    "L2 distance with RG_4": 0.25279994856163407,
+    "L2_converged": false
+  },
+  "RG_6": {
+    "mean": 25.99133434045199,
+    "std": 4.651481855378521,
+    "std_converged": false,
+    "L2 distance with RG_5": 0.2882863524357846,
+    "L2_converged": false
+  },
+  "RG_7": {
+    "mean": 29.79562473572272,
+    "std": 3.031338820121994,
+    "std_converged": false,
+    "L2 distance with RG_6": 0.20750047239733538,
+    "L2_converged": false
+  }
+}
