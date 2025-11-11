@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1 import inset_locator
 from source.utilities import (
     l2_distance,
     hist_moments,
@@ -13,7 +14,7 @@ import json
 from typing import Optional
 
 DATA_DIR = "C:/Users/ssark/Desktop/Uni/Year 4 Courses/Physics Final Year Project/Project Code/Taskfarm/Data from taskfarm"
-CURRENT_VERSION = 1.31
+CURRENT_VERSION = 1.4
 TYPE = "FP"
 NUM_RG = 8
 
@@ -180,16 +181,18 @@ if __name__ == "__main__":
 
     # Plot the symmetrised z data
     fig, (ax2, ax3) = plt.subplots(1, 2, figsize=(10, 4))
-    ax2.set_xlim([-25.0, 25.0])
+    ax2.set_xlim([-5.0, 5.0])
     ax2.set_ylim([0.0, 0.3])
-    ax2.set_title("Unclipped histogram of Unsymmetrised z data")
+    ax2.set_title("Unclipped histogram of Symmetrised z data")
     ax2.set_xlabel("z")
     ax2.set_ylabel("Q(z)")
-    ax3.set_title("Clipped histogram of Unsymmetrised z data")
+    ax3.set_title("Clipped histogram of Symmetrised z data")
     ax3.set_xlabel("z")
     ax3.set_ylabel("Q(z)")
-    ax3.set_xlim([-4, 4])
-    ax3.set_ylim([0, 0.3])
+    ax3.set_xlim([-1, 1])
+    ax3.set_ylim([0.16, 0.24])
+    ax4 = inset_locator.inset_axes(ax2, width="30%", height=0.6)
+    ax4.set_xlim([-25.0, 25.0])
     sym_z_dist = []
     sym_z_moments = []
     for i in range(NUM_RG):
@@ -204,8 +207,10 @@ if __name__ == "__main__":
             )
         sym_z_moments.append(hist_moments(map["sym_z"][i][0], map["sym_z"][i][1]))
         ax2.plot(map["sym_z"][i][2], map["sym_z"][i][3], label=f"RG{i}")
-        ax3.plot(map["sym_z"][i][2], map["sym_z"][i][3], label=f"RG{i}")
-    plt.legend()
+        ax3.scatter(map["sym_z"][i][2][::50], map["sym_z"][i][3][::50], label=f"RG{i}")
+        ax4.plot(map["sym_z"][i][2][::50], map["sym_z"][i][3][::50])
+    ax2.legend(loc="upper left")
+    ax3.legend()
     plt.savefig(f"{plots_dir}/sym_z_histogram.png", dpi=150)
     print("Data plot made for symmetrised z")
 
@@ -219,5 +224,5 @@ if __name__ == "__main__":
         retrieved_file,
         moments,
     )
-
+    # print(map["sym_z"][0][1])
     print("Analysis done.")
