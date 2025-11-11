@@ -156,12 +156,14 @@ if [[ "$TYPE" == "FP" ]]; then
         "$N" \
         "$OUTPUT_Z" \
         "$symmetrised_z"
-
+    sampling_hist="$symmetrised_z"
     echo " Symmetrised z histogram saved to: $symmetrised_z "
 else
     symmetrised_z="$OUTPUT_Z"
+    sampling_hist="$OUTPUT_T"
     echo " Performing RG iters for Type $TYPE "
     echo " Raw z histogram being used at $symmetrised_z"
+    echo " Laundering from raw t histogram at $sampling_hist"
 fi
 
 # Analyse the moments
@@ -174,24 +176,34 @@ else
     prev="$PREV_Z_HIST"
 fi
 
-python -m "source.rg" \
-    "$RG_STEP" \
-    "$prev" \
-    "$symmetrised_z" \
-    "$stats"
+if [[ "$TYPE" == "FP" ]]; then
+    python -m "source.rg" \
+        "$RG_STEP" \
+        "$prev" \
+        "$symmetrised_z" \
+        "$stats"
 
-echo " Moments of histogram for $N samples written to $stats. "
+    echo " Moments of histogram for $N samples written to $stats. "
+fi
 
 INPUT_T="$INPUT_DIR/input_t_hist_RG${RG_STEP}.npz"
 
 for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
     launderbatch="$laundereddir/t_laundered_RG${RG_STEP}_batch_${batch}.txt"
 
-    python -m "source.helpers" \
-        0 \
-        "$BATCH_SIZE" \
-        "$symmetrised_z" \
-        "$launderbatch"
+    if [[ "$TYPE" == "FP" ]]; then
+        python -m "source.helpers" \
+            0 \
+            "$BATCH_SIZE" \
+            "$sampling_hist" \
+            "$launderbatch"
+    else
+        python -m "source.helpers" \
+            2 \
+            "$BATCH_SIZE" \
+            "$sampling_hist" \
+            "$launderbatch"
+    fi
 
     echo " Batch $batch of t data laundered from Q(z) saved to $launderbatch "
 
