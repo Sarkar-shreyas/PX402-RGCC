@@ -10,7 +10,7 @@ from source.utilities import (
     hist_moments,
     l2_distance,
 )
-from data_plotting import load_hist_data, construct_moments_dict, load_moments
+from data_plotting import load_hist_data, construct_moments_dict
 import os
 import json
 from time import time
@@ -85,12 +85,12 @@ if __name__ == "__main__":
     peaks = np.zeros((NUM_RG, len(SHIFTS))).astype(float)
     print("Beginning peak estimations")
     print("-" * 100)
-
+    means = np.zeros((NUM_RG, len(SHIFTS))).astype(float)
     for j in range(len(SHIFTS)):
         z_moments = []
         z_dist = []
         shift = SHIFTS[j]
-        print(f"Estimating peak for shift {shift}")
+        # print(f"Estimating peak for shift {shift}")
         loop = time()
         for i in range(NUM_RG):
             counts = map["z"][shift][i][0]
@@ -99,6 +99,7 @@ if __name__ == "__main__":
             densities = map["z"][shift][i][3]
             peaks[i, j] = estimate_z_peak(densities, bins, centers)
             mean, std = hist_moments(counts, bins)
+            means[i, j] = mean
             z_moments.append([mean, std])
             if i > 0:
                 old_counts = map["z"][shift][i - 1][0]
@@ -106,9 +107,9 @@ if __name__ == "__main__":
                 old_std = z_moments[i - 1][1]
                 l2 = l2_distance(old_counts, counts, old_bins, bins)
                 z_dist.append(l2)
-            print(
-                f"Peak estimated for RG{i} of shift {shift} after {time() - loop:.3f} seconds"
-            )
+            # print(
+            #     f"Peak estimated for RG{i} of shift {shift} after {time() - loop:.3f} seconds"
+            # )
         z_stats = f"{stats_dir}/{shift}_z_stats.json"
         construct_moments_dict(z_stats, z_moments, z_dist, NUM_RG)
         print(f"Stats for shift {shift} saved to {z_stats}")
@@ -116,22 +117,44 @@ if __name__ == "__main__":
     print(
         f"Peaks estimated for each shift at every RG {time() - start:.3f} seconds from start of program"
     )
-    print(z_moments)
+    # print(z_moments)
     overall_stats = defaultdict(dict)
     overall_stats_file = f"{stats_dir}/overall_stats.json"
     x = np.array(SHIFTS).astype(float)
-    for i in range(1, 6):
-        y = peaks[i, :] - peaks[0, :]
+    nus = []
+    other_nus = []
+    r2s = []
+    other_r2s = []
+    for i in range(NUM_RG):
+        y = np.abs(peaks[i, :] - peaks[i, 0])
+        m = means[i, :] - means[i, 0]
+        # print(f"For RG{i}: Mean diffs: {m}")
+        ms, mr2 = fit_z_peaks(x, m)
         slope, r2 = fit_z_peaks(x, y)
-        ax_0.scatter(x, y, label=f"RG_{i}")
-        ax_1.scatter(x, y, label=f"RG_{i}")
-        ax_1.plot(x, slope * x)
+        ax_0.set_title("Difference of means")
+        ax_1.set_title("Difference of estimated peaks")
+        if i % 2 == 0:
+            ax_0.scatter(x, m)
+            ax_0.plot(x, ms * x, label=f"RG_{i}")
+            ax_1.scatter(x, y)
+            ax_1.plot(x, slope * x, label=f"RG_{i}")
         nu = calculate_nu(slope, i)
+        other_nu = calculate_nu(ms, i)
+        nus.append(nu)
+        other_nus.append(other_nu)
+        r2s.append(r2)
+        other_r2s.append(mr2)
         overall_stats[f"RG{i}"] = {
             "Nu": float(nu),
+            "Other Nu": float(other_nu),
             "Slope": float(slope),
+            "Mean Slope": float(ms),
             "R2": float(r2),
+            "Mean R2": float(mr2),
             "Peaks": list(peaks[i, :]),
+            "Peak diffs": list(y),
+            "Means": list(means[i, :]),
+            "Mean diffs": list(m),
         }
     ax_0.legend()
     ax_1.legend()
@@ -140,4 +163,21 @@ if __name__ == "__main__":
     with open(overall_stats_file, "w") as f:
         json.dump(overall_stats, f, indent=2)
 
+    fig, (ax_2, ax_3) = plt.subplots(1, 2, figsize=(10, 4))
+    # ax_2.set_xlim([0, 0.01])
+    # ax_2.set_ylim([0.0, 2])
+    ax_2.set_title("Scatter plot of Nu vs System size from means")
+    ax_2.set_xlabel("2^n")
+    ax_2.set_ylabel("Nu")
+    ax_3.set_title("Scatter plot of Nu vs System size from peaks")
+    ax_3.set_xlabel("2^n")
+    ax_3.set_ylabel("Nu")
+    # ax_3.set_xlim([0, 0.01])
+    # ax_3.set_ylim([0, 2])
+    ind = 2
+    system_size = [2**i for i in range(ind, NUM_RG)]
+    ax_2.scatter(system_size, other_nus[ind:])
+    ax_3.scatter(system_size, nus[ind:])
+    plt.savefig(f"{plots_dir}/Nu.png", dpi=150)
+    plt.close()
     print(f"Analysis done after {time() - start:.3f} seconds")
