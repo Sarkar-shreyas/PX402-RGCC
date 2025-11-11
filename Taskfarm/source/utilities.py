@@ -13,6 +13,7 @@ DIST_TOLERANCE: float = 0.001
 STD_TOLERANCE: float = 0.0005
 T_RANGE: tuple = (1.39e-11, 1.0 - 1.39e-11)
 EXPRESSION: str = "Shaw"
+G_TOL: float = 1e-15
 # EXPRESSION = "Shreyas"
 # EXPRESSION = "Cain"
 # EXPRESSION = "Jack"
@@ -70,7 +71,7 @@ def generate_initial_t_distribution(N: int) -> np.ndarray:
     numpy.ndarray
         Array of N amplitude values t = √g where g ~ U[0,1].
     """
-    g_sample = np.random.uniform(0, 1.0, N)
+    g_sample = np.random.uniform(G_TOL, 1.0 - G_TOL, N)
     t_dist = np.sqrt(g_sample)
     return t_dist
 
@@ -206,9 +207,10 @@ def generate_t_prime(
     # t_prime = np.abs(
     #     numerator / np.where(np.abs(denominator) < 1e-12, np.nan + 0j, denominator)
     # )
-    t_prime = np.abs(numerator) / np.abs(denominator)
+    # t_prime = np.abs(numerator) / np.abs(denominator)
+    t_prime = np.abs(numerator / denominator)
     return t_prime
-    # return np.clip(t_prime, 1.38e-11, 1 - 1.38e-11)
+    # return np.clip(t_prime, 1.39e-11, 1 - 1.39e-11)
 
 
 # ---------- Variable conversion helpers ---------- #
@@ -251,8 +253,7 @@ def convert_g_to_z(g: np.ndarray) -> np.ndarray:
     Input values are clipped to [1e-15, 1-1e-15] to ensure numerical stability
     of the logarithm.
     """
-    tolerance = 1e-15
-    g = np.clip(g, tolerance, 1 - tolerance)
+    g = np.clip(g, G_TOL, 1 - G_TOL)
     return np.log((1.0 - g) / g)
 
 
@@ -519,66 +520,92 @@ def launder(
     N: int, hist_vals: np.ndarray, bin_edges: np.ndarray, bin_centers: np.ndarray
 ) -> np.ndarray:
     """A copy of the laundering sample method decoupled from the Probability Distribution class"""
+    # Inverse CDF method
+    u = np.random.uniform(0, 1.0, N)  # Uniform sample from 0 to 1
+    cdf = hist_vals.cumsum()
+    cdf = cdf / cdf[-1]
+    index = np.searchsorted(
+        cdf, u
+    )  # Map it into our cdf histogram, will work fine because our cdf is normalised on initialisation.
+    index = np.clip(index, 0, len(cdf) - 1)  # Ensure we're within bounds
+    left_edge = bin_edges[
+        index
+    ]  # Find the leftmost bin, could probably just set bin_edges[0]?
+    right_edge = bin_edges[
+        index + 1
+    ]  # Find the rightmost bin, could probably just set bin_edges[-1]?
+
+    left_cdf = np.where(
+        index == 0, 0.0, cdf[index - 1]
+    )  # Starting from the left, just set the first bin to 0 then move
+    right_cdf = cdf[index]  # Starting from the right, just follow indexing
+
+    # Add a guard in the denominator for extremely small values
+    denominator = np.maximum(right_cdf - left_cdf, 1e-15)
+    # Check how close to the right bin the value is
+    fraction = (u - left_cdf) / denominator
+    # Return the values mapped within their respective bins
+    return left_edge + fraction * (right_edge - left_edge)
     # Launder a.k.a rejection method
     # Get the bin widths, and total number of bins
-    bin_width = np.diff(bin_edges)[0]
-    num_bins = len(bin_centers)
-    # Normalise the histogram manually
-    normed = hist_vals / np.sum(hist_vals * bin_width)
+    # bin_width = np.diff(bin_edges)[0]
+    # num_bins = len(bin_centers)
+    # # Normalise the histogram manually
+    # normed = hist_vals / np.sum(hist_vals * bin_width)
 
-    # Store the max height of the bins
-    max_height = np.max(normed)
-    # Store the domain edges
-    domain_min = bin_edges[0]
-    domain_max = bin_edges[-1]
-    # print(max_height)
-    # Vectorise with numpy, run using reasonable batch sizes
-    min_batch_size = 10000
-    max_batch_size = 1000000
-    # Track how many samples we've accepted and still need to be produced
-    filled = 0
-    remaining = N - filled
-    # Placeholder array initialised early so we can just update values
-    accepted = np.empty(N, dtype=float)
-    num_iters = 0
-    # Runs until we've got N samples
-    while filled < N:
-        num_iters += 1
-        # Set the batch size to be between 10000 and 1000000, but use remaining if its in the bounds
-        batch_size = max(min_batch_size, min(remaining, max_batch_size))
-        # Random x and y draws within the domains of the existing dataset
-        x = np.random.uniform(domain_min, domain_max, batch_size)
-        y = np.random.uniform(0, max_height, batch_size)
+    # # Store the max height of the bins
+    # max_height = np.max(normed)
+    # # Store the domain edges
+    # domain_min = bin_edges[0]
+    # domain_max = bin_edges[-1]
+    # # print(max_height)
+    # # Vectorise with numpy, run using reasonable batch sizes
+    # min_batch_size = 10000
+    # max_batch_size = 1000000
+    # # Track how many samples we've accepted and still need to be produced
+    # filled = 0
+    # remaining = N - filled
+    # # Placeholder array initialised early so we can just update values
+    # accepted = np.empty(N, dtype=float)
+    # num_iters = 0
+    # # Runs until we've got N samples
+    # while filled < N:
+    #     num_iters += 1
+    #     # Set the batch size to be between 10000 and 1000000, but use remaining if its in the bounds
+    #     batch_size = max(min_batch_size, min(remaining, max_batch_size))
+    #     # Random x and y draws within the domains of the existing dataset
+    #     x = np.random.uniform(domain_min, domain_max, batch_size)
+    #     y = np.random.uniform(0, max_height, batch_size)
 
-        # Check which bin the x value falls into
-        bin_number = np.ceil((x - domain_min) / bin_width).astype(int) - 1
-        # Guard if we hit the boundaries
-        bin_number = np.clip(bin_number, 0, num_bins - 1)
+    #     # Check which bin the x value falls into
+    #     bin_number = np.ceil((x - domain_min) / bin_width).astype(int) - 1
+    #     # Guard if we hit the boundaries
+    #     bin_number = np.clip(bin_number, 0, num_bins - 1)
 
-        # Store the heights at that bin
-        heights = normed[bin_number]
+    #     # Store the heights at that bin
+    #     heights = normed[bin_number]
 
-        # Setup the y mask and slice the values to accept
-        mask = y <= heights
-        acceptable = x[mask]
+    #     # Setup the y mask and slice the values to accept
+    #     mask = y <= heights
+    #     acceptable = x[mask]
 
-        # Just try again if none are acceptable
-        if len(acceptable) == 0:
-            continue
+    #     # Just try again if none are acceptable
+    #     if len(acceptable) == 0:
+    #         continue
 
-        if num_iters % 1000 == 0:
-            print(
-                f"Launder iteration {num_iters} - Accepted: {len(acceptable)}, Remaining: {remaining}, batch size: {batch_size}"
-            )
-        # Only add how many we need, since we want exactly N samples
-        to_accept = min(len(acceptable), remaining)
-        # Fill the placeholder at those indices with the new accepted values
-        # print(filled, to_accept)
-        accepted[filled : filled + to_accept] = acceptable[:to_accept]
-        filled += to_accept
-        remaining -= to_accept
+    #     if num_iters % 1000 == 0:
+    #         print(
+    #             f"Launder iteration {num_iters} - Accepted: {len(acceptable)}, Remaining: {remaining}, batch size: {batch_size}"
+    #         )
+    #     # Only add how many we need, since we want exactly N samples
+    #     to_accept = min(len(acceptable), remaining)
+    #     # Fill the placeholder at those indices with the new accepted values
+    #     # print(filled, to_accept)
+    #     accepted[filled : filled + to_accept] = acceptable[:to_accept]
+    #     filled += to_accept
+    #     remaining -= to_accept
 
-    return accepted
+    # return accepted
 
 
 def get_density(hist_vals: np.ndarray, bin_edges: np.ndarray) -> np.ndarray:
