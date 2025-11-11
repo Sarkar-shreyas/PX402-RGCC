@@ -4,8 +4,8 @@
 #SBATCH --error=../job_logs/bootstrap/%x_%A.err
 
 N=120000000
-NUM_RG_ITERS=8
-VERSION=1.53S
+NUM_RG_ITERS=12
+VERSION=1.54S
 TYPE="FP"
 INITIAL=1
 EXISTING_T=""
