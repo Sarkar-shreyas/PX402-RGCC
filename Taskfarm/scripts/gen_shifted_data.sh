@@ -5,8 +5,8 @@
 #SBATCH --cpus-per-task=1
 #SBATCH --time=08:00:00
 #SBATCH --job-name=gen_shift
-#SBATCH --output=../job_outputs/bootstrap/%x_%A_%a.out
-#SBATCH --error=../job_logs/bootstrap/%x_%A_%a.err
+#SBATCH --output=../job_outputs/bootstrap/%x_%A.out
+#SBATCH --error=../job_logs/bootstrap/%x_%A.err
 
 # Config
 N="$1"
