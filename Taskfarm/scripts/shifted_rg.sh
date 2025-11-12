@@ -5,13 +5,14 @@
 
 N=120000000
 NUM_RG_ITERS=12
+NUM_BATCHES=8
 VERSION=1.54S
 TYPE="EXP"
 INITIAL=1
 EXISTING_T=""
 prev_hist_job=""
 last_step=$((NUM_RG_ITERS - 1))
-SAMPLE_SIZE=$(( N / NUM_RG_ITERS ))
+SAMPLE_SIZE=$(( N / NUM_BATCHES ))
 
 shift="$1"
 
