@@ -8,7 +8,6 @@ import numpy as np
 from .utilities import (
     T_BINS,
     T_RANGE,
-    Probability_Distribution,
     save_data,
 )
 import sys
@@ -17,20 +16,22 @@ import sys
 def construct_initial_histogram(
     data_file: str,
     output_filename: str,
-    bins: int,
-    range: tuple,
-    density: bool = False,
+    var: str,
 ) -> None:
     """A function to construct the initial histogram for any type of data"""
     data = np.load(data_file)
     if data.size == 0:
         raise FileNotFoundError(f"Could not load data from {data_file}")
+    if var.lower() == "t" or var.lower() == "g":
+        range = T_RANGE
+        bins = T_BINS
 
-    distribution = Probability_Distribution(data, bins, range, density)
+    hist_vals, bin_edges = np.histogram(data, bins, range)
+    bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
     save_data(
-        distribution.histogram_values,
-        distribution.bin_edges,
-        distribution.bin_centers,
+        hist_vals,
+        bin_edges,
+        bin_centers,
         output_filename,
     )
 
@@ -44,7 +45,7 @@ def append_to_histogram(
     """A function to append the input data to an input histogram"""
     # Load the input data, should be a .npy file
     data = np.load(input_file)
-
+    data = data[np.isfinite(data)]
     # Load the target file, should be an .npz file
     existing_data = np.load(existing_file, allow_pickle=False)
     existing_vals = existing_data["histval"]
@@ -83,7 +84,7 @@ if __name__ == "__main__":
         # This means we're going to be creating the first histograms of t and z
         print("-" * 100)
         print(f"Constructing initial input t histogram for RG step {rg_step}")
-        construct_initial_histogram(input_t_file, output_t_file, T_BINS, T_RANGE, False)
+        construct_initial_histogram(input_t_file, output_t_file, "t")
         print(f"Input t histogram saved to {output_t_file}")
         # os.remove(input_t_file)
         # os.remove(input_g_file)

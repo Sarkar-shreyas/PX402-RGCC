@@ -10,7 +10,6 @@ from .utilities import (
     T_RANGE,
     Z_BINS,
     Z_RANGE,
-    Probability_Distribution,
     save_data,
 )
 import sys
@@ -19,20 +18,29 @@ import sys
 def construct_initial_histogram(
     data_file: str,
     output_filename: str,
-    bins: int,
-    range: tuple,
-    density: bool = False,
+    var: str,
 ) -> None:
     """A function to construct the initial histogram for any type of data"""
     data = np.load(data_file)
     if data.size == 0:
         raise FileNotFoundError(f"Could not load data from {data_file}")
+    if var.lower() == "t" or var.lower() == "g":
+        range = T_RANGE
+        bins = T_BINS
+    else:
+        range = Z_RANGE
+        bins = Z_BINS
+        min_z, max_z = Z_RANGE
+        data = data[np.isfinite(data)]
+        z_mask = np.logical_and((data >= min_z), (data <= max_z))
+        data = data[z_mask]
 
-    distribution = Probability_Distribution(data, bins, range, density)
+    hist_vals, bin_edges = np.histogram(data, bins, range)
+    bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
     save_data(
-        distribution.histogram_values,
-        distribution.bin_edges,
-        distribution.bin_centers,
+        hist_vals,
+        bin_edges,
+        bin_centers,
         output_filename,
     )
 
@@ -46,7 +54,7 @@ def append_to_histogram(
     """A function to append the input data to an input histogram"""
     # Load the input data, should be a .npy file
     data = np.load(input_file)
-
+    data = data[np.isfinite(data)]
     # Load the target file, should be an .npz file
     existing_data = np.load(existing_file, allow_pickle=False)
     existing_vals = existing_data["histval"]
@@ -88,18 +96,18 @@ if __name__ == "__main__":
         rg_step = int(sys.argv[11].strip())
     else:
         raise SystemExit(
-            "Usage: histogram_manager.py PROCESS INPUT_T_FILE INPUT_Z_FILE INPUT_G_FILE EXISTING_T_FILE EXISTING_G_FILE EXISTING_Z_FILE OUTPUT_T_FILE OUTPUT_G_FILE OUTPUT_Z_FILE RG_STEP SHIFT"
+            "Usage: histogram_manager.py PROCESS INPUT_T_FILE INPUT_G_FILE INPUT_Z_FILE EXISTING_T_FILE EXISTING_G_FILE EXISTING_Z_FILE OUTPUT_T_FILE OUTPUT_G_FILE OUTPUT_Z_FILE RG_STEP"
         )
 
     if process == 0:
         # This means we're going to be creating the first histograms of t and z
         print("-" * 100)
         print(f"Constructing initial histograms for RG step {rg_step}")
-        construct_initial_histogram(input_t_file, output_t_file, T_BINS, T_RANGE, False)
+        construct_initial_histogram(input_t_file, output_t_file, "t")
         print(f"t histogram saved to {output_t_file}")
-        construct_initial_histogram(input_g_file, output_g_file, T_BINS, T_RANGE, False)
+        construct_initial_histogram(input_g_file, output_g_file, "g")
         print(f"g histogram saved to {output_g_file}")
-        construct_initial_histogram(input_z_file, output_z_file, Z_BINS, Z_RANGE, False)
+        construct_initial_histogram(input_z_file, output_z_file, "z")
         print(f"z histogram saved to {output_z_file}")
         # os.remove(input_t_file)
         # os.remove(input_g_file)
