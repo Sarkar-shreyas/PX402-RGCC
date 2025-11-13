@@ -3,29 +3,31 @@
 #SBATCH --output=../job_outputs/bootstrap/%x_%A.out
 #SBATCH --error=../job_logs/bootstrap/%x_%A.err
 
-N=120000000
-NUM_RG_ITERS=12
-NUM_BATCHES=8
-VERSION=1.54S
-TYPE="EXP"
-INITIAL=1
-EXISTING_T=""
-prev_hist_job=""
-last_step=$((NUM_RG_ITERS - 1))
-SAMPLE_SIZE=$(( N / NUM_BATCHES ))
+# Define the constants for this RG flow
+N=150000000 # Total number of samples
+NUM_RG_ITERS=8 # Number of RG steps
+NUM_BATCHES=8 # Number of batches to generate/process data over
+VERSION=1.62S # Version for tracking changes and matrix used
+TYPE="EXP" # Type flag to toggle symmetrisation/launder target
+INITIAL=1 # Flag to generate starting distribution/histograms or not
+EXISTING_T="" # Placeholder var to point to data file for non-initial RG steps
+prev_hist_job="" # Placeholder var for holding previous job ID when setting up dependency
+last_step=$((NUM_RG_ITERS - 1)) # Var to determine which FP distribution to use for generating the shifted dataset, for now we use the latest one
+SAMPLE_SIZE=$(( N / NUM_BATCHES )) # How many samples should be calculated per batch
 
-shift="$1"
+shift="$1" # Takes in the shift value to apply for this round.
 
-basedir="$(cd "$SLURM_SUBMIT_DIR/.."&&pwd)" # Root, fyp for now
-joboutdir="$basedir/job_outputs/v${VERSION}/$TYPE/shift_${shift}"
-datadir="$joboutdir/data"
-scriptsdir="$basedir/scripts"
-logsdir="$basedir/job_logs/v${VERSION}/$TYPE/shift_${shift}"
-mkdir -p "$logsdir" "$joboutdir" "$datadir"
+basedir="$(cd "$SLURM_SUBMIT_DIR/.."&&pwd)" # Our root directory
+joboutdir="$basedir/job_outputs/v${VERSION}/$TYPE/shift_${shift}" # Where the output files will go
+datadir="$joboutdir/data" # Where the data will live
+scriptsdir="$basedir/scripts" # Where all shell scripts live
+logsdir="$basedir/job_logs/v${VERSION}/$TYPE/shift_${shift}" # Where log files will go
+mkdir -p "$logsdir" "$joboutdir" "$datadir" # Make them in case they aren't already there
 
-exec > >(tee -a "$joboutdir/${SLURM_JOB_NAME}_JOB${SLURM_JOB_ID}.out")
-exec 2> >(tee -a "$logsdir/${SLURM_JOB_NAME}_JOB${SLURM_JOB_ID}.err" >&2)
+exec > >(tee -a "$joboutdir/${SLURM_JOB_NAME}_JOB${SLURM_JOB_ID}.out") # Redirect outputs to be within their own folders, together with the data they produce
+exec 2> >(tee -a "$logsdir/${SLURM_JOB_NAME}_JOB${SLURM_JOB_ID}.err" >&2) # Redirect error logs to be within their own folders for easy grouping
 
+# General job information
 echo "==================================================="
 echo "                  SLURM JOB INFO "
 echo "---------------------------------------------------"
@@ -39,12 +41,13 @@ echo " Date of job      : [$(date '+%Y-%m-%d %H:%M:%S')] "
 echo "==================================================="
 echo ""
 
+# Where the FP distribution we'll use to generate shifted data lives
 FP_dist="$basedir/job_outputs/v${VERSION}/FP/data/RG${last_step}/hist/sym_z/sym_z_hist_RG${last_step}.npz"
 
 
 echo "============================================================================"
 echo " [$(date '+%Y-%m-%d %H:%M:%S')]: Generating initial data for shift ${shift} "
-
+# Run the job to generate initial shifted data
 shift_job=$(sbatch --parsable \
     --output=../job_outputs/bootstrap/gen_shift_${shift}_%A_%a.out \
     --error=../job_logs/bootstrap/gen_shift_${shift}_%A_%a.out \
@@ -52,12 +55,12 @@ shift_job=$(sbatch --parsable \
         "$SAMPLE_SIZE" "$VERSION" "$FP_dist" "Initial" "$shift")
 
 echo " [$(date '+%Y-%m-%d %H:%M:%S')]: Submitted shift job ${shift_job} for shift ${shift}"
-
+# For each RG, we queue data generation and then histogram jobs, dependencies ensure they run in sequence
 for step in $(seq 0 $(( NUM_RG_ITERS - 1 ))); do
     echo "================================================================================================================"
     echo " [$(date '+%Y-%m-%d %H:%M:%S')]: Proceeding with RG step $step of type $TYPE"
     laundereddir="$datadir/RG${step}/laundered"
-
+    # If its the first step, we need to use the shifted data, later steps go back to using data from the previous RG step
     if [ "$step" -eq 0 ]; then
         INITIAL=0
         gen_job_dep="$shift_job"
@@ -86,12 +89,12 @@ for step in $(seq 0 $(( NUM_RG_ITERS - 1 ))); do
         "$N" "$step" "$TYPE" "$VERSION" "$shift")
     echo "----------------------------------------------------------------------------------------------------------------"
     echo " [$(date '+%Y-%m-%d %H:%M:%S')]: Submitted histogram job for RG step $step  : $hist_job (after ${gen_job}) "
-
+    # Keep track of the job ID for setting up dependencies in order
     prev_hist_job="$hist_job"
     INITIAL=0
 
     EXISTING_T="$laundereddir"
-
+    sleep 5
 done
 echo "================================================================================================================"
 echo " All ${NUM_RG_ITERS} RG jobs submitted. Final dependency ends at JOB${prev_hist_job} "

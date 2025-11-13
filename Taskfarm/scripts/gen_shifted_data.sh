@@ -8,13 +8,13 @@
 #SBATCH --output=../job_outputs/bootstrap/%x_%A.out
 #SBATCH --error=../job_logs/bootstrap/%x_%A.err
 
-# Config
-N="$1"
-VERSION="$2"
-INPUT_FILE="$3"
-STEP="$4"
-shift="$5"
-TYPE="EXP"
+# Define the constants for this RG flow
+N="$1" # Total number of samples
+VERSION="$2" # Version for tracking changes and matrix used
+INPUT_FILE="$3" # The input histogram we launder and shift from
+STEP="$4" # The RG step we're currently at
+shift="$5" # Takes in the shift value to apply for this round.
+TYPE="EXP" # Type flag to toggle symmetrisation/launder target
 
 set -euo pipefail
 
@@ -22,19 +22,20 @@ set -euo pipefail
 module purge
 module load GCC/13.3.0 SciPy-bundle/2024.05
 
-basedir="$(cd "$SLURM_SUBMIT_DIR/.."&&pwd)" # Root, fyp for now
+basedir="$(cd "$SLURM_SUBMIT_DIR/.."&&pwd)" # Our root directory
 codedir="$basedir/code" # Where the code lives
-logsdir="$basedir/job_logs/v${VERSION}/$TYPE/shift_${shift}/${SLURM_JOB_NAME}" # Where logs will be sent
-outputdir="$basedir/job_outputs/v${VERSION}/$TYPE/shift_${shift}" # Where the outputs will live
-joboutdir="$outputdir/output/${SLURM_JOB_NAME}/${STEP}" # General output directory
+logsdir="$basedir/job_logs/v${VERSION}/$TYPE/shift_${shift}/${SLURM_JOB_NAME}" # Where log files will go
+outputdir="$basedir/job_outputs/v${VERSION}/$TYPE/shift_${shift}" # General output dir for this shift
+joboutdir="$outputdir/output/${SLURM_JOB_NAME}/${STEP}" # Where the output files will go
 jobdatadir="$outputdir/data" # Where the data will go
-stepdir="$jobdatadir/${STEP}"
-mkdir -p "$outputdir" "$logsdir" # Make these now so that it does it every time we run this job
-mkdir -p "$joboutdir" "$jobdatadir" "$stepdir"
+stepdir="$jobdatadir/${STEP}" # The data directory for this RG step
+mkdir -p "$outputdir" "$logsdir" # Make them in case they aren't already there
+mkdir -p "$joboutdir" "$jobdatadir" "$stepdir" # Make them in case they aren't already there
 
-exec > >(tee -a "$joboutdir/JOB${SLURM_JOB_ID}.out")
-exec 2> >(tee -a "$logsdir/JOB${SLURM_JOB_ID}.err" >&2)
+exec > >(tee -a "$joboutdir/JOB${SLURM_JOB_ID}.out") # Redirect outputs to be within their own folders, together with the data they produce
+exec 2> >(tee -a "$logsdir/JOB${SLURM_JOB_ID}.err" >&2) # Redirect error logs to be within their own folders for easy grouping
 
+# General job information
 echo "==================================================="
 echo "                  SLURM JOB INFO "
 echo "---------------------------------------------------"
@@ -46,7 +47,7 @@ echo " Date of job      : [$(date '+%Y-%m-%d %H:%M:%S')] "
 echo "==================================================="
 echo ""
 
-
+# Config for confirmation purposes
 echo "====================================================================="
 echo "      Config for shifting samples from the FP for shift $shift "
 echo "---------------------------------------------------------------------"
@@ -56,11 +57,12 @@ echo " Output data directory : $stepdir"
 echo "====================================================================="
 echo ""
 
-
+# Make sure the system recognises the python path to ensure relative imports proceed without issue
 export PYTHONPATH="$codedir:$PYTHONPATH"
 cd "$codedir"
 SRC_DIR="$codedir/source" # This is where the actual code lives
 
+# Where to store the shifted data for use in later RG steps
 OUTPUT_FILE="$jobdatadir/${STEP}/perturbed_t_shift_${shift}.npy"
 
 python -m "source.shift_z" \

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-shifts=( 0.0 0.003 0.005 0.007 0.009 )
+shifts=( 0.0 0.005 0.009 )
 
 prev_shift_job=""
 
@@ -19,6 +19,7 @@ for shift in "${shifts[@]}"; do
     fi
 
     prev_shift_job="$shift_job"
+    sleep 30
 done
 
 echo "All shift jobs have been submitted."

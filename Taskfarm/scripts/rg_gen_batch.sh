@@ -9,18 +9,18 @@
 #SBATCH --output=../job_outputs/bootstrap/%x_%A_%a.out
 #SBATCH --error=../job_logs/bootstrap/%x_%A_%a.err
 
-# Config variables
-VERSION="$5" # A version =number to help me track where we're at
-TYPE="$6"
-SHIFT="${7-}"
+# Define the constants for this RG flow
+VERSION="$5" # Version for tracking changes and matrix used
+TYPE="$6" # Type flag to toggle symmetrisation/launder target
+SHIFT="${7-}" # Takes in the shift value if running EXP, mostly for folder location
 N="$1" # Target number of samples
-RG_STEP="$4" # Step counter
-INITIAL="$2" # This is the first run, need initial distribution
-NUM_BATCHES=$((SLURM_ARRAY_TASK_MAX + 1)) # Number of batches to split this into, same as array size
-BATCH_SIZE=$(( N / NUM_BATCHES ))
-TASK_ID=${SLURM_ARRAY_TASK_ID}
-# Placeholder for later steps
-EXISTING_T_FILE="$3"
+RG_STEP="$4" # The RG step we're currently at
+INITIAL="$2" # Flag to generate starting distribution/histograms or not
+NUM_BATCHES=$((SLURM_ARRAY_TASK_MAX + 1)) # Number of batches to generate/process data over, same as array size
+BATCH_SIZE=$(( N / NUM_BATCHES )) # How many samples should be calculated per batch
+TASK_ID=${SLURM_ARRAY_TASK_ID} # Array task ID for easy tracking
+
+EXISTING_T_FILE="$3" # Placeholder var to point to data file for non-initial RG steps
 set -euo pipefail
 
 # Libraries needed
@@ -28,8 +28,12 @@ module purge
 module load GCC/13.3.0 SciPy-bundle/2024.05
 
 # Directories we're using
-basedir="$(cd "$SLURM_SUBMIT_DIR/.."&&pwd)" # Root, fyp for now
+basedir="$(cd "$SLURM_SUBMIT_DIR/.."&&pwd)" # Our root directory
 codedir="$basedir/code" # Where the code lives
+tempdir="${TMPDIR:-/tmp}/${SLURM_JOB_NAME}_${SLURM_ARRAY_JOB_ID}" # The temp directory we'll use, unique to each job ID
+tempbatchdir="$tempdir/RG${RG_STEP}/batch_${TASK_ID}" # The temp directory to write batch data to
+
+# If we're doing an EXP run, set the directories accordingly
 if [[ -n "${SHIFT}" ]]; then
     jobsdir="$basedir/jobs/v${VERSION}/$TYPE/shift_${SHIFT}" # Where metadata will be
     logsdir="$basedir/job_logs/v${VERSION}/$TYPE/shift_${SHIFT}/${SLURM_JOB_NAME}/RG${RG_STEP}" # Where logs will be sent
@@ -39,20 +43,21 @@ else
     logsdir="$basedir/job_logs/v${VERSION}/$TYPE/${SLURM_JOB_NAME}/RG${RG_STEP}" # Where logs will be sent
     outputdir="$basedir/job_outputs/v${VERSION}/$TYPE" # Where the outputs will live
 fi
-
-joboutdir="$outputdir/output/${SLURM_JOB_NAME}/RG${RG_STEP}"
-jobdatadir="$outputdir/data"
+# Common directories regardless of TYPE
+joboutdir="$outputdir/output/${SLURM_JOB_NAME}/RG${RG_STEP}" # Where the output files will go
+jobdatadir="$outputdir/data" # Where the data will live
 batchdir="$jobdatadir/RG${RG_STEP}/batches" # Make a folder for the batches, combined can stay out later
-batchsubdir="$batchdir/batch_${TASK_ID}"
+batchsubdir="$tempbatchdir"
 
 
+# Make these now so that it does it every time we run this job
+mkdir -p "$outputdir" "$logsdir" "$jobsdir"
+mkdir -p "$joboutdir" "$jobdatadir" "$batchdir"
+mkdir -p "$tempbatchdir"
+exec > >(tee -a "$joboutdir/RG_${RG_STEP}_JOB${SLURM_ARRAY_JOB_ID}_TASK${TASK_ID}.out") # Redirect outputs to be within their own folders, together with the data they produce
+exec 2> >(tee -a "$logsdir/RG_${RG_STEP}_JOB${SLURM_ARRAY_JOB_ID}_TASK${TASK_ID}.err" >&2) # Redirect error logs to be within their own folders for easy grouping
 
-mkdir -p "$outputdir" "$logsdir" "$jobsdir" # Make these now so that it does it every time we run this job
-mkdir -p "$joboutdir" "$jobdatadir" "$batchdir" "$batchsubdir"
-
-exec > >(tee -a "$joboutdir/RG_${RG_STEP}_JOB${SLURM_ARRAY_JOB_ID}_TASK${TASK_ID}.out")
-exec 2> >(tee -a "$logsdir/RG_${RG_STEP}_JOB${SLURM_ARRAY_JOB_ID}_TASK${TASK_ID}.err" >&2)
-
+# General job information
 echo "==================================================="
 echo "                  SLURM JOB INFO "
 echo "---------------------------------------------------"
@@ -78,7 +83,7 @@ echo " Batch directory   : $batchdir"
 echo "====================================================================="
 echo ""
 
-# cd to code directory for paths
+# Make sure the system recognises the python path to ensure relative imports proceed without issue
 export PYTHONPATH="$codedir:$PYTHONPATH"
 cd "$codedir"
 SRC_DIR="$codedir/source" # This is where the actual code lives
@@ -111,6 +116,14 @@ else
     "$INITIAL" \
     "$RG_STEP"
 fi
+
+# Move batch back to shared storage
+target_dir="$batchdir/batch_${TASK_ID}"
+mkdir -p "$target_dir"
+rsync -a "$tempbatchdir/" "$target_dir/"
+
+# Free the tmp folder
+rm -rf "$tempbatchdir"
 
 echo "==================================================================================================="
 echo " Data gen job ${SLURM_ARRAY_JOB_ID} for RG${RG_STEP} completed on : [$(date '+%Y-%m-%d %H:%M:%S')] "
