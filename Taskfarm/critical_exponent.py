@@ -16,10 +16,10 @@ import json
 from time import time
 
 DATA_DIR = "C:/Users/ssark/Desktop/Uni/Year 4 Courses/Physics Final Year Project/Project Code/Taskfarm/Data from taskfarm"
-CURRENT_VERSION = "1.53S"
+CURRENT_VERSION = "1.61S"
 TYPE = "EXP"
 NUM_RG = 8
-SHIFTS = [0.0, 0.003, 0.005, 0.007, 0.009]
+SHIFTS = [0.0, 0.005, 0.009]
 
 if __name__ == "__main__":
     version = CURRENT_VERSION

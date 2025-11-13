@@ -14,7 +14,7 @@ import json
 from typing import Optional
 
 DATA_DIR = "C:/Users/ssark/Desktop/Uni/Year 4 Courses/Physics Final Year Project/Project Code/Taskfarm/Data from taskfarm"
-CURRENT_VERSION = "1.53S"
+CURRENT_VERSION = "1.61S"
 TYPE = "FP"
 NUM_RG = 8
 
@@ -90,7 +90,7 @@ def construct_moments_dict(
 if __name__ == "__main__":
     # Load constants
     version = CURRENT_VERSION
-    N = 80000000
+    N = 120000000
     var_names = ["t", "g", "z", "input_t", "sym_z"]
     hist_dir = f"{DATA_DIR}/v{version}/{TYPE}/hist"
     stats_dir = f"{DATA_DIR}/v{version}/{TYPE}/stats"
@@ -206,9 +206,12 @@ if __name__ == "__main__":
                 )
             )
         sym_z_moments.append(hist_moments(map["sym_z"][i][0], map["sym_z"][i][1]))
-        ax2.plot(map["sym_z"][i][2], map["sym_z"][i][3], label=f"RG{i}")
-        ax3.scatter(map["sym_z"][i][2][::50], map["sym_z"][i][3][::50], label=f"RG{i}")
-        ax4.plot(map["sym_z"][i][2][::50], map["sym_z"][i][3][::50])
+        if i % 2 == 0:
+            ax2.plot(map["sym_z"][i][2], map["sym_z"][i][3], label=f"RG{i}")
+            ax3.scatter(
+                map["sym_z"][i][2][::50], map["sym_z"][i][3][::50], label=f"RG{i}"
+            )
+            ax4.plot(map["sym_z"][i][2][::50], map["sym_z"][i][3][::50])
     ax2.legend(loc="upper left")
     ax3.legend()
     plt.savefig(f"{plots_dir}/sym_z_histogram.png", dpi=150)
