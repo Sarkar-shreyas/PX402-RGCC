@@ -31,7 +31,7 @@ if __name__ == "__main__":
         existing_t_file = sys.argv[5].strip()
     else:
         raise SystemExit(
-            "Usage: histogram_manager.py ARRAY_SIZE OUTPUT_DIR INITIAL RG_STEP [EXISTING_T_FILE]"
+            "Usage: data_generation.py ARRAY_SIZE OUTPUT_DIR INITIAL RG_STEP [EXISTING_T_FILE]"
         )
 
     print("-" * 100)
