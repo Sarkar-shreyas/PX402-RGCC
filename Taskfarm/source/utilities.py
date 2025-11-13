@@ -1,5 +1,6 @@
 import numpy as np
 from numpy.polynomial import polynomial
+from scipy.optimize import curve_fit
 from scipy.stats import norm
 
 # ---------- Constants ---------- #
@@ -11,7 +12,7 @@ Z_RANGE: tuple = (-50.0, 50.0)
 Z_PERTURBATION: float = 0.007
 DIST_TOLERANCE: float = 0.001
 STD_TOLERANCE: float = 0.0005
-T_RANGE: tuple = (1.39e-11, 1.0 - 1.39e-11)
+T_RANGE: tuple = (0.0, 1.0)
 EXPRESSION: str = "Shaw"
 G_TOL: float = 1e-15
 # EXPRESSION = "Shreyas"
@@ -210,6 +211,7 @@ def generate_t_prime(
     # t_prime = np.abs(numerator) / np.abs(denominator)
     t_prime = np.abs(numerator / denominator)
     return t_prime
+    # return t_prime[np.isfinite(t_prime)]
     # return np.clip(t_prime, 1.39e-11, 1 - 1.39e-11)
 
 
@@ -304,215 +306,215 @@ def convert_t_to_z(t: np.ndarray) -> np.ndarray:
 
 
 # ---------- Histogram construction helper ---------- #
-class Probability_Distribution:
-    """A class for managing binned probability distributions in the RG analysis.
+# class Probability_Distribution:
+#     """A class for managing binned probability distributions in the RG analysis.
 
-    This class provides tools for creating, analyzing, and sampling from
-    probability distributions represented as normalized histograms. It supports
-    operations needed for the RG flow analysis including distance calculations
-    between distributions and statistical measurements.
+#     This class provides tools for creating, analyzing, and sampling from
+#     probability distributions represented as normalized histograms. It supports
+#     operations needed for the RG flow analysis including distance calculations
+#     between distributions and statistical measurements.
 
-    Parameters
-    ----------
-    values : numpy.ndarray
-        Raw values to bin into a probability distribution.
-    bins : int, optional
-        Number of bins for the histogram (default from config.BINS).
-    range : tuple, optional
-        (min, max) range for binning (default from config.Z_RANGE).
+#     Parameters
+#     ----------
+#     values : numpy.ndarray
+#         Raw values to bin into a probability distribution.
+#     bins : int, optional
+#         Number of bins for the histogram (default from config.BINS).
+#     range : tuple, optional
+#         (min, max) range for binning (default from config.Z_RANGE).
 
-    Attributes
-    ----------
-    bin_edges : numpy.ndarray
-        Edges of the histogram bins, shape (bins+1,).
-    histogram_values : numpy.ndarray
-        Normalized histogram values, shape (bins,).
-    cdf : numpy.ndarray
-        Cumulative distribution function, shape (bins,).
-    """
+#     Attributes
+#     ----------
+#     bin_edges : numpy.ndarray
+#         Edges of the histogram bins, shape (bins+1,).
+#     histogram_values : numpy.ndarray
+#         Normalized histogram values, shape (bins,).
+#     cdf : numpy.ndarray
+#         Cumulative distribution function, shape (bins,).
+#     """
 
-    def __init__(self, values, bins=Z_BINS, range=Z_RANGE, density: bool = True):
-        histogram_values, bin_edges = np.histogram(
-            values, bins=bins, range=range, density=density
-        )
-        cdf = histogram_values.cumsum()
-        cdf = cdf / cdf[-1]
-        self.bin_edges = bin_edges
-        self.domain_min = min(range)
-        self.domain_max = max(range)
-        self.domain_width = np.abs(self.domain_min) + np.abs(self.domain_max)
-        self.bin_centers = 0.5 * (bin_edges[1:] + bin_edges[:-1])
-        self.histogram_values = histogram_values
-        self.cdf = cdf
+#     def __init__(self, values, bins=Z_BINS, range=Z_RANGE, density: bool = True):
+#         histogram_values, bin_edges = np.histogram(
+#             values, bins=bins, range=range, density=density
+#         )
+#         cdf = histogram_values.cumsum()
+#         cdf = cdf / cdf[-1]
+#         self.bin_edges = bin_edges
+#         self.domain_min = min(range)
+#         self.domain_max = max(range)
+#         self.domain_width = np.abs(self.domain_min) + np.abs(self.domain_max)
+#         self.bin_centers = 0.5 * (bin_edges[1:] + bin_edges[:-1])
+#         self.histogram_values = histogram_values
+#         self.cdf = cdf
 
-    def histogram_distances(
-        self, other_histogram_values, other_histogram_bin_edges
-    ) -> float:
-        """Calculate L2 distance between this distribution and another.
+#     def histogram_distances(
+#         self, other_histogram_values, other_histogram_bin_edges
+#     ) -> float:
+#         """Calculate L2 distance between this distribution and another.
 
-        Computes the integrated squared difference between two normalized
-        histograms: δ = √∫(Q_{k+1}(z)² - Q_k(z)²)dz.
+#         Computes the integrated squared difference between two normalized
+#         histograms: δ = √∫(Q_{k+1}(z)² - Q_k(z)²)dz.
 
-        Parameters
-        ----------
-        other_histogram_values : numpy.ndarray
-            Normalized values from other histogram, shape (bins,).
-        other_histogram_bin_edges : numpy.ndarray
-            Bin edges from other histogram, shape (bins+1,).
+#         Parameters
+#         ----------
+#         other_histogram_values : numpy.ndarray
+#             Normalized values from other histogram, shape (bins,).
+#         other_histogram_bin_edges : numpy.ndarray
+#             Bin edges from other histogram, shape (bins+1,).
 
-        Returns
-        -------
-        float
-            L2 distance between the distributions.
-        """
-        integrand = (self.histogram_values - other_histogram_values) ** 2
-        dz = np.diff(other_histogram_bin_edges)
-        distance = float(np.sqrt(np.sum(integrand * dz)))
-        return distance
+#         Returns
+#         -------
+#         float
+#             L2 distance between the distributions.
+#         """
+#         integrand = (self.histogram_values - other_histogram_values) ** 2
+#         dz = np.diff(other_histogram_bin_edges)
+#         distance = float(np.sqrt(np.sum(integrand * dz)))
+#         return distance
 
-    def update(self, new_hist_values):
-        """Replace the stored histogram and recompute the CDF.
+#     def update(self, new_hist_values):
+#         """Replace the stored histogram and recompute the CDF.
 
-        Parameters
-        ----------
-        new_hist_values : numpy.ndarray
-            Normalized histogram values for each bin (shape: (bins,)). The
-            values should represent a probability density over the bin widths.
-        new_bin_edges : numpy.ndarray
-            Bin edges corresponding to the histogram (shape: (bins+1,)).
+#         Parameters
+#         ----------
+#         new_hist_values : numpy.ndarray
+#             Normalized histogram values for each bin (shape: (bins,)). The
+#             values should represent a probability density over the bin widths.
+#         new_bin_edges : numpy.ndarray
+#             Bin edges corresponding to the histogram (shape: (bins+1,)).
 
-        Notes
-        -----
-        This method updates the distribution in-place and recomputes the
-        cumulative distribution function (CDF) from the provided histogram
-        values. If the provided histogram values are not normalized, the
-        computed CDF will be scaled by their cumulative sum (i.e. cdf[-1]).
-        The caller should ensure that the inputs are valid (non-negative and
-        consistent shapes) to avoid runtime errors.
-        """
-        self.histogram_values = new_hist_values
-        cdf = new_hist_values.cumsum()
-        cdf /= cdf[-1]
-        self.cdf = cdf
+#         Notes
+#         -----
+#         This method updates the distribution in-place and recomputes the
+#         cumulative distribution function (CDF) from the provided histogram
+#         values. If the provided histogram values are not normalized, the
+#         computed CDF will be scaled by their cumulative sum (i.e. cdf[-1]).
+#         The caller should ensure that the inputs are valid (non-negative and
+#         consistent shapes) to avoid runtime errors.
+#         """
+#         self.histogram_values = new_hist_values
+#         cdf = new_hist_values.cumsum()
+#         cdf /= cdf[-1]
+#         self.cdf = cdf
 
-    def mean_and_std(self) -> tuple:
-        """Calculate mean and standard deviation of the distribution.
+#     def mean_and_std(self) -> tuple:
+#         """Calculate mean and standard deviation of the distribution.
 
-        Uses the normalized histogram values to compute first and second
-        moments of the distribution.
+#         Uses the normalized histogram values to compute first and second
+#         moments of the distribution.
 
-        Returns
-        -------
-        tuple
-            (mean, standard_deviation) of the distribution.
-        """
-        centers = 0.5 * (self.bin_edges[:-1] + self.bin_edges[1:])
-        mean = (centers * self.histogram_values).sum() / self.histogram_values.sum()
-        variance = (
-            ((centers - mean) ** 2) * self.histogram_values
-        ).sum() / self.histogram_values.sum()
-        standard_deviation = np.sqrt(variance)
-        return mean, standard_deviation
+#         Returns
+#         -------
+#         tuple
+#             (mean, standard_deviation) of the distribution.
+#         """
+#         centers = 0.5 * (self.bin_edges[:-1] + self.bin_edges[1:])
+#         mean = (centers * self.histogram_values).sum() / self.histogram_values.sum()
+#         variance = (
+#             ((centers - mean) ** 2) * self.histogram_values
+#         ).sum() / self.histogram_values.sum()
+#         standard_deviation = np.sqrt(variance)
+#         return mean, standard_deviation
 
-    def sample(self, N: int) -> np.ndarray:
-        """Generate random samples from the distribution.
+#     def sample(self, N: int) -> np.ndarray:
+#         """Generate random samples from the distribution.
 
-        Uses inverse transform sampling: generates uniform random numbers,
-        maps them through the CDF, and interpolates within bins to get
-        continuous values.
+#         Uses inverse transform sampling: generates uniform random numbers,
+#         maps them through the CDF, and interpolates within bins to get
+#         continuous values.
 
-        Parameters
-        ----------
-        N : int
-            Number of samples to generate.
+#         Parameters
+#         ----------
+#         N : int
+#             Number of samples to generate.
 
-        Returns
-        -------
-        numpy.ndarray
-            Array of N samples drawn from the distribution.
-        """
-        # Inverse CDF method
-        # u = np.random.uniform(0, 1.0, N)  # Uniform sample from 0 to 1
-        # index = np.searchsorted(
-        #     self.cdf, u
-        # )  # Map it into our cdf histogram, will work fine because our cdf is normalised on initialisation.
-        # index = np.clip(index, 0, len(self.cdf) - 1)  # Ensure we're within bounds
-        # left_edge = self.bin_edges[
-        #     index
-        # ]  # Find the leftmost bin, could probably just set bin_edges[0]?
-        # right_edge = self.bin_edges[
-        #     index + 1
-        # ]  # Find the rightmost bin, could probably just set bin_edges[-1]?
+#         Returns
+#         -------
+#         numpy.ndarray
+#             Array of N samples drawn from the distribution.
+#         """
+#         # Inverse CDF method
+#         # u = np.random.uniform(0, 1.0, N)  # Uniform sample from 0 to 1
+#         # index = np.searchsorted(
+#         #     self.cdf, u
+#         # )  # Map it into our cdf histogram, will work fine because our cdf is normalised on initialisation.
+#         # index = np.clip(index, 0, len(self.cdf) - 1)  # Ensure we're within bounds
+#         # left_edge = self.bin_edges[
+#         #     index
+#         # ]  # Find the leftmost bin, could probably just set bin_edges[0]?
+#         # right_edge = self.bin_edges[
+#         #     index + 1
+#         # ]  # Find the rightmost bin, could probably just set bin_edges[-1]?
 
-        # left_cdf = np.where(
-        #     index == 0, 0.0, self.cdf[index - 1]
-        # )  # Starting from the left, just set the first bin to 0 then move
-        # right_cdf = self.cdf[index]  # Starting from the right, just follow indexing
+#         # left_cdf = np.where(
+#         #     index == 0, 0.0, self.cdf[index - 1]
+#         # )  # Starting from the left, just set the first bin to 0 then move
+#         # right_cdf = self.cdf[index]  # Starting from the right, just follow indexing
 
-        # # Add a guard in the denominator for extremely small values
-        # denominator = np.maximum(right_cdf - left_cdf, 1e-15)
-        # # Check how close to the right bin the value is
-        # fraction = (u - left_cdf) / denominator
-        # # Return the values mapped within their respective bins
-        # return left_edge + fraction * (right_edge - left_edge)
+#         # # Add a guard in the denominator for extremely small values
+#         # denominator = np.maximum(right_cdf - left_cdf, 1e-15)
+#         # # Check how close to the right bin the value is
+#         # fraction = (u - left_cdf) / denominator
+#         # # Return the values mapped within their respective bins
+#         # return left_edge + fraction * (right_edge - left_edge)
 
-        # Launder a.k.a rejection method
-        # Get the bin widths, and total number of bins
-        bin_width = np.diff(self.bin_edges)[0]
-        num_bins = len(self.bin_centers)
-        # Normalise the histogram manually
-        normed = self.histogram_values / np.sum(self.histogram_values * bin_width)
+#         # Launder a.k.a rejection method
+#         # Get the bin widths, and total number of bins
+#         bin_width = np.diff(self.bin_edges)[0]
+#         num_bins = len(self.bin_centers)
+#         # Normalise the histogram manually
+#         normed = self.histogram_values / np.sum(self.histogram_values * bin_width)
 
-        # Store the max height of the bins
-        max_height = np.max(normed)
-        # print(max_height)
-        # Vectorise with numpy, run using reasonable batch sizes
-        min_batch_size = 10000
-        max_batch_size = 1000000
-        # Track how many samples we've accepted and still need to be produced
-        filled = 0
-        remaining = N - filled
-        # Placeholder array initialised early so we can just update values
-        accepted = np.empty(N, dtype=float)
-        num_iters = 0
-        # Runs until we've got N samples
-        while filled < N:
-            num_iters += 1
-            # Set the batch size to be between 10000 and 1000000, but use remaining if its in the bounds
-            batch_size = max(min_batch_size, min(remaining, max_batch_size))
-            # Random x and y draws within the domains of the existing dataset
-            x = np.random.uniform(self.domain_min, self.domain_max, batch_size)
-            y = np.random.uniform(0, max_height, batch_size)
+#         # Store the max height of the bins
+#         max_height = np.max(normed)
+#         # print(max_height)
+#         # Vectorise with numpy, run using reasonable batch sizes
+#         min_batch_size = 10000
+#         max_batch_size = 1000000
+#         # Track how many samples we've accepted and still need to be produced
+#         filled = 0
+#         remaining = N - filled
+#         # Placeholder array initialised early so we can just update values
+#         accepted = np.empty(N, dtype=float)
+#         num_iters = 0
+#         # Runs until we've got N samples
+#         while filled < N:
+#             num_iters += 1
+#             # Set the batch size to be between 10000 and 1000000, but use remaining if its in the bounds
+#             batch_size = max(min_batch_size, min(remaining, max_batch_size))
+#             # Random x and y draws within the domains of the existing dataset
+#             x = np.random.uniform(self.domain_min, self.domain_max, batch_size)
+#             y = np.random.uniform(0, max_height, batch_size)
 
-            # Check which bin the x value falls into
-            bin_number = np.ceil((x - self.domain_min) / bin_width).astype(int) - 1
-            # Guard if we hit the boundaries
-            bin_number = np.clip(bin_number, 0, num_bins - 1)
+#             # Check which bin the x value falls into
+#             bin_number = np.ceil((x - self.domain_min) / bin_width).astype(int) - 1
+#             # Guard if we hit the boundaries
+#             bin_number = np.clip(bin_number, 0, num_bins - 1)
 
-            # Store the heights at that bin
-            heights = normed[bin_number]
+#             # Store the heights at that bin
+#             heights = normed[bin_number]
 
-            # Setup the y mask and slice the values to accept
-            mask = y <= heights
-            acceptable = x[mask]
+#             # Setup the y mask and slice the values to accept
+#             mask = y <= heights
+#             acceptable = x[mask]
 
-            # Just try again if none are acceptable
-            if len(acceptable) == 0:
-                continue
+#             # Just try again if none are acceptable
+#             if len(acceptable) == 0:
+#                 continue
 
-            # if num_iters % 1000 == 0:
-            #     print(
-            #         f"Still laundering, Accepted: {len(acceptable)}, Remaining: {remaining}, batch size: {batch_size}"
-            #     )
-            # Only add how many we need, since we want exactly N samples
-            to_accept = min(len(acceptable), remaining)
-            # Fill the placeholder at those indices with the new accepted values
-            # print(filled, to_accept)
-            accepted[filled : filled + to_accept] = acceptable[:to_accept]
-            filled += to_accept
-            remaining -= to_accept
+#             # if num_iters % 1000 == 0:
+#             #     print(
+#             #         f"Still laundering, Accepted: {len(acceptable)}, Remaining: {remaining}, batch size: {batch_size}"
+#             #     )
+#             # Only add how many we need, since we want exactly N samples
+#             to_accept = min(len(acceptable), remaining)
+#             # Fill the placeholder at those indices with the new accepted values
+#             # print(filled, to_accept)
+#             accepted[filled : filled + to_accept] = acceptable[:to_accept]
+#             filled += to_accept
+#             remaining -= to_accept
 
-        return accepted
+#         return accepted
 
 
 # ---------- Sampling helpers decoupled from P_D ---------- #
@@ -521,91 +523,79 @@ def launder(
 ) -> np.ndarray:
     """A copy of the laundering sample method decoupled from the Probability Distribution class"""
     # Inverse CDF method
-    u = np.random.uniform(0, 1.0, N)  # Uniform sample from 0 to 1
-    cdf = hist_vals.cumsum()
-    cdf = cdf / cdf[-1]
-    index = np.searchsorted(
-        cdf, u
-    )  # Map it into our cdf histogram, will work fine because our cdf is normalised on initialisation.
-    index = np.clip(index, 0, len(cdf) - 1)  # Ensure we're within bounds
-    left_edge = bin_edges[
-        index
-    ]  # Find the leftmost bin, could probably just set bin_edges[0]?
-    right_edge = bin_edges[
-        index + 1
-    ]  # Find the rightmost bin, could probably just set bin_edges[-1]?
+    # u = np.random.random(size=N)  # random indices
+    # cdf = hist_vals.cumsum()
+    # cdf = cdf / cdf[-1]
+    # # Map it into our cdf histogram, will work fine because our cdf is normalised above
+    # index = np.searchsorted(cdf, u, side="right")
+    # index = np.clip(index, 0, len(hist_vals) - 1)  # Ensure we're within bounds
+    # left_edge = bin_edges[index]
+    # right_edge = bin_edges[index + 1]
 
-    left_cdf = np.where(
-        index == 0, 0.0, cdf[index - 1]
-    )  # Starting from the left, just set the first bin to 0 then move
-    right_cdf = cdf[index]  # Starting from the right, just follow indexing
-
-    # Add a guard in the denominator for extremely small values
-    denominator = np.maximum(right_cdf - left_cdf, 1e-15)
-    # Check how close to the right bin the value is
-    fraction = (u - left_cdf) / denominator
-    # Return the values mapped within their respective bins
-    return left_edge + fraction * (right_edge - left_edge)
+    # # Check how close to the right bin the value is
+    # diff = right_edge - left_edge
+    # # Return values uniformly from their bins
+    # return left_edge + diff * np.random.random(size=N)
     # Launder a.k.a rejection method
     # Get the bin widths, and total number of bins
-    # bin_width = np.diff(bin_edges)[0]
-    # num_bins = len(bin_centers)
-    # # Normalise the histogram manually
-    # normed = hist_vals / np.sum(hist_vals * bin_width)
+    bin_width = np.diff(bin_edges)[0]
+    num_bins = len(bin_centers)
+    # Normalise the histogram manually
+    normed = hist_vals / np.sum(hist_vals * bin_width)
 
-    # # Store the max height of the bins
-    # max_height = np.max(normed)
-    # # Store the domain edges
-    # domain_min = bin_edges[0]
-    # domain_max = bin_edges[-1]
-    # # print(max_height)
-    # # Vectorise with numpy, run using reasonable batch sizes
-    # min_batch_size = 10000
-    # max_batch_size = 1000000
-    # # Track how many samples we've accepted and still need to be produced
-    # filled = 0
-    # remaining = N - filled
-    # # Placeholder array initialised early so we can just update values
-    # accepted = np.empty(N, dtype=float)
-    # num_iters = 0
-    # # Runs until we've got N samples
-    # while filled < N:
-    #     num_iters += 1
-    #     # Set the batch size to be between 10000 and 1000000, but use remaining if its in the bounds
-    #     batch_size = max(min_batch_size, min(remaining, max_batch_size))
-    #     # Random x and y draws within the domains of the existing dataset
-    #     x = np.random.uniform(domain_min, domain_max, batch_size)
-    #     y = np.random.uniform(0, max_height, batch_size)
+    # Store the max height of the bins
+    max_height = np.max(normed)
+    # Store the domain edges
+    domain_min = bin_edges[0]
+    domain_max = bin_edges[-1]
+    # print(max_height)
+    # Vectorise with numpy, run using reasonable batch sizes
+    min_batch_size = 10000
+    max_batch_size = 1000000
+    # Track how many samples we've accepted and still need to be produced
+    filled = 0
+    remaining = N - filled
+    # Placeholder array initialised early so we can just update values
+    accepted = np.empty(N, dtype=float)
+    num_iters = 0
+    # Runs until we've got N samples
+    while filled < N:
+        num_iters += 1
+        # Set the batch size to be between 10000 and 1000000, but use remaining if its in the bounds
+        batch_size = max(min_batch_size, min(remaining, max_batch_size))
+        # Random x and y draws within the domains of the existing dataset
+        x = np.random.uniform(domain_min, domain_max, batch_size)
+        y = np.random.uniform(0, max_height, batch_size)
 
-    #     # Check which bin the x value falls into
-    #     bin_number = np.ceil((x - domain_min) / bin_width).astype(int) - 1
-    #     # Guard if we hit the boundaries
-    #     bin_number = np.clip(bin_number, 0, num_bins - 1)
+        # Check which bin the x value falls into
+        bin_number = np.ceil((x - domain_min) / bin_width).astype(int) - 1
+        # Guard if we hit the boundaries
+        bin_number = np.clip(bin_number, 0, num_bins - 1)
 
-    #     # Store the heights at that bin
-    #     heights = normed[bin_number]
+        # Store the heights at that bin
+        heights = normed[bin_number]
 
-    #     # Setup the y mask and slice the values to accept
-    #     mask = y <= heights
-    #     acceptable = x[mask]
+        # Setup the y mask and slice the values to accept
+        mask = y <= heights
+        acceptable = x[mask]
 
-    #     # Just try again if none are acceptable
-    #     if len(acceptable) == 0:
-    #         continue
+        # Just try again if none are acceptable
+        if len(acceptable) == 0:
+            continue
 
-    #     if num_iters % 1000 == 0:
-    #         print(
-    #             f"Launder iteration {num_iters} - Accepted: {len(acceptable)}, Remaining: {remaining}, batch size: {batch_size}"
-    #         )
-    #     # Only add how many we need, since we want exactly N samples
-    #     to_accept = min(len(acceptable), remaining)
-    #     # Fill the placeholder at those indices with the new accepted values
-    #     # print(filled, to_accept)
-    #     accepted[filled : filled + to_accept] = acceptable[:to_accept]
-    #     filled += to_accept
-    #     remaining -= to_accept
+        if num_iters % 1000 == 0:
+            print(
+                f"Launder iteration {num_iters} - Accepted: {len(acceptable)}, Remaining: {remaining}, batch size: {batch_size}"
+            )
+        # Only add how many we need, since we want exactly N samples
+        to_accept = min(len(acceptable), remaining)
+        # Fill the placeholder at those indices with the new accepted values
+        # print(filled, to_accept)
+        accepted[filled : filled + to_accept] = acceptable[:to_accept]
+        filled += to_accept
+        remaining -= to_accept
 
-    # return accepted
+    return accepted
 
 
 def get_density(hist_vals: np.ndarray, bin_edges: np.ndarray) -> np.ndarray:
@@ -690,10 +680,15 @@ def center_z_distribution(z_hist: np.ndarray, z_bins: np.ndarray) -> np.ndarray:
     and will call `Q_z.update` to replace the stored histogram with the
     symmetrised version.
     """
-    dz = np.diff(z_bins)
+    # dz = np.diff(z_bins)
     symmetrised_z = 0.5 * (z_hist + z_hist[::-1])
-    symmetrised_z /= np.sum(symmetrised_z * dz)
+    # symmetrised_z /= np.sum(symmetrised_z * dz)
     return symmetrised_z
+
+
+def _gauss(x: np.ndarray, a: float, mu: float, sigma: float):
+    """Simple gaussian for curve fit"""
+    return a * np.exp(-0.5 * ((x - mu) / sigma) ** 2)
 
 
 def estimate_z_peak(
@@ -718,30 +713,45 @@ def estimate_z_peak(
     float
         Arithmetic mean of the per-subset peak estimates.
     """
-    z_length = len(z_hist)
-    top_ten_percent = int(0.01 * z_length)
-    top_indices = np.argsort(z_hist)[-top_ten_percent:]
+    # z_length = len(z_hist)
+    # top_ten_percent = int(0.01 * z_length)
+    # top_indices = np.argsort(z_hist)[-top_ten_percent:]
 
-    bin_values = z_bin_centers[top_indices]
-    y_values = z_hist[top_indices]
-    if len(y_values) == 0:
-        raise ValueError("The y values array is empty.")
+    # bin_values = z_bin_centers[top_indices]
+    # y_values = z_hist[top_indices]
+    # if len(y_values) == 0:
+    #     raise ValueError("The y values array is empty.")
 
-    length = np.random.permutation(len(y_values))
-    subsets = np.array_split(bin_values[length], 10)
-    # subsets = [bin_values[needed[i]] for i in range(10)]
+    # length = np.random.permutation(len(y_values))
+    # subsets = np.array_split(bin_values[length], 10)
+    # # subsets = [bin_values[needed[i]] for i in range(10)]
 
-    print("Fitting subsets")
-    params = [norm.fit(x) for x in subsets]
-    if len(params) == 0:
-        raise ValueError("No parameters were stored from the fit in estimate_z_peak.")
+    # print("Fitting subsets")
+    # params = [norm.fit(x) for x in subsets]
+    # if len(params) == 0:
+    #     raise ValueError("No parameters were stored from the fit in estimate_z_peak.")
 
-    mus = [i for i, j in params]
-    return float(np.sum(mus) / 10)
+    # mus = [i for i, j in params]
+    # return float(np.sum(mus) / 10)
 
     # Different approach, grows about center peak till 5% of probability mass is obtained. Used this in previous get_peak_from_subset code.
-    # bin_widths = np.diff(z_bins)  # Get widths
-    # bin_masses = z_hist * bin_widths  # Get masses
+
+    # Get densities
+    # z_sample = launder(int(1e7), z_hist, z_bins, z_bin_centers)
+    # z_density = get_density(z_hist, z_bins)
+
+    # # Restrict calculations within [-25,25]
+    # z_min = -25.0
+    # z_max = 25.0
+    # mask = np.logical_and((z_bin_centers >= z_min), (z_bin_centers <= z_max))
+
+    # # Slice out the values within the window for analysis
+    # centers = z_bin_centers[mask]
+    # z_data = z_density[mask]
+
+    # # Get bin width, single since bins are uniform
+    # bin_width = np.diff(z_bins)[0]
+    # bin_masses = z_data * bin_width  # Get masses
 
     # # Check total mass, then calculate what 5% of that is.
     # total_mass = np.sum(bin_masses)
@@ -749,10 +759,10 @@ def estimate_z_peak(
     # top_5_percent = 0.05 * total_mass
 
     # # Store the bin indexes we care about - center and the 2 sides for later growth
-    # peak_bin = np.argmax(z_hist)
+    # peak_bin = np.argmax(z_data)
     # left_bin = peak_bin
     # right_bin = peak_bin
-    # final_bin = len(z_hist) - 1
+    # final_bin = len(z_data) - 1
     # # Hold the mass of our current bin, will grow until 5%
     # current_bin_mass = bin_masses[peak_bin]
 
@@ -764,8 +774,8 @@ def estimate_z_peak(
 
     #     # If both directions are safe, we'll decide by values.
     #     if move_left and move_right:
-    #         left_val = z_hist[left_bin - 1]
-    #         right_val = z_hist[right_bin + 1]
+    #         left_val = z_data[left_bin - 1]
+    #         right_val = z_data[right_bin + 1]
     #         # If left has higher or equivalent value, we'll move left. Slight bias choosing to go left if equivalent, but shouldn't matter too much.
     #         if left_val >= right_val:
     #             left_bin -= 1
@@ -784,31 +794,111 @@ def estimate_z_peak(
 
     # # print(f"{current_bin_mass:.3f} percent of bin mass accumulated.")
 
-    # # Now that we know which bins matter, we get their centers, and the z values at those edges.
-    # leftmost_bin = z_bins[left_bin]
-    # rightmost_bin = z_bins[right_bin + 1]
-    # # Use a sample from the distribution to prevent us from storing absurdly large amounts of raw data, maybe inaccurate but we'll see.
-    # samples = launder(1 * 10**7, z_hist, z_bins, z_bin_centers)
-    # # And now we slice out the z values we need
-    # hist_mask = np.logical_and((samples >= leftmost_bin), (samples < rightmost_bin))
-    # top_5_percent_values = samples[hist_mask]
-    # # print(len(top_5_percent_values))
-    # # Shuffle the data so its randomly ordered
-    # np.random.shuffle(top_5_percent_values)
-    # # Now we split it into 10 equal sized subsets, shuffling before hand lets array_splits order slicing be fine.
-    # subsets = np.array_split(top_5_percent_values, 10)
-    # mu_guesses = [np.mean(subset) for subset in subsets]
-    # sigma_guesses = []
-    # fitted_mus = []
-    # for i in range(len(mu_guesses)):
-    #     sigma_guesses.append(np.var(subsets[i]))
+    # # Slice out the values corresponding to the top 5%
+    # z_tip_values = centers[left_bin : right_bin + 1]
+    # density_tip_values = z_data[left_bin : right_bin + 1]
+    # tip_weights = density_tip_values * bin_width
+    # # Separate indices randomly into 10 subsets
+    # random_centers = np.random.permutation(len(z_tip_values))
+    # reordered_tip = z_tip_values[random_centers]
+    # reordered_densities = density_tip_values[random_centers]
+    # reordered_weights = tip_weights[random_centers]
+    # subset_indices = np.array_split(random_centers, 10)
+    # mus = []
+    # for subset in subset_indices:
+    #     # mu, sigma = norm.fit(reordered_tip[subset])
+    #     # mus.append(mu)
+    #     x = reordered_tip[subset]
+    #     y = reordered_densities[subset]
+    #     weights = reordered_weights[subset]
 
-    # for i in range(len(mu_guesses)):
-    #     mu, sigma = norm.fit(subsets[i])
-    #     fitted_mus.append(float(mu))
+    #     initial_a = np.max(y)
+    #     initial_mu = x[np.argmax(y)]
+    #     initial_sigma = max(np.std(x), ((np.max(x) - np.min(x)) / 4))
+    #     popt, _ = curve_fit(
+    #         _gauss,
+    #         x,
+    #         y,
+    #         p0=(initial_a, initial_mu, initial_sigma),
+    #         sigma=1.0 / (np.sqrt(weights / np.max(weights))),
+    #         maxfev=10000,
+    #     )
+    #     mus.append(float(popt[1]))
+    # return float(np.mean(mus))
+    bin_widths = np.diff(z_bins)  # Get widths
+    bin_masses = z_hist * bin_widths  # Get masses
+    z_density = get_density(z_hist, z_bins)
+    z_min = -25.0
+    z_max = 25.0
+    mask = np.logical_and((z_bin_centers >= z_min), (z_bin_centers <= z_max))
+    # Slice out the values within the window for analysis
+    centers = z_bin_centers[mask]
+    z_data = z_density[mask]
+    bins = z_bins
+    # Get bin width, single since bins are uniform
+    bin_width = np.diff(bins)[0]
+    bin_masses = z_data * bin_width  # Get masses
+    # Check total mass, then calculate what 5% of that is.
+    total_mass = np.sum(bin_masses)
+    # print(f"Total bin mass of Q_z is {total_mass:.3f}")
+    top_5_percent = 0.05 * total_mass
 
-    # # print(fitted_mus)
-    # return float(np.mean(fitted_mus))
+    # Store the bin indexes we care about - center and the 2 sides for later growth
+    peak_bin = np.argmax(z_data)
+    left_bin = peak_bin
+    right_bin = peak_bin
+    final_bin = len(z_data) - 1
+    # Hold the mass of our current bin, will grow until 5%
+    current_bin_mass = bin_masses[peak_bin]
+
+    # We keep going until we hit 5%, or we hit the tails for whatever reason [thats a different problem then].
+    while current_bin_mass < top_5_percent and (left_bin > 0 or right_bin < final_bin):
+        # Now we decide whether to go left, or right. Check with some booleans
+        move_left = left_bin > 0
+        move_right = right_bin < final_bin
+
+        # If both directions are safe, we'll decide by values.
+        if move_left and move_right:
+            left_val = z_data[left_bin - 1]
+            right_val = z_data[right_bin + 1]
+            # If left has higher or equivalent value, we'll move left. Slight bias choosing to go left if equivalent, but shouldn't matter too much.
+            if left_val >= right_val:
+                left_bin -= 1
+                current_bin_mass += bin_masses[left_bin]
+            else:
+                right_bin += 1
+                current_bin_mass += bin_masses[right_bin]
+        elif move_left:
+            # If only left is safe, of course we go left
+            left_bin -= 1
+            current_bin_mass += bin_masses[left_bin]
+        else:
+            # If only right is safe, of course we go right
+            right_bin += 1
+            current_bin_mass += bin_masses[right_bin]
+
+    # print(f"{current_bin_mass:.3f} percent of bin mass accumulated.")
+
+    # Now that we know which bins matter, we get their centers, and the z values at those edges.
+    leftmost_bin = bins[left_bin]
+    rightmost_bin = bins[right_bin + 1]
+    # Use a sample from the distribution to prevent us from storing absurdly large amounts of raw data, maybe inaccurate but we'll see.
+    samples = launder(1 * 10**7, z_data, bins, centers)
+    # And now we slice out the z values we need
+    hist_mask = np.logical_and((samples >= leftmost_bin), (samples < rightmost_bin))
+    top_5_percent_values = samples[hist_mask]
+    # print(len(top_5_percent_values))
+    # Shuffle the data so its randomly ordered
+    np.random.shuffle(top_5_percent_values)
+    # Now we split it into 10 equal sized subsets, shuffling before hand lets array_splits order slicing be fine.
+    subsets = np.array_split(top_5_percent_values, 10)
+    fitted_mus = []
+    for i in range(len(subsets)):
+        mu, sigma = norm.fit(subsets[i])
+        fitted_mus.append(float(mu))
+
+    # print(fitted_mus)
+    return float(np.mean(fitted_mus))
 
 
 # ---------- Fitting helper ---------- #
