@@ -12,9 +12,9 @@
 VERSION="$4" # Version for tracking changes and matrix used
 N="$1" # Target number of samples
 RG_STEP="$2" # The RG step we're currently at
-SHIFT="${5-}" # Takes in the shift value if running EXP, mostly for folder location
+SHIFT="${5-}" # Takes in the shift value if running EXP, to change histogram domain
 TYPE="$3" # Type flag to toggle symmetrisation/launder target
-NUM_BATCHES=8 # Number of batches of data to generate/process, same as array size
+NUM_BATCHES=16 # Number of batches of data to generate/process, same as array size
 BATCH_SIZE=$(( N / NUM_BATCHES )) # How many samples exist per batch
 set -euo pipefail
 
@@ -135,7 +135,8 @@ for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
             "$OUTPUT_T" \
             "$OUTPUT_G" \
             "$OUTPUT_Z" \
-            "$RG_STEP"
+            "$RG_STEP" \
+            "$SHIFT"
     else
         python -m "source.histogram_manager" \
             1 \
@@ -148,7 +149,8 @@ for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
             "$OUTPUT_T" \
             "$OUTPUT_G" \
             "$OUTPUT_Z" \
-            "$RG_STEP"
+            "$RG_STEP" \
+            "$SHIFT"
     fi
     sleep 5
 done

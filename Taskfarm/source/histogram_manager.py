@@ -16,26 +16,23 @@ import sys
 
 
 def construct_initial_histogram(
-    data_file: str,
-    output_filename: str,
-    var: str,
+    data_file: str, output_filename: str, var: str, range: tuple
 ) -> None:
     """A function to construct the initial histogram for any type of data"""
     data = np.load(data_file)
+    range = range
     if data.size == 0:
         raise FileNotFoundError(f"Could not load data from {data_file}")
     if var.lower() == "t" or var.lower() == "g":
-        range = T_RANGE
         bins = T_BINS
     else:
-        range = Z_RANGE
         bins = Z_BINS
-        min_z, max_z = Z_RANGE
+        min_z, max_z = range
         data = data[np.isfinite(data)]
         z_mask = np.logical_and((data >= min_z), (data <= max_z))
         data = data[z_mask]
 
-    hist_vals, bin_edges = np.histogram(data, bins, range)
+    hist_vals, bin_edges = np.histogram(data, bins, range=range)
     bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
     save_data(
         hist_vals,
@@ -64,14 +61,14 @@ def append_to_histogram(
     # t_bin_edges = t_data["binedges"]
     # t_bin_centers = t_data["bincenters"]
 
-    data_counts, _ = np.histogram(data, existing_bin_edges, range, density=False)
+    data_counts, _ = np.histogram(data, existing_bin_edges, density=False)
     assert data_counts.size == existing_vals.size
     existing_vals += data_counts
     save_data(existing_vals, existing_bin_edges, existing_bin_centers, output_file)
 
 
 if __name__ == "__main__":
-    if len(sys.argv) == 9:
+    if len(sys.argv) == 10:
         # This is if this is the first time we're making the histogram - no existing t or z histogram files
         process = int(sys.argv[1].strip())
         input_t_file = sys.argv[2].strip()
@@ -81,7 +78,8 @@ if __name__ == "__main__":
         output_g_file = sys.argv[6].strip()
         output_z_file = sys.argv[7].strip()
         rg_step = int(sys.argv[8].strip())
-    elif len(sys.argv) == 12:
+        shift = float(sys.argv[9].strip())
+    elif len(sys.argv) == 11:
         # If there are already existing histograms, we need to append the new data into them.
         process = int(sys.argv[1].strip())
         input_t_file = sys.argv[2].strip()
@@ -94,20 +92,27 @@ if __name__ == "__main__":
         output_g_file = sys.argv[9].strip()
         output_z_file = sys.argv[10].strip()
         rg_step = int(sys.argv[11].strip())
+        shift = float(sys.argv[12].strip())
     else:
         raise SystemExit(
             "Usage: histogram_manager.py PROCESS INPUT_T_FILE INPUT_G_FILE INPUT_Z_FILE EXISTING_T_FILE EXISTING_G_FILE EXISTING_Z_FILE OUTPUT_T_FILE OUTPUT_G_FILE OUTPUT_Z_FILE RG_STEP"
         )
-
+    if shift > 0.0:
+        min_z, max_z = Z_RANGE
+        min_z += shift
+        max_z += shift
+        shifted_range = (min_z, max_z)
+    else:
+        shifted_range = Z_RANGE
     if process == 0:
         # This means we're going to be creating the first histograms of t and z
         print("-" * 100)
         print(f"Constructing initial histograms for RG step {rg_step}")
-        construct_initial_histogram(input_t_file, output_t_file, "t")
+        construct_initial_histogram(input_t_file, output_t_file, "t", T_RANGE)
         print(f"t histogram saved to {output_t_file}")
-        construct_initial_histogram(input_g_file, output_g_file, "g")
+        construct_initial_histogram(input_g_file, output_g_file, "g", T_RANGE)
         print(f"g histogram saved to {output_g_file}")
-        construct_initial_histogram(input_z_file, output_z_file, "z")
+        construct_initial_histogram(input_z_file, output_z_file, "z", shifted_range)
         print(f"z histogram saved to {output_z_file}")
         # os.remove(input_t_file)
         # os.remove(input_g_file)
@@ -121,7 +126,7 @@ if __name__ == "__main__":
         print(f"t histogram saved to {output_t_file}")
         append_to_histogram(input_g_file, existing_g_file, output_g_file, T_RANGE)
         print(f"g histogram saved to {output_g_file}")
-        append_to_histogram(input_z_file, existing_z_file, output_z_file, Z_RANGE)
+        append_to_histogram(input_z_file, existing_z_file, output_z_file, shifted_range)
         print(f"z histogram saved to {output_z_file}")
 
         # Delete old files once done to prevent buildup
