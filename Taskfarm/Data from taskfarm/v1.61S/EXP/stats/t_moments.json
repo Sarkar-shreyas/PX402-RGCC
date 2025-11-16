@@ -1,0 +1,69 @@
+{
+  "RG_0": {
+    "mean": 0.5104492581606774,
+    "std": 0.241606626984407
+  },
+  "RG_1": {
+    "L2 distance with RG_0": 0.5866552938227588,
+    "Mean squared distance with RG_0": 0.4717223406130819,
+    "L2_converged": false,
+    "MSD converged": false,
+    "mean": 0.3649251476897908,
+    "std": 0.23392557230539326,
+    "std_converged": false
+  },
+  "RG_2": {
+    "L2 distance with RG_1": 0.8669515238915978,
+    "Mean squared distance with RG_1": 0.47063211452872805,
+    "L2_converged": false,
+    "MSD converged": false,
+    "mean": 0.2282404631527291,
+    "std": 0.20936637981572834,
+    "std_converged": false
+  },
+  "RG_3": {
+    "L2 distance with RG_2": 1.7913114416643607,
+    "Mean squared distance with RG_2": 0.5053054329023529,
+    "L2_converged": false,
+    "MSD converged": false,
+    "mean": 0.11329183129721071,
+    "std": 0.1591293988354384,
+    "std_converged": false
+  },
+  "RG_4": {
+    "L2 distance with RG_3": 5.79088207413094,
+    "Mean squared distance with RG_3": 0.5761736457917936,
+    "L2_converged": false,
+    "MSD converged": false,
+    "mean": 0.03657398678613222,
+    "std": 0.09093127925355411,
+    "std_converged": false
+  },
+  "RG_5": {
+    "L2 distance with RG_4": 18.381162804766316,
+    "Mean squared distance with RG_4": 0.6988006952583732,
+    "L2_converged": false,
+    "MSD converged": false,
+    "mean": 0.005369693027083582,
+    "std": 0.03172693230562848,
+    "std_converged": false
+  },
+  "RG_6": {
+    "L2 distance with RG_5": 9.205294082914827,
+    "Mean squared distance with RG_5": 0.6827372355919751,
+    "L2_converged": false,
+    "MSD converged": false,
+    "mean": 0.0006331950198651303,
+    "std": 0.004914285812685525,
+    "std_converged": false
+  },
+  "RG_7": {
+    "L2 distance with RG_6": 0.4532803871581332,
+    "Mean squared distance with RG_6": 0.16083454764711635,
+    "L2_converged": false,
+    "MSD converged": false,
+    "mean": 0.0005035258849199818,
+    "std": 0.0007542650666840524,
+    "std_converged": false
+  }
+}

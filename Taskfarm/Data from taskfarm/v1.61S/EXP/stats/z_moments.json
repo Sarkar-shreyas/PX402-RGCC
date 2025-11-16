@@ -1,0 +1,69 @@
+{
+  "RG_0": {
+    "mean": 1.1519026884123433,
+    "std": 1.7858115099007577
+  },
+  "RG_1": {
+    "L2 distance with RG_0": 0.18723771609338893,
+    "Mean squared distance with RG_0": 0.009435407681243192,
+    "L2_converged": false,
+    "MSD converged": false,
+    "mean": 2.269510641149174,
+    "std": 1.9611801604401382,
+    "std_converged": false
+  },
+  "RG_2": {
+    "L2 distance with RG_1": 0.19292373999977283,
+    "Mean squared distance with RG_1": 0.009414248843568283,
+    "L2_converged": false,
+    "MSD converged": false,
+    "mean": 3.754142192721578,
+    "std": 2.337849844721742,
+    "std_converged": false
+  },
+  "RG_3": {
+    "L2 distance with RG_2": 0.203797010555359,
+    "Mean squared distance with RG_2": 0.010105901132324732,
+    "L2_converged": false,
+    "MSD converged": false,
+    "mean": 5.996808249847307,
+    "std": 2.916060486419589,
+    "std_converged": false
+  },
+  "RG_4": {
+    "L2 distance with RG_3": 0.22467744095159725,
+    "Mean squared distance with RG_3": 0.011526063696977512,
+    "L2_converged": false,
+    "MSD converged": false,
+    "mean": 9.732048621423017,
+    "std": 3.735418144564183,
+    "std_converged": false
+  },
+  "RG_5": {
+    "L2 distance with RG_4": 0.255483205751141,
+    "Mean squared distance with RG_4": 0.013561895817843358,
+    "L2_converged": false,
+    "MSD converged": false,
+    "mean": 16.067687544449612,
+    "std": 4.499400839561491,
+    "std_converged": false
+  },
+  "RG_6": {
+    "L2 distance with RG_5": 0.2940715427643514,
+    "Mean squared distance with RG_5": 0.013608677655548707,
+    "L2_converged": false,
+    "MSD converged": false,
+    "mean": 21.16135528154534,
+    "std": 3.2729275201568413,
+    "std_converged": false
+  },
+  "RG_7": {
+    "L2 distance with RG_6": 0.17702752263899282,
+    "Mean squared distance with RG_6": 0.009460615542965366,
+    "L2_converged": false,
+    "MSD converged": false,
+    "mean": 22.627657816492032,
+    "std": 2.315268854504874,
+    "std_converged": false
+  }
+}
