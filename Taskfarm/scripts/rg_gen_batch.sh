@@ -3,7 +3,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --mem-per-cpu=3988
 #SBATCH --cpus-per-task=1
-#SBATCH --array=0-7
+#SBATCH --array=0-15%8
 #SBATCH --time=08:00:00
 #SBATCH --job-name=rg_gen
 #SBATCH --output=../job_outputs/bootstrap/%x_%A_%a.out
@@ -54,8 +54,8 @@ batchsubdir="$tempbatchdir"
 mkdir -p "$outputdir" "$logsdir" "$jobsdir"
 mkdir -p "$joboutdir" "$jobdatadir" "$batchdir"
 mkdir -p "$tempbatchdir"
-exec > >(tee -a "$joboutdir/RG_${RG_STEP}_JOB${SLURM_ARRAY_JOB_ID}_TASK${TASK_ID}.out") # Redirect outputs to be within their own folders, together with the data they produce
-exec 2> >(tee -a "$logsdir/RG_${RG_STEP}_JOB${SLURM_ARRAY_JOB_ID}_TASK${TASK_ID}.err" >&2) # Redirect error logs to be within their own folders for easy grouping
+exec >"$joboutdir/${SLURM_JOB_NAME}_JOB${SLURM_ARRAY_JOB_ID}_TASK${TASK_ID}.out" # Redirect outputs to be within their own folders, together with the data they produce
+exec 2>"$logsdir/${SLURM_JOB_NAME}_JOB${SLURM_ARRAY_JOB_ID}_TASK${TASK_ID}.err" # Redirect error logs to be within their own folders for easy grouping
 
 # General job information
 echo "==================================================="

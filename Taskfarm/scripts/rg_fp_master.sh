@@ -4,9 +4,9 @@
 #SBATCH --error=../job_logs/bootstrap/%x_%A.err
 
 # Define the constants for this RG flow
-N=150000000 # Total number of samples
+N=200000000 # Total number of samples
 NUM_RG_ITERS=8 # Number of RG steps
-VERSION=1.62S  # Version for tracking changes and matrix used
+VERSION=1.63S  # Version for tracking changes and matrix used
 TYPE="FP" # Type flag to toggle symmetrisation/launder target
 INITIAL=1 # Flag to generate starting distribution/histograms or not
 EXISTING_T="" # Placeholder var to point to data file for non-initial RG steps
@@ -19,8 +19,8 @@ scriptsdir="$basedir/scripts" # Where all shell scripts live
 logsdir="$basedir/job_logs/v${VERSION}/$TYPE" # Where log files will go
 mkdir -p "$logsdir" "$joboutdir" # Make them in case they aren't already there
 
-exec > >(tee -a "$joboutdir/${SLURM_JOB_NAME}_JOB${SLURM_JOB_ID}.out") # Redirect outputs to be within their own folders, together with the data they produce
-exec 2> >(tee -a "$logsdir/${SLURM_JOB_NAME}_JOB${SLURM_JOB_ID}.err" >&2) # Redirect error logs to be within their own folders for easy grouping
+exec >"$joboutdir/${SLURM_JOB_NAME}_JOB${SLURM_JOB_ID}.out" # Redirect outputs to be within their own folders, together with the data they produce
+exec 2>"$logsdir/${SLURM_JOB_NAME}_JOB${SLURM_JOB_ID}.err" # Redirect error logs to be within their own folders for easy grouping
 
 
 echo "==================================================="
