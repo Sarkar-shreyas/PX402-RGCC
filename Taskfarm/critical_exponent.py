@@ -8,9 +8,8 @@ from source.utilities import (
     calculate_nu,
     get_density,
     hist_moments,
-    l2_distance,
 )
-from data_plotting import load_hist_data, construct_moments_dict
+from data_plotting import load_hist_data, construct_moments_dict, plot_data
 import os
 import json
 from time import time
@@ -27,49 +26,32 @@ if __name__ == "__main__":
     plots_dir = f"{DATA_DIR}/v{version}/{TYPE}/plots"
     os.makedirs(stats_dir, exist_ok=True)
     os.makedirs(plots_dir, exist_ok=True)
-    map = defaultdict(dict)
+    data_map = defaultdict(dict)
     vars = ["t", "g", "input_t", "z"]
     # Get all the initial plots made for inspection
     start = time()
-    for var in vars:
-        for shift in SHIFTS:
-            fig, (ax0, ax1) = plt.subplots(1, 2, figsize=(10, 4))
-            map[var][shift] = []
-            ax0.set_title(f"Unclipped histogram of {var} data for shift {shift}")
-            ax0.set_xlabel(f"{var}")
-            ax0.set_ylabel(f"P{var}")
-            ax1.set_title(f"Clipped histogram of {var} data for shift {shift}")
-            ax1.set_xlabel(f"{var}")
-            ax1.set_ylabel(f"P({var})")
-            if var == "z":
-                ax0.set_xlim([-50, 50])
-                ax0.set_ylim([0.0, 0.3])
-                ax1.set_xlim([-25, 25.0])
-                ax1.set_ylim([0, 0.3])
-            else:
-                ax0.set_ylim([0.0, 2.0])
-                ax1.set_ylim([0.0, 2.0])
+    for shift in SHIFTS:
+        for var in vars:
+            data_map[shift][var] = []
             shift_dir = f"{DATA_DIR}/v{version}/{TYPE}/shift_{shift}/hist/{var}"
             shift_plot_dir = f"{plots_dir}/{shift}"
-            # shift_stats_dir = f"{stats_dir}/{shift}"
+            shift_stats_dir = f"{stats_dir}/{shift}"
             os.makedirs(shift_plot_dir, exist_ok=True)
-            # os.makedirs(shift_stats_dir, exist_ok=True)
+            os.makedirs(shift_stats_dir, exist_ok=True)
             for i in range(NUM_RG):
                 filename = f"{shift_dir}/{var}_hist_RG{i}.npz"
                 counts, bins, centers = load_hist_data(filename)
                 densities = get_density(counts, bins)
-                map[var][shift].append([counts, bins, centers, densities])
-                ax0.plot(centers, densities, label=f"RG_{i}")
-                ax1.plot(centers, densities, label=f"RG_{i}")
-            ax0.legend()
-            ax1.legend()
-            plt.savefig(f"{shift_plot_dir}/{var}_hist_shift_{shift}.png", dpi=150)
-            plt.close()
+                data_map[shift][var].append([counts, bins, centers, densities])
             # print(f"All histograms for shift {shift} have been plotted")
-        print(f"Finished plotting data of {var} for all shifts")
-
-    print("All plots made.")
-    # print(map.keys())
+            filename = f"{shift_plot_dir}/{var}_hist_shift_{shift}.png"
+            plot_data(var, filename, data_map[shift][var], TYPE)
+        construct_moments_dict(stats_dir, shift_plot_dir, vars, data_map[shift])
+        print("-" * 100)
+        print(f"Plots for shift {shift} have been made.")
+        print(f"Stats for shift {shift} have been made.")
+    print("=" * 100)
+    # print(data_map.keys())
     fig, (ax_0, ax_1) = plt.subplots(1, 2, figsize=(10, 4))
     ax_0.set_xlim([0, 0.01])
     # ax_0.set_ylim([0.0, 2])
@@ -83,40 +65,30 @@ if __name__ == "__main__":
     # ax_1.set_ylim([0, 2])
 
     peaks = np.zeros((NUM_RG, len(SHIFTS))).astype(float)
+    means = np.zeros((NUM_RG, len(SHIFTS))).astype(float)
+    stds = np.zeros((NUM_RG, len(SHIFTS))).astype(float)
     print("Beginning peak estimations")
     print("-" * 100)
-    means = np.zeros((NUM_RG, len(SHIFTS))).astype(float)
+
     for j in range(len(SHIFTS)):
         z_moments = []
         z_dist = []
         shift = SHIFTS[j]
-        # print(f"Estimating peak for shift {shift}")
+        print(f"Estimating peak for shift {shift}")
         loop = time()
         for i in range(NUM_RG):
-            counts = map["z"][shift][i][0]
-            bins = map["z"][shift][i][1]
-            centers = map["z"][shift][i][2]
-            densities = map["z"][shift][i][3]
-            peaks[i, j] = estimate_z_peak(densities, bins, centers)
+            counts = data_map[shift]["z"][i][0]
+            bins = data_map[shift]["z"][i][1]
+            centers = data_map[shift]["z"][i][2]
+            densities = data_map[shift]["z"][i][3]
             mean, std = hist_moments(counts, bins)
+            peaks[i, j] = estimate_z_peak(densities, bins, centers)
             means[i, j] = mean
-            z_moments.append([mean, std])
-            if i > 0:
-                old_counts = map["z"][shift][i - 1][0]
-                old_bins = map["z"][shift][i - 1][1]
-                old_std = z_moments[i - 1][1]
-                l2 = l2_distance(old_counts, counts, old_bins, bins)
-                z_dist.append(l2)
-            # print(
-            #     f"Peak estimated for RG{i} of shift {shift} after {time() - loop:.3f} seconds"
-            # )
-        z_stats = f"{stats_dir}/{shift}_z_stats.json"
-        construct_moments_dict(z_stats, z_moments, z_dist, NUM_RG)
-        print(f"Stats for shift {shift} saved to {z_stats}")
-        print("-" * 100)
-    print(
-        f"Peaks estimated for each shift at every RG {time() - start:.3f} seconds from start of program"
-    )
+            stds[i, j] = std
+        # print("-" * 100)
+        print(f"Peak estimated for shift {shift} after {time() - start:.3f} seconds")
+    print("Finished peaks estimation for every shift")
+    print("=" * 100)
     # print(z_moments)
     overall_stats = defaultdict(dict)
     overall_stats_file = f"{stats_dir}/overall_stats.json"
@@ -125,6 +97,8 @@ if __name__ == "__main__":
     other_nus = []
     r2s = []
     other_r2s = []
+
+    rgs = [i + 1 for i in range(NUM_RG)]
     for i in range(NUM_RG):
         y = np.abs(peaks[i, :] - peaks[i, 0])
         m = means[i, :] - means[i, 0]
@@ -156,13 +130,17 @@ if __name__ == "__main__":
             "Means": list(means[i, :]),
             "Mean diffs": list(m),
         }
+
     ax_0.legend()
     ax_1.legend()
-    plt.savefig(f"{plots_dir}/z_peaks.png", dpi=150)
+    z_peaks_plot = f"{plots_dir}/z_peaks.png"
+    Nu_plot = f"{plots_dir}/Nu.png"
+    plt.savefig(z_peaks_plot, dpi=150)
     plt.close()
     with open(overall_stats_file, "w") as f:
         json.dump(overall_stats, f, indent=2)
-
+    print(f"Overall stats for z saved to {overall_stats_file}")
+    print(f"z peaks data plotted and saved to {z_peaks_plot}")
     fig, (ax_2, ax_3) = plt.subplots(1, 2, figsize=(10, 4))
     # ax_2.set_xlim([0, 0.01])
     # ax_2.set_ylim([0.0, 2])
@@ -178,6 +156,7 @@ if __name__ == "__main__":
     system_size = [2**i for i in range(ind, NUM_RG)]
     ax_2.scatter(system_size, other_nus[ind:])
     ax_3.scatter(system_size, nus[ind:])
-    plt.savefig(f"{plots_dir}/Nu.png", dpi=150)
+    plt.savefig(Nu_plot, dpi=150)
     plt.close()
+    print(f"Nu data plotted and saved to {Nu_plot}")
     print(f"Analysis done after {time() - start:.3f} seconds")

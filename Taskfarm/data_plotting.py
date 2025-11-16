@@ -1,24 +1,151 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits.axes_grid1 import inset_locator
 from source.utilities import (
     l2_distance,
+    mean_squared_distance,
     hist_moments,
     get_density,
+    std_derivative,
     STD_TOLERANCE,
     DIST_TOLERANCE,
 )
 import os
 from collections import defaultdict
 import json
-from typing import Optional
 
 DATA_DIR = "C:/Users/ssark/Desktop/Uni/Year 4 Courses/Physics Final Year Project/Project Code/Taskfarm/Data from taskfarm"
-CURRENT_VERSION = "1.61S"
+CURRENT_VERSION = "1.63S"
 TYPE = "FP"
 NUM_RG = 8
+LEGENDS = {
+    "FP": {
+        "t": "upper left",
+        "g": "upper right",
+        "input_t": "upper left",
+        "z": "upper left",
+        "sym_z": "upper left",
+    },
+    "EXP": {
+        "t": "upper right",
+        "g": "upper right",
+        "input_t": "upper right",
+        "z": "upper left",
+    },
+}
+YLIMS = {
+    "FP": {
+        "t": (0.0, 1.50),
+        "g": (0.0, 4.0),
+        "input_t": (0.0, 4.0),
+        "z": (0.0, 0.3),
+        "sym_z": (0.0, 0.25),
+    },
+    "EXP": {
+        "t": (0.0, 1.50),
+        "g": (0.0, 4.0),
+        "input_t": (0.0, 4.0),
+        "z": (0.0, 0.3),
+    },
+}
+XLIMS = {
+    "FP": {
+        "t": (0.0, 1.0),
+        "g": (0.0, 1.0),
+        "input_t": (0.0, 1.0),
+        "z": (-25.0, 25.0),
+        "sym_z": (-25.0, 25.0),
+    },
+    "EXP": {
+        "t": (0.0, 1.0),
+        "g": (0.0, 1.0),
+        "input_t": (0.0, 1.0),
+        "z": (-5.0, 20.0),
+    },
+}
 
 
+# ---------- Plotting helpers ---------- #
+def plot_data(var: str, filename: str, data: list, mode: str):
+    # plt.ylim((0.0, 1.01 * max(y_data)))
+
+    xlim = XLIMS[mode][var]
+    ylim = YLIMS[mode][var]
+    legend_loc = LEGENDS[mode][var]
+    if var == "z" or var == "sym_z":
+        fig, (ax1, ax2) = plt.subplots(1, 2, num=f"{var}", figsize=(12, 4))
+        ax1.set_title(f"Histogram of {var}")
+        ax1.set_xlabel(f"{var}")
+        ax1.set_ylabel(f"Q({var})")
+        ax2.set_title(f"Clipped Histogram of {var}")
+        ax2.set_xlabel(f"{var}")
+        ax2.set_ylabel(f"Q({var})")
+
+        ax1.set_xlim(xlim)
+        ax2.set_xlim((-3.0, 3.0))
+        ax2.set_ylim(ylim)
+        # inset = inset_locator.inset_axes(ax, width="25%", height=1.0)
+        # inset.set_xlim([-25.0, 25.0])
+        for i in range(0, NUM_RG, 2):
+            x_data = data[i][2]
+            y_data = data[i][3]
+            ax1.plot(x_data, y_data, label=f"RG{i}")
+            ax2.scatter(x_data[::100], y_data[::100], label=f"RG{i}")
+            ax1.legend(loc=legend_loc)
+            ax2.legend(loc=legend_loc)
+            # inset.plot(x_data, y_data)
+    else:
+        fig, ax = plt.subplots(num=f"{var}", figsize=(10, 10))
+        ax.set_title(f"Histogram of {var}")
+        ax.set_xlabel(f"{var}")
+        ax.set_ylabel(f"P({var})")
+        for i in range(NUM_RG):
+            x_data = data[i][2]
+            y_data = data[i][3]
+            ax.plot(x_data, y_data, label=f"RG{i}")
+        ax.set_xlim(xlim)
+        ax.set_ylim(ylim)
+        ax.legend(loc=legend_loc)
+
+    fig.savefig(filename, dpi=150)
+    plt.close(fig)
+    print(f"Figure plotted for {var} to {filename}")
+
+
+def plot_moments(l2: list, moment_list: list[tuple], filename: str):
+    moment_fig, ((moment_ax0, moment_ax1), (moment_ax2, moment_ax3)) = plt.subplots(
+        2, 2, figsize=(10, 10)
+    )
+    moment_ax0.set_title("Mean over RG steps")
+    moment_ax1.set_title("Standard deviation over RG steps")
+    moment_ax2.set_title("Derivative of standard deviation over RG steps")
+    moment_ax3.set_title("Mean Squared distance between RG steps")
+    moment_ax0.set_xlabel("RG step")
+    moment_ax1.set_xlabel("RG step")
+    moment_ax2.set_xlabel("RG step")
+    moment_ax3.set_xlabel("RG step")
+    moment_ax0.set_ylabel("Mean")
+    moment_ax1.set_ylabel("Standard Deviation")
+    moment_ax2.set_ylabel("Derivative of STD")
+    moment_ax3.set_ylabel("Mean Squared Distance")
+    # moment_ax1.set_ylim([2.0, 2.2])
+    # moment_ax2.set_ylim([0.0, 0.04])
+    # moment_ax3.set_ylim([0.0, 0.0015])
+    rgs = [i + 1 for i in range(NUM_RG)]
+    mean, std = map(np.array, zip(*moment_list))
+
+    std_primes = std_derivative(rgs, std, 1)
+    for i in range(NUM_RG):
+        moment_ax0.scatter(i, mean[i])
+        moment_ax1.scatter(i, std[i])
+        moment_ax2.scatter(i, std_primes[i])
+        if i > 0:
+            moment_ax3.scatter(i + 1, l2[i - 1])
+    moment_fig.tight_layout()
+    moment_fig.savefig(filename, dpi=150)
+    plt.close(moment_fig)
+
+
+# ---------- Stats helpers ---------- #
 def load_hist_data(filename: str) -> tuple:
     data = np.load(filename)
     counts = data["histval"]
@@ -38,34 +165,40 @@ def load_moments(filename: str) -> tuple:
 
 
 def construct_moments_dict(
-    filename: str,
-    moments: defaultdict | list,
-    distances: Optional[list] = None,
-    rg_steps: int = NUM_RG,
+    stats_directory: str,
+    plots_directory: str,
+    vars: list,
+    data_map: dict | defaultdict,
 ):
     data = defaultdict(dict)
-    if not distances:
-        for i in range(rg_steps):
-            mean = moments[i][1]
-            std = moments[i][2]
-            data[f"RG_{i}"]["mean"] = mean
-            data[f"RG_{i}"]["std"] = std
+    for var in vars:
+        l2_dist = []
+        moments = []
+        msd = []
+        for i in range(NUM_RG):
+            counts = data_map[var][i][0]
+            bins = data_map[var][i][1]
             if i > 0:
-                prev_std = moments[i - 1][2]
-                if np.abs(std - prev_std) <= STD_TOLERANCE:
-                    data[f"RG_{i}"]["std_converged"] = True
+                prev_counts = data_map[var][i - 1][0]
+                prev_bins = data_map[var][i - 1][1]
+                l2 = l2_distance(counts, prev_counts, bins, prev_bins)
+                l2_dist.append(l2)
+                mean_square_dist = mean_squared_distance(
+                    prev_counts, counts, prev_bins, bins
+                )
+                msd.append(mean_square_dist)
+                data[f"RG_{i}"][f"L2 distance with RG_{i - 1}"] = l2_dist[i - 1]
+                data[f"RG_{i}"][f"Mean squared distance with RG_{i - 1}"] = msd[i - 1]
+                if l2_dist[i - 1] <= DIST_TOLERANCE:
+                    data[f"RG_{i}"]["L2_converged"] = True
                 else:
-                    data[f"RG_{i}"]["std_converged"] = False
-        for i in range(1, rg_steps):
-            l2 = moments[i][0]
-            data[f"RG_{i}"][f"L2 distance with RG_{i - 1}"] = l2
-            if l2 <= DIST_TOLERANCE:
-                data[f"RG_{i}"]["L2_converged"] = True
-            else:
-                data[f"RG_{i}"]["L2_converged"] = False
-    else:
-        for i in range(rg_steps):
-            mean, std = moments[i]
+                    data[f"RG_{i}"]["L2_converged"] = False
+                if msd[i - 1] <= DIST_TOLERANCE:
+                    data[f"RG_{i}"]["MSD converged"] = True
+                else:
+                    data[f"RG_{i}"]["MSD converged"] = False
+            mean, std = hist_moments(counts, bins)
+            moments.append((mean, std))
             data[f"RG_{i}"]["mean"] = mean
             data[f"RG_{i}"]["std"] = std
             if i > 0:
@@ -74,24 +207,21 @@ def construct_moments_dict(
                     data[f"RG_{i}"]["std_converged"] = True
                 else:
                     data[f"RG_{i}"]["std_converged"] = False
-        for i in range(1, rg_steps):
-            data[f"RG_{i}"][f"L2 distance with RG_{i - 1}"] = distances[i - 1]
-            if distances[i - 1] <= DIST_TOLERANCE:
-                data[f"RG_{i}"]["L2_converged"] = True
-            else:
-                data[f"RG_{i}"]["L2_converged"] = False
-
-    with open(filename, "w") as f:
-        json.dump(data, f, indent=2)
-
-    print(f"Data has been saved to {filename}")
+        plot_file = f"{plots_directory}/{var}_moments.png"
+        plot_moments(l2_dist, moments, plot_file)
+        stats_file = f"{stats_directory}/{var}_moments.json"
+        with open(stats_file, "w") as f:
+            json.dump(data, f, indent=2)
+        print(f"Stats for {var} has been saved to {stats_file}")
 
 
 if __name__ == "__main__":
     # Load constants
     version = CURRENT_VERSION
-    N = 120000000
+    N = 200000000
     var_names = ["t", "g", "z", "input_t", "sym_z"]
+    z_vars = ["z", "sym_z"]
+    other_vars = ["t", "g", "input_t"]
     hist_dir = f"{DATA_DIR}/v{version}/{TYPE}/hist"
     stats_dir = f"{DATA_DIR}/v{version}/{TYPE}/stats"
     plots_dir = f"{DATA_DIR}/v{version}/{TYPE}/plots"
@@ -115,117 +245,22 @@ if __name__ == "__main__":
     print("Folders created")
 
     # Load histogram data
-    map = defaultdict(list)
+    data_map = defaultdict(list)
     for var in var_names:
         for i in range(NUM_RG):
             file = f"{folder_names[var]}/{var}_hist_RG{i}.npz"
             counts, bins, centers = load_hist_data(file)
             densities = get_density(counts, bins)
-            map[var].append([counts, bins, centers, densities])
-    print("All histograms have been loaded")
+            data_map[var].append([counts, bins, centers, densities])
+    print("All histogram datasets have been loaded")
 
     # Plot the other 3 variables without clipping bounds
-    other_vars = ["t", "g", "input_t"]
-    for var in other_vars:
-        plt.figure()
-        plt.title(f"Histogram of dataset {var}")
-        plt.xlabel(f"{var}")
-        plt.ylabel(f"P({var})")
-        for i in range(NUM_RG):
-            plt.plot(map[var][i][2], map[var][i][3], label=f"RG{i}")
-        plt.legend()
-        plt.savefig(f"{plots_dir}/{var}_histogram.png", dpi=150)
+    for var in var_names:
+        filename = f"{plots_dir}/{var}_histogram.png"
+        plot_data(var, filename, data_map[var], TYPE)
     print("Plots for t, g and input t data have been made")
-
-    # Store the moments calculated by the script
-    moments = defaultdict(list)
-    for i in range(NUM_RG):
-        file = f"{stats_dir}/z_moments_RG{i}_{N}_samples.npz"
-        l2, mean, std, converged = load_moments(file)
-        moments[i] = [float(l2), float(mean), float(std), bool(converged)]
-    print("Stats from the script have been stored")
-    # print(moments)
-    # print(moments)
-
-    # Plot the unsymmetrised z data
-    fig, (ax0, ax1) = plt.subplots(1, 2, figsize=(10, 4))
-    ax0.set_xlim([-25.0, 25.0])
-    ax0.set_ylim([0.0, 0.3])
-    ax0.set_title("Unclipped histogram of Unsymmetrised z data")
-    ax0.set_xlabel("z")
-    ax0.set_ylabel("Q(z)")
-    ax1.set_title("Clipped histogram of Unsymmetrised z data")
-    ax1.set_xlabel("z")
-    ax1.set_ylabel("Q(z)")
-    ax1.set_xlim([-4, 4])
-    ax1.set_ylim([0, 0.3])
-    z_dist = []
-    z_moments = []
-    for i in range(NUM_RG):
-        if i > 0:
-            z_dist.append(
-                l2_distance(
-                    map["z"][i][0],
-                    map["z"][i - 1][0],
-                    map["z"][i][1],
-                    map["z"][i - 1][1],
-                )
-            )
-        z_moments.append(hist_moments(map["z"][i][0], map["z"][i][1]))
-        ax0.plot(map["z"][i][2], map["z"][i][3], label=f"RG{i}")
-        ax1.plot(map["z"][i][2], map["z"][i][3], label=f"RG{i}")
-    plt.legend()
-    plt.savefig(f"{plots_dir}/z_histogram.png", dpi=150)
-    print("Data plot made for unsymmetrised z")
-    plt.close()
-
-    # Plot the symmetrised z data
-    fig, (ax2, ax3) = plt.subplots(1, 2, figsize=(10, 4))
-    ax2.set_xlim([-5.0, 5.0])
-    ax2.set_ylim([0.0, 0.3])
-    ax2.set_title("Unclipped histogram of Symmetrised z data")
-    ax2.set_xlabel("z")
-    ax2.set_ylabel("Q(z)")
-    ax3.set_title("Clipped histogram of Symmetrised z data")
-    ax3.set_xlabel("z")
-    ax3.set_ylabel("Q(z)")
-    ax3.set_xlim([-1, 1])
-    ax3.set_ylim([0.16, 0.24])
-    ax4 = inset_locator.inset_axes(ax2, width="30%", height=0.6)
-    ax4.set_xlim([-25.0, 25.0])
-    sym_z_dist = []
-    sym_z_moments = []
-    for i in range(NUM_RG):
-        if i > 0:
-            sym_z_dist.append(
-                l2_distance(
-                    map["sym_z"][i][0],
-                    map["sym_z"][i - 1][0],
-                    map["sym_z"][i][1],
-                    map["sym_z"][i - 1][1],
-                )
-            )
-        sym_z_moments.append(hist_moments(map["sym_z"][i][0], map["sym_z"][i][1]))
-        if i % 2 == 0:
-            ax2.plot(map["sym_z"][i][2], map["sym_z"][i][3], label=f"RG{i}")
-            ax3.scatter(
-                map["sym_z"][i][2][::50], map["sym_z"][i][3][::50], label=f"RG{i}"
-            )
-            ax4.plot(map["sym_z"][i][2][::50], map["sym_z"][i][3][::50])
-    ax2.legend(loc="upper left")
-    ax3.legend()
-    plt.savefig(f"{plots_dir}/sym_z_histogram.png", dpi=150)
-    print("Data plot made for symmetrised z")
-
-    # Manually calculate statistics to compare
-    retrieved_file = f"{stats_dir}/retrieved_stats.json"
-    z_file = f"{stats_dir}/z_stats.json"
-    sym_z_file = f"{stats_dir}/sym_stats.json"
-    construct_moments_dict(z_file, z_moments, z_dist)
-    construct_moments_dict(sym_z_file, sym_z_moments, sym_z_dist)
-    construct_moments_dict(
-        retrieved_file,
-        moments,
-    )
-    # print(map["sym_z"][0][1])
+    print("-" * 100)
+    construct_moments_dict(stats_dir, plots_dir, var_names, data_map)
+    print("-" * 100)
+    # print(data_map["sym_z"][0][1])
     print("Analysis done.")
