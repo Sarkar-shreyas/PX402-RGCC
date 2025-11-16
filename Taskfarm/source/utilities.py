@@ -1,6 +1,8 @@
 import numpy as np
 from numpy.polynomial import polynomial
-from scipy.optimize import curve_fit
+
+# from scipy.optimize import curve_fit
+from scipy.interpolate import UnivariateSpline
 from scipy.stats import norm
 
 # ---------- Constants ---------- #
@@ -14,7 +16,7 @@ DIST_TOLERANCE: float = 0.001
 STD_TOLERANCE: float = 0.0005
 T_RANGE: tuple = (0.0, 1.0)
 EXPRESSION: str = "Shaw"
-G_TOL: float = 1e-15
+G_TOL: float = 1.39e-11
 # EXPRESSION = "Shreyas"
 # EXPRESSION = "Cain"
 # EXPRESSION = "Jack"
@@ -72,7 +74,8 @@ def generate_initial_t_distribution(N: int) -> np.ndarray:
     numpy.ndarray
         Array of N amplitude values t = √g where g ~ U[0,1].
     """
-    g_sample = np.random.uniform(G_TOL, 1.0 - G_TOL, N)
+    # g_sample = np.random.uniform(G_TOL, 1.0 - G_TOL, N)
+    g_sample = np.random.uniform(0.0, 1.0, N)
     t_dist = np.sqrt(g_sample)
     return t_dist
 
@@ -305,218 +308,6 @@ def convert_t_to_z(t: np.ndarray) -> np.ndarray:
     return np.log((1.0 / (t**2.0)) - 1.0)
 
 
-# ---------- Histogram construction helper ---------- #
-# class Probability_Distribution:
-#     """A class for managing binned probability distributions in the RG analysis.
-
-#     This class provides tools for creating, analyzing, and sampling from
-#     probability distributions represented as normalized histograms. It supports
-#     operations needed for the RG flow analysis including distance calculations
-#     between distributions and statistical measurements.
-
-#     Parameters
-#     ----------
-#     values : numpy.ndarray
-#         Raw values to bin into a probability distribution.
-#     bins : int, optional
-#         Number of bins for the histogram (default from config.BINS).
-#     range : tuple, optional
-#         (min, max) range for binning (default from config.Z_RANGE).
-
-#     Attributes
-#     ----------
-#     bin_edges : numpy.ndarray
-#         Edges of the histogram bins, shape (bins+1,).
-#     histogram_values : numpy.ndarray
-#         Normalized histogram values, shape (bins,).
-#     cdf : numpy.ndarray
-#         Cumulative distribution function, shape (bins,).
-#     """
-
-#     def __init__(self, values, bins=Z_BINS, range=Z_RANGE, density: bool = True):
-#         histogram_values, bin_edges = np.histogram(
-#             values, bins=bins, range=range, density=density
-#         )
-#         cdf = histogram_values.cumsum()
-#         cdf = cdf / cdf[-1]
-#         self.bin_edges = bin_edges
-#         self.domain_min = min(range)
-#         self.domain_max = max(range)
-#         self.domain_width = np.abs(self.domain_min) + np.abs(self.domain_max)
-#         self.bin_centers = 0.5 * (bin_edges[1:] + bin_edges[:-1])
-#         self.histogram_values = histogram_values
-#         self.cdf = cdf
-
-#     def histogram_distances(
-#         self, other_histogram_values, other_histogram_bin_edges
-#     ) -> float:
-#         """Calculate L2 distance between this distribution and another.
-
-#         Computes the integrated squared difference between two normalized
-#         histograms: δ = √∫(Q_{k+1}(z)² - Q_k(z)²)dz.
-
-#         Parameters
-#         ----------
-#         other_histogram_values : numpy.ndarray
-#             Normalized values from other histogram, shape (bins,).
-#         other_histogram_bin_edges : numpy.ndarray
-#             Bin edges from other histogram, shape (bins+1,).
-
-#         Returns
-#         -------
-#         float
-#             L2 distance between the distributions.
-#         """
-#         integrand = (self.histogram_values - other_histogram_values) ** 2
-#         dz = np.diff(other_histogram_bin_edges)
-#         distance = float(np.sqrt(np.sum(integrand * dz)))
-#         return distance
-
-#     def update(self, new_hist_values):
-#         """Replace the stored histogram and recompute the CDF.
-
-#         Parameters
-#         ----------
-#         new_hist_values : numpy.ndarray
-#             Normalized histogram values for each bin (shape: (bins,)). The
-#             values should represent a probability density over the bin widths.
-#         new_bin_edges : numpy.ndarray
-#             Bin edges corresponding to the histogram (shape: (bins+1,)).
-
-#         Notes
-#         -----
-#         This method updates the distribution in-place and recomputes the
-#         cumulative distribution function (CDF) from the provided histogram
-#         values. If the provided histogram values are not normalized, the
-#         computed CDF will be scaled by their cumulative sum (i.e. cdf[-1]).
-#         The caller should ensure that the inputs are valid (non-negative and
-#         consistent shapes) to avoid runtime errors.
-#         """
-#         self.histogram_values = new_hist_values
-#         cdf = new_hist_values.cumsum()
-#         cdf /= cdf[-1]
-#         self.cdf = cdf
-
-#     def mean_and_std(self) -> tuple:
-#         """Calculate mean and standard deviation of the distribution.
-
-#         Uses the normalized histogram values to compute first and second
-#         moments of the distribution.
-
-#         Returns
-#         -------
-#         tuple
-#             (mean, standard_deviation) of the distribution.
-#         """
-#         centers = 0.5 * (self.bin_edges[:-1] + self.bin_edges[1:])
-#         mean = (centers * self.histogram_values).sum() / self.histogram_values.sum()
-#         variance = (
-#             ((centers - mean) ** 2) * self.histogram_values
-#         ).sum() / self.histogram_values.sum()
-#         standard_deviation = np.sqrt(variance)
-#         return mean, standard_deviation
-
-#     def sample(self, N: int) -> np.ndarray:
-#         """Generate random samples from the distribution.
-
-#         Uses inverse transform sampling: generates uniform random numbers,
-#         maps them through the CDF, and interpolates within bins to get
-#         continuous values.
-
-#         Parameters
-#         ----------
-#         N : int
-#             Number of samples to generate.
-
-#         Returns
-#         -------
-#         numpy.ndarray
-#             Array of N samples drawn from the distribution.
-#         """
-#         # Inverse CDF method
-#         # u = np.random.uniform(0, 1.0, N)  # Uniform sample from 0 to 1
-#         # index = np.searchsorted(
-#         #     self.cdf, u
-#         # )  # Map it into our cdf histogram, will work fine because our cdf is normalised on initialisation.
-#         # index = np.clip(index, 0, len(self.cdf) - 1)  # Ensure we're within bounds
-#         # left_edge = self.bin_edges[
-#         #     index
-#         # ]  # Find the leftmost bin, could probably just set bin_edges[0]?
-#         # right_edge = self.bin_edges[
-#         #     index + 1
-#         # ]  # Find the rightmost bin, could probably just set bin_edges[-1]?
-
-#         # left_cdf = np.where(
-#         #     index == 0, 0.0, self.cdf[index - 1]
-#         # )  # Starting from the left, just set the first bin to 0 then move
-#         # right_cdf = self.cdf[index]  # Starting from the right, just follow indexing
-
-#         # # Add a guard in the denominator for extremely small values
-#         # denominator = np.maximum(right_cdf - left_cdf, 1e-15)
-#         # # Check how close to the right bin the value is
-#         # fraction = (u - left_cdf) / denominator
-#         # # Return the values mapped within their respective bins
-#         # return left_edge + fraction * (right_edge - left_edge)
-
-#         # Launder a.k.a rejection method
-#         # Get the bin widths, and total number of bins
-#         bin_width = np.diff(self.bin_edges)[0]
-#         num_bins = len(self.bin_centers)
-#         # Normalise the histogram manually
-#         normed = self.histogram_values / np.sum(self.histogram_values * bin_width)
-
-#         # Store the max height of the bins
-#         max_height = np.max(normed)
-#         # print(max_height)
-#         # Vectorise with numpy, run using reasonable batch sizes
-#         min_batch_size = 10000
-#         max_batch_size = 1000000
-#         # Track how many samples we've accepted and still need to be produced
-#         filled = 0
-#         remaining = N - filled
-#         # Placeholder array initialised early so we can just update values
-#         accepted = np.empty(N, dtype=float)
-#         num_iters = 0
-#         # Runs until we've got N samples
-#         while filled < N:
-#             num_iters += 1
-#             # Set the batch size to be between 10000 and 1000000, but use remaining if its in the bounds
-#             batch_size = max(min_batch_size, min(remaining, max_batch_size))
-#             # Random x and y draws within the domains of the existing dataset
-#             x = np.random.uniform(self.domain_min, self.domain_max, batch_size)
-#             y = np.random.uniform(0, max_height, batch_size)
-
-#             # Check which bin the x value falls into
-#             bin_number = np.ceil((x - self.domain_min) / bin_width).astype(int) - 1
-#             # Guard if we hit the boundaries
-#             bin_number = np.clip(bin_number, 0, num_bins - 1)
-
-#             # Store the heights at that bin
-#             heights = normed[bin_number]
-
-#             # Setup the y mask and slice the values to accept
-#             mask = y <= heights
-#             acceptable = x[mask]
-
-#             # Just try again if none are acceptable
-#             if len(acceptable) == 0:
-#                 continue
-
-#             # if num_iters % 1000 == 0:
-#             #     print(
-#             #         f"Still laundering, Accepted: {len(acceptable)}, Remaining: {remaining}, batch size: {batch_size}"
-#             #     )
-#             # Only add how many we need, since we want exactly N samples
-#             to_accept = min(len(acceptable), remaining)
-#             # Fill the placeholder at those indices with the new accepted values
-#             # print(filled, to_accept)
-#             accepted[filled : filled + to_accept] = acceptable[:to_accept]
-#             filled += to_accept
-#             remaining -= to_accept
-
-#         return accepted
-
-
 # ---------- Sampling helpers decoupled from P_D ---------- #
 def launder(
     N: int, hist_vals: np.ndarray, bin_edges: np.ndarray, bin_centers: np.ndarray
@@ -624,12 +415,25 @@ def l2_distance(old_hist_val, new_hist_val, old_bins, new_bins) -> float:
     float
         L2 distance between the distributions.
     """
+    # L2 distance between 2 histograms
     old_density = get_density(old_hist_val, old_bins)
     new_density = get_density(new_hist_val, new_bins)
-    shaw_density_integrand = (new_density - old_density) ** 2
-    old_dz = np.diff(old_bins)
-    density_shaw_distance = float(np.sqrt(np.sum(shaw_density_integrand * old_dz)))
-    return density_shaw_distance
+    integrand = (new_density - old_density) ** 2
+    dz = np.diff(old_bins)
+    l2_distance = float(np.sqrt(np.sum(integrand * dz)))
+    return l2_distance
+
+
+def mean_squared_distance(old_hist_val, new_hist_val, old_bins, new_bins) -> float:
+    # Shaw's MSD
+    old_density = get_density(old_hist_val, old_bins)
+    new_density = get_density(new_hist_val, new_bins)
+    shaw_integrand = new_density**2 - old_density**2
+    # I'm getting negative values at some points since the shift is large so for now I have to manually clip it
+    # mask = shaw_integrand < 0
+    # print(f"There are {np.sum(mask)} negative differences out of {len(old_density)}")
+    shaw_integrand = np.clip(shaw_integrand, 0.0, None)
+    return float(np.mean(np.sqrt(shaw_integrand)))
 
 
 def hist_moments(hist_vals: np.ndarray, bins: np.ndarray) -> tuple:
@@ -652,9 +456,16 @@ def hist_moments(hist_vals: np.ndarray, bins: np.ndarray) -> tuple:
     return mean, standard_deviation
 
 
+def std_derivative(
+    rgs: np.ndarray | list, stds: np.ndarray | list, smoothing_factor: float
+) -> np.ndarray | list:
+    spline = UnivariateSpline(rgs, stds, s=smoothing_factor)
+    derivative_line = spline.derivative()
+    std_primes = derivative_line(stds)
+    return std_primes
+
+
 # ---------- Distribution manipulation helpers ---------- #
-
-
 def center_z_distribution(z_hist: np.ndarray, z_bins: np.ndarray) -> np.ndarray:
     """Symmetrize and renormalize a binned Q(z) distribution in-place.
 
