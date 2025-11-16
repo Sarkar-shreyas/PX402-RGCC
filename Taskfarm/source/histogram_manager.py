@@ -79,7 +79,7 @@ if __name__ == "__main__":
         output_z_file = sys.argv[7].strip()
         rg_step = int(sys.argv[8].strip())
         shift = float(sys.argv[9].strip())
-    elif len(sys.argv) == 11:
+    elif len(sys.argv) == 13:
         # If there are already existing histograms, we need to append the new data into them.
         process = int(sys.argv[1].strip())
         input_t_file = sys.argv[2].strip()
