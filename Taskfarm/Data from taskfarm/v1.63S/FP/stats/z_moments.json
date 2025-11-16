@@ -1,0 +1,69 @@
+{
+  "RG_0": {
+    "mean": 1.0883425482268065,
+    "std": 1.7090177054518574
+  },
+  "RG_1": {
+    "L2 distance with RG_0": 0.01484547785914097,
+    "Mean squared distance with RG_0": 0.0010845978432969482,
+    "L2_converged": false,
+    "MSD converged": false,
+    "mean": 1.1272407148295842,
+    "std": 1.7606057580626848,
+    "std_converged": false
+  },
+  "RG_2": {
+    "L2 distance with RG_1": 0.00534864406825796,
+    "Mean squared distance with RG_1": 0.0006279824871244257,
+    "L2_converged": false,
+    "MSD converged": true,
+    "mean": 1.1388819668465282,
+    "std": 1.7770854458292165,
+    "std_converged": false
+  },
+  "RG_3": {
+    "L2 distance with RG_2": 0.0035616959155439633,
+    "Mean squared distance with RG_2": 0.0005448124032573341,
+    "L2_converged": false,
+    "MSD converged": true,
+    "mean": 1.1425088035635724,
+    "std": 1.7817247028855983,
+    "std_converged": false
+  },
+  "RG_4": {
+    "L2 distance with RG_3": 0.0034664247383731136,
+    "Mean squared distance with RG_3": 0.0005597903609063321,
+    "L2_converged": false,
+    "MSD converged": true,
+    "mean": 1.1430370675670427,
+    "std": 1.782911557491655,
+    "std_converged": false
+  },
+  "RG_5": {
+    "L2 distance with RG_4": 0.003368733105357871,
+    "Mean squared distance with RG_4": 0.0005627932694315082,
+    "L2_converged": false,
+    "MSD converged": true,
+    "mean": 1.1437702925717281,
+    "std": 1.7835331656020594,
+    "std_converged": false
+  },
+  "RG_6": {
+    "L2 distance with RG_5": 0.0033933428672781123,
+    "Mean squared distance with RG_5": 0.0005720791086717595,
+    "L2_converged": false,
+    "MSD converged": true,
+    "mean": 1.144196758699374,
+    "std": 1.7838485729328535,
+    "std_converged": true
+  },
+  "RG_7": {
+    "L2 distance with RG_6": 0.0034173805572883962,
+    "Mean squared distance with RG_6": 0.0005703370356548892,
+    "L2_converged": false,
+    "MSD converged": true,
+    "mean": 1.1439911046825848,
+    "std": 1.7839403620558363,
+    "std_converged": true
+  }
+}
