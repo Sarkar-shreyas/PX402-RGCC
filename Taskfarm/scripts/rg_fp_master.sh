@@ -4,9 +4,9 @@
 #SBATCH --error=../job_logs/bootstrap/%x_%A.err
 
 # Define the constants for this RG flow
-N=200000000 # Total number of samples
-NUM_RG_ITERS=8 # Number of RG steps
-VERSION=1.63S  # Version for tracking changes and matrix used
+N=800000 # Total number of samples
+NUM_RG_ITERS=10 # Number of RG steps
+VERSION=1.8S  # Version for tracking changes and matrix used
 TYPE="FP" # Type flag to toggle symmetrisation/launder target
 INITIAL=1 # Flag to generate starting distribution/histograms or not
 EXISTING_T="" # Placeholder var to point to data file for non-initial RG steps

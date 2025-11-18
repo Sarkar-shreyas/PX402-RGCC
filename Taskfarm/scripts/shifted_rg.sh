@@ -4,10 +4,10 @@
 #SBATCH --error=../job_logs/bootstrap/%x_%A.err
 
 # Define the constants for this RG flow
-N=200000000 # Total number of samples
-NUM_RG_ITERS=8 # Number of RG steps
-NUM_BATCHES=16 # Number of batches to generate/process data over
-VERSION=1.63S # Version for tracking changes and matrix used
+N=800000 # Total number of samples
+NUM_RG_ITERS=10 # Number of RG steps
+NUM_BATCHES=8 # Number of batches to generate/process data over
+VERSION=1.8S # Version for tracking changes and matrix used
 TYPE="EXP" # Type flag to toggle symmetrisation/launder target
 INITIAL=1 # Flag to generate starting distribution/histograms or not
 EXISTING_T="" # Placeholder var to point to data file for non-initial RG steps
@@ -53,7 +53,7 @@ shift_job=$(sbatch --parsable \
     --output=../job_outputs/bootstrap/gen_shift_${CURRENT_SHIFT}_%A_%a.out \
     --error=../job_logs/bootstrap/gen_shift_${CURRENT_SHIFT}_%A_%a.out \
     "$scriptsdir/gen_shifted_data.sh" \
-        "$SAMPLE_SIZE" "$VERSION" "$FP_dist" "Initial" "$CURRENT_SHIFT")
+        "$N" "$VERSION" "$FP_dist" "Initial" "$CURRENT_SHIFT")
 
 echo " [$(date '+%Y-%m-%d %H:%M:%S')]: Submitted shift job ${shift_job} for shift ${CURRENT_SHIFT}"
 # For each RG, we queue data generation and then histogram jobs, dependencies ensure they run in sequence
@@ -65,7 +65,7 @@ for step in $(seq 0 $(( NUM_RG_ITERS - 1 ))); do
     if [ "$step" -eq 0 ]; then
         INITIAL=0
         gen_job_dep="$shift_job"
-        EXISTING_T="$datadir/Initial/perturbed_t_shift_${CURRENT_SHIFT}.npy"
+        EXISTING_T="$datadir/Initial"
     else
         prev_step=$(( $step - 1 ))
         gen_job_dep="$prev_hist_job"
@@ -95,7 +95,6 @@ for step in $(seq 0 $(( NUM_RG_ITERS - 1 ))); do
     prev_hist_job="$hist_job"
     INITIAL=0
 
-    EXISTING_T="$laundereddir"
     sleep 5
 done
 echo "================================================================================================================="
