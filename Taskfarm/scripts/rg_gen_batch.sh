@@ -3,7 +3,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --mem-per-cpu=3988
 #SBATCH --cpus-per-task=1
-#SBATCH --array=0-15%8
+#SBATCH --array=0-7
 #SBATCH --time=08:00:00
 #SBATCH --job-name=rg_gen
 #SBATCH --output=../job_outputs/bootstrap/%x_%A_%a.out
@@ -89,11 +89,23 @@ cd "$codedir"
 SRC_DIR="$codedir/source" # This is where the actual code lives
 PREV_RG=$(( RG_STEP - 1 ))
 
-# If we passed in a directory, it'll run through each file.
+# Handle what data to use
 if [[ "$INITIAL" -eq 0 ]]; then
     if [[ -d "$EXISTING_T_FILE" ]]; then
-        T_INPUT="$EXISTING_T_FILE/t_laundered_RG${PREV_RG}_batch_${TASK_ID}.npy"
+        if [[ "$TYPE" == "FP" ]]; then
+            # If its the first step of the FP run, use t_laundered as usual
+            T_INPUT="$EXISTING_T_FILE/t_laundered_RG${PREV_RG}_batch_${TASK_ID}.npy"
+        else
+            if [[ "$RG_STEP" -eq 0 ]]; then
+                # If its the first step of the EXP run, use the shifted dataset
+                T_INPUT="$EXISTING_T_FILE/perturbed_t_shift_${shift}_batch_${TASK_ID}.npy"
+            else
+                # Otherwise, use the usual laundered dataset
+                T_INPUT="$EXISTING_T_FILE/t_laundered_RG${PREV_RG}_batch_${TASK_ID}.npy"
+            fi
+        fi
     else
+        # If its just a file and not a directory, we can use it directly
         T_INPUT="$EXISTING_T_FILE"
     fi
 else
