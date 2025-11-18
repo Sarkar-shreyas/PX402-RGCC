@@ -3,6 +3,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --mem-per-cpu=3988
 #SBATCH --cpus-per-task=1
+#SBATCH --array=0-7
 #SBATCH --time=08:00:00
 #SBATCH --job-name=gen_shift
 #SBATCH --output=../job_outputs/bootstrap/%x_%A.out
@@ -15,6 +16,9 @@ INPUT_FILE="$3" # The input histogram we launder and shift from
 STEP="$4" # The RG step we're currently at
 shift="$5" # Takes in the shift value to apply for this round.
 TYPE="EXP" # Type flag to toggle symmetrisation/launder target
+NUM_BATCHES=$((SLURM_ARRAY_TASK_MAX + 1)) # Number of batches to generate/process data over, same as array size
+BATCH_SIZE=$(( N / NUM_BATCHES )) # How many samples should be calculated per batch
+TASK_ID=${SLURM_ARRAY_TASK_ID} # Array task ID for easy tracking
 
 set -euo pipefail
 
@@ -63,10 +67,10 @@ cd "$codedir"
 SRC_DIR="$codedir/source" # This is where the actual code lives
 
 # Where to store the shifted data for use in later RG steps
-OUTPUT_FILE="$jobdatadir/${STEP}/perturbed_t_shift_${shift}.npy"
+OUTPUT_FILE="$jobdatadir/${STEP}/perturbed_t_shift_${shift}_batch_${TASK_ID}.npy"
 
 python -m "source.shift_z" \
-    "$N" \
+    "$BATCH_SIZE" \
     "$INPUT_FILE" \
     "$OUTPUT_FILE" \
     "$shift"
