@@ -14,9 +14,10 @@ from collections import defaultdict
 import json
 
 DATA_DIR = "C:/Users/ssark/Desktop/Uni/Year 4 Courses/Physics Final Year Project/Project Code/Taskfarm/Data from taskfarm"
-CURRENT_VERSION = "1.63S"
+CURRENT_VERSION = "1.7S"
 TYPE = "FP"
-NUM_RG = 8
+NUM_RG = 10
+N = 120000000
 LEGENDS = {
     "FP": {
         "t": "upper left",
@@ -35,15 +36,15 @@ LEGENDS = {
 YLIMS = {
     "FP": {
         "t": (0.0, 1.50),
-        "g": (0.0, 4.0),
-        "input_t": (0.0, 4.0),
+        "g": (0.0, 3.0),
+        "input_t": (0.0, 3.0),
         "z": (0.0, 0.3),
         "sym_z": (0.0, 0.25),
     },
     "EXP": {
         "t": (0.0, 1.50),
-        "g": (0.0, 4.0),
-        "input_t": (0.0, 4.0),
+        "g": (0.0, 3.0),
+        "input_t": (0.0, 3.0),
         "z": (0.0, 0.3),
     },
 }
@@ -85,7 +86,7 @@ def plot_data(var: str, filename: str, data: list, mode: str):
         ax2.set_ylim(ylim)
         # inset = inset_locator.inset_axes(ax, width="25%", height=1.0)
         # inset.set_xlim([-25.0, 25.0])
-        for i in range(0, NUM_RG, 2):
+        for i in range(0, NUM_RG, 1):
             x_data = data[i][2]
             y_data = data[i][3]
             ax1.plot(x_data, y_data, label=f"RG{i}")
@@ -102,6 +103,11 @@ def plot_data(var: str, filename: str, data: list, mode: str):
             x_data = data[i][2]
             y_data = data[i][3]
             ax.plot(x_data, y_data, label=f"RG{i}")
+        if var == "input_t":
+            g = np.linspace(0, 1, 1000000)
+            t = np.sqrt(g)
+            h, b = np.histogram(t, 1000, (0, 1), density=True)
+            ax.plot(x_data, h, label="Initial")
         ax.set_xlim(xlim)
         ax.set_ylim(ylim)
         ax.legend(loc=legend_loc)
@@ -133,11 +139,16 @@ def plot_moments(l2: list, moment_list: list[tuple], filename: str):
     rgs = [i + 1 for i in range(NUM_RG)]
     mean, std = map(np.array, zip(*moment_list))
 
+    # mean_errors = std / np.sqrt(N)
+    # std_errors = std / np.sqrt(2 * (N - 1))
+
     std_primes = std_derivative(rgs, std, 1)
     for i in range(NUM_RG):
         moment_ax0.scatter(i, mean[i])
         moment_ax1.scatter(i, std[i])
         moment_ax2.scatter(i, std_primes[i])
+        # moment_ax0.errorbar(i, mean[i], yerr=mean_errors[i], fmt="o")
+        # moment_ax1.errorbar(i, std[i], yerr=std_errors[i], fmt="o")
         if i > 0:
             moment_ax3.scatter(i + 1, l2[i - 1])
     moment_fig.tight_layout()
@@ -151,7 +162,6 @@ def load_hist_data(filename: str) -> tuple:
     counts = data["histval"]
     bins = data["binedges"]
     centers = data["bincenters"]
-
     return (counts, bins, centers)
 
 
@@ -218,15 +228,14 @@ def construct_moments_dict(
 if __name__ == "__main__":
     # Load constants
     version = CURRENT_VERSION
-    N = 200000000
-    var_names = ["t", "g", "z", "input_t", "sym_z"]
+
+    var_names = ["t", "z", "input_t", "sym_z"]
     z_vars = ["z", "sym_z"]
-    other_vars = ["t", "g", "input_t"]
+    other_vars = ["t", "input_t"]
     hist_dir = f"{DATA_DIR}/v{version}/{TYPE}/hist"
     stats_dir = f"{DATA_DIR}/v{version}/{TYPE}/stats"
     plots_dir = f"{DATA_DIR}/v{version}/{TYPE}/plots"
     t_folder = f"{hist_dir}/t"
-    g_folder = f"{hist_dir}/g"
     z_folder = f"{hist_dir}/z"
     input_folder = f"{hist_dir}/input_t"
     sym_folder = f"{hist_dir}/sym_z"
@@ -235,7 +244,6 @@ if __name__ == "__main__":
         "stats": stats_dir,
         "plots": plots_dir,
         "t": t_folder,
-        "g": g_folder,
         "z": z_folder,
         "input_t": input_folder,
         "sym_z": sym_folder,

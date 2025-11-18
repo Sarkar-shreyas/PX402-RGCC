@@ -15,11 +15,11 @@ import json
 from time import time
 
 DATA_DIR = "C:/Users/ssark/Desktop/Uni/Year 4 Courses/Physics Final Year Project/Project Code/Taskfarm/Data from taskfarm"
-CURRENT_VERSION = "1.61S"
+CURRENT_VERSION = "1.7S"
 TYPE = "EXP"
-NUM_RG = 8
-SHIFTS = [0.0, 0.005, 0.009]
-
+NUM_RG = 10
+# SHIFTS = [0.0, 0.003, 0.005, 0.007, 0.009]
+SHIFTS = [0.0, 0.003, 0.005, 0.007]
 if __name__ == "__main__":
     version = CURRENT_VERSION
     stats_dir = f"{DATA_DIR}/v{version}/{TYPE}/stats"
@@ -27,7 +27,7 @@ if __name__ == "__main__":
     os.makedirs(stats_dir, exist_ok=True)
     os.makedirs(plots_dir, exist_ok=True)
     data_map = defaultdict(dict)
-    vars = ["t", "g", "input_t", "z"]
+    vars = ["t", "input_t", "z"]
     # Get all the initial plots made for inspection
     start = time()
     for shift in SHIFTS:
@@ -41,6 +41,11 @@ if __name__ == "__main__":
             for i in range(NUM_RG):
                 filename = f"{shift_dir}/{var}_hist_RG{i}.npz"
                 counts, bins, centers = load_hist_data(filename)
+                # if var == "z":
+                #     print(
+                #         f"For RG{i}, first bin = {bins[0]}, first center = {centers[0]}, last bin = {bins[-1]}, last center = {bins[-1]}"
+                #     )
+                #     print(f"Min: {min(counts)}, Max: {max(counts)}")
                 densities = get_density(counts, bins)
                 data_map[shift][var].append([counts, bins, centers, densities])
             # print(f"All histograms for shift {shift} have been plotted")
