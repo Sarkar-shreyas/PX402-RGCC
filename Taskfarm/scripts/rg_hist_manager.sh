@@ -14,7 +14,7 @@ N="$1" # Target number of samples
 RG_STEP="$2" # The RG step we're currently at
 SHIFT="${5-}" # Takes in the shift value if running EXP, to change histogram domain
 TYPE="$3" # Type flag to toggle symmetrisation/launder target
-NUM_BATCHES=16 # Number of batches of data to generate/process, same as array size
+NUM_BATCHES=8 # Number of batches of data to generate/process, same as array size
 BATCH_SIZE=$(( N / NUM_BATCHES )) # How many samples exist per batch
 set -euo pipefail
 
@@ -32,6 +32,7 @@ else
     logsdir="$basedir/job_logs/v${VERSION}/$TYPE/${SLURM_JOB_NAME}/RG${RG_STEP}" # Where logs will be sent
     outputdir="$basedir/job_outputs/v${VERSION}/$TYPE" # Where the outputs will live
 fi
+
 # Common directories regardless of TYPE
 joboutdir="$outputdir/output/${SLURM_JOB_NAME}/RG${RG_STEP}" # General output directory
 jobdatadir="$outputdir/data" # Where the data will go
@@ -41,13 +42,12 @@ statsdir="$jobdatadir/RG${RG_STEP}/stats"
 laundereddir="$jobdatadir/RG${RG_STEP}/laundered"
 
 
-T_DIR="$histdir/t"
-G_DIR="$histdir/g"
-Z_DIR="$histdir/z"
-INPUT_DIR="$histdir/input_t"
-SYM_DIR="$histdir/sym_z"
+T_DIR="$histdir/t" # Output from rg_gen_batch
+Z_DIR="$histdir/z" # Histogram of unsymmetrised z
+INPUT_DIR="$histdir/input_t" # Histogram of laundered input t for next RG step
+SYM_DIR="$histdir/sym_z" # Histogram of symmetrised z for FP runs
 
-mkdir -p "$T_DIR" "$G_DIR" "$Z_DIR" "$INPUT_DIR" "$SYM_DIR"
+mkdir -p "$T_DIR" "$Z_DIR" "$INPUT_DIR" "$SYM_DIR"
 mkdir -p "$outputdir" "$logsdir" "$jobsdir" # Make these now so that it does it every time we run this job
 mkdir -p "$joboutdir" "$jobdatadir" "$batchdir" "$histdir" "$statsdir" "$laundereddir"
 
@@ -62,6 +62,7 @@ echo " Job Name         : $SLURM_JOB_NAME"
 echo " Job ID           : $SLURM_JOB_ID"
 echo " Submitted from   : $SLURM_SUBMIT_DIR"
 echo " Type             : $TYPE"
+echo " Shift            : ${SHIFT:-None}"
 echo " Current dir      : $(pwd)"
 echo " Date of job      : [$(date '+%Y-%m-%d %H:%M:%S')] "
 echo "==================================================="
@@ -103,65 +104,79 @@ module load GCC/13.3.0 SciPy-bundle/2024.05
 # Make sure the system recognises the python path to ensure relative imports proceed without issue
 export PYTHONPATH="$codedir:$PYTHONPATH"
 cd "$codedir"
-SRC_DIR="$codedir/source" # This is where the actual code lives
 
 # Target filenames for global histogram per RG step
 OUTPUT_T="$T_DIR/t_hist_RG${RG_STEP}.npz"
-OUTPUT_G="$G_DIR/g_hist_RG${RG_STEP}.npz"
 OUTPUT_Z="$Z_DIR/z_hist_RG${RG_STEP}.npz"
 
 echo " Making histograms for RG step $RG_STEP from $NUM_BATCHES batches "
 
-# Process every batch of data
+# Histogram jobs for every batch of data
 for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
     BATCH_DIR="$batchdir/batch_${batch}"
 
-    batch_t=$(ls "$BATCH_DIR"/t_data_RG${RG_STEP}_*.npy)
-    batch_g=$(ls "$BATCH_DIR"/g_data_RG${RG_STEP}_*.npy)
-    batch_z=$(ls "$BATCH_DIR"/z_data_RG${RG_STEP}_*.npy)
+    batch_t="$BATCH_DIR/t_data_RG${RG_STEP}_${BATCH_SIZE}_samples.npy"
+    batch_z="$BATCH_DIR/z_data_RG${RG_STEP}_batch_${batch}.npy"
 
-    echo " Adding batch $batch:"
-    echo " t dir: $batch_t"
-    echo " g dir: $batch_g"
-    echo " z dir: $batch_z"
+    echo " Adding batch $batch"
+    echo " t file : $batch_t"
+    echo " z file : $batch_z"
 
-    # 2 choices depending on whether its the first histogram or not
-    if [[ ! -f "$OUTPUT_T" || ! -f "$OUTPUT_G" || ! -f "$OUTPUT_Z" ]]; then
+    # Convert generated t' into z
+    python -m "source.helpers" \
+        3 \
+        "$BATCH_SIZE" \
+        "$batch_t" \
+        "$batch_z"
+
+    # Construct/Append t' histogram, t has no shift
+    if [[ ! -f "$OUTPUT_T" ]]; then
         python -m "source.histogram_manager" \
             0 \
+            "t" \
             "$batch_t" \
-            "$batch_g" \
-            "$batch_z" \
             "$OUTPUT_T" \
-            "$OUTPUT_G" \
+            "$RG_STEP"
+    else
+        python -m "source.histogram_manager" \
+            1 \
+            "t" \
+            "$batch_t" \
+            "$OUTPUT_T" \
+            "$OUTPUT_T" \
+            "$RG_STEP"
+    fi
+
+    sleep 1
+
+    # Construct/Append z histogram, with shift
+    if [[ ! -f "$OUTPUT_Z" ]]; then
+        python -m "source.histogram_manager"\
+            0 \
+            "z" \
+            "$batch_z" \
             "$OUTPUT_Z" \
             "$RG_STEP" \
             "$SHIFT"
     else
-        python -m "source.histogram_manager" \
+        python -m "source.histogram_manager"\
             1 \
-            "$batch_t" \
-            "$batch_g" \
+            "z" \
             "$batch_z" \
-            "$OUTPUT_T" \
-            "$OUTPUT_G" \
             "$OUTPUT_Z" \
-            "$OUTPUT_T" \
-            "$OUTPUT_G" \
             "$OUTPUT_Z" \
             "$RG_STEP" \
             "$SHIFT"
     fi
+
     sleep 5
 done
 
 echo " Made histograms at: "
 echo " T: $OUTPUT_T "
-echo " G: $OUTPUT_G "
 echo " Z: $OUTPUT_Z "
 
-# If we're doing the FP calculation, we symmetrise, otherwise we don't.
-# For FP, we launder form Sym Z, for EXP, we launder from t
+# Symmetrisation if its an FP run
 if [[ "$TYPE" == "FP" ]]; then
     symmetrised_z="$SYM_DIR/sym_z_hist_RG${RG_STEP}.npz"
     python -m "source.helpers" \
@@ -179,25 +194,8 @@ else
     echo " Laundering from raw t histogram at $sampling_hist"
 fi
 
-# Analyse the moments
+# Laundering data for next RG step + histogram job for laundered t
 
-stats="$statsdir/z_moments_RG${RG_STEP}_${N}_samples.npz"
-
-if [[ -z "$PREV_Z_HIST" || ! -f "$PREV_Z_HIST" ]]; then
-    prev="None"
-else
-    prev="$PREV_Z_HIST"
-fi
-# If we're doing the FP we can calculate these, for EXP thats done locally while doing peak finding
-if [[ "$TYPE" == "FP" ]]; then
-    python -m "source.rg" \
-        "$RG_STEP" \
-        "$prev" \
-        "$symmetrised_z" \
-        "$stats"
-
-    echo " Moments of histogram for $N samples written to $stats. "
-fi
 # Point to the input t histogram so we can construct it
 INPUT_T="$INPUT_DIR/input_t_hist_RG${RG_STEP}.npz"
 
@@ -218,7 +216,7 @@ for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
             "$launderbatch"
     fi
     sleep 5
-    echo " Batch $batch of t data laundered from Q(z) saved to $launderbatch "
+    echo " Batch $batch of t data laundered from $TYPE histogram saved to $launderbatch "
     # Build the input t histogram
     echo " Building histogram for input t data of RG${RG_STEP} "
     if [[ ! -f "$INPUT_T" ]]; then
