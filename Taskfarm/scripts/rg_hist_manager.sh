@@ -129,6 +129,7 @@ for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
         "$batch_t" \
         "$batch_z"
 
+    echo " Converted t' data to z data "
     # Construct/Append t' histogram, t has no shift
     if [[ ! -f "$OUTPUT_T" ]]; then
         python -m "source.histogram_manager" \
