@@ -98,7 +98,7 @@ if [[ "$INITIAL" -eq 0 ]]; then
         else
             if [[ "$RG_STEP" -eq 0 ]]; then
                 # If its the first step of the EXP run, use the shifted dataset
-                T_INPUT="$EXISTING_T_FILE/perturbed_t_shift_${shift}_batch_${TASK_ID}.npy"
+                T_INPUT="$EXISTING_T_FILE/perturbed_t_shift_${SHIFT}_batch_${TASK_ID}.npy"
             else
                 # Otherwise, use the usual laundered dataset
                 T_INPUT="$EXISTING_T_FILE/t_laundered_RG${PREV_RG}_batch_${TASK_ID}.npy"
