@@ -11,8 +11,6 @@ from .utilities import (
     generate_random_phases,
     generate_t_prime,
     extract_t_samples,
-    convert_t_to_g,
-    convert_t_to_z,
 )
 
 if __name__ == "__main__":
@@ -47,24 +45,11 @@ if __name__ == "__main__":
     phases = generate_random_phases(array_size)
     t_array = extract_t_samples(t, array_size)
     t_prime = generate_t_prime(t_array, phases)
-    g = convert_t_to_g(t_prime)
-    z = convert_t_to_z(t_prime)
     t_filename = os.path.join(
         output_dir, f"t_data_RG{rg_step}_{array_size}_samples.npy"
     )
-    g_filename = os.path.join(
-        output_dir, f"g_data_RG{rg_step}_{array_size}_samples.npy"
-    )
-    z_filename = os.path.join(
-        output_dir, f"z_data_RG{rg_step}_{array_size}_samples.npy"
-    )
     np.save(t_filename, t_prime)
-    np.save(g_filename, g)
-    np.save(z_filename, z)
     print(f"t data generated for RG step {rg_step} and saved to {t_filename}")
-    print(f"g data generated for RG step {rg_step} and saved to {g_filename}")
-    print(f"z data generated for RG step {rg_step} and saved to {z_filename}")
-
     # if existing_t_file is not None and os.path.exists(existing_t_file):
     #     # Delete old files once done to prevent buildup
     #     os.remove(existing_t_file)
