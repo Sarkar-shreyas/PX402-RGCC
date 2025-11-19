@@ -5,19 +5,19 @@ from source.utilities import (
     mean_squared_distance,
     hist_moments,
     get_density,
-    std_derivative,
     STD_TOLERANCE,
     DIST_TOLERANCE,
 )
+from source.fitters import std_derivative
 import os
 from collections import defaultdict
 import json
 
 DATA_DIR = "C:/Users/ssark/Desktop/Uni/Year 4 Courses/Physics Final Year Project/Project Code/Taskfarm/Data from taskfarm"
-CURRENT_VERSION = "1.7S"
+CURRENT_VERSION = "1.82C"
 TYPE = "FP"
-NUM_RG = 10
-N = 120000000
+NUM_RG = 9
+N = 320000000
 LEGENDS = {
     "FP": {
         "t": "upper left",
@@ -35,14 +35,14 @@ LEGENDS = {
 }
 YLIMS = {
     "FP": {
-        "t": (0.0, 1.50),
+        "t": (0.0, 3.0),
         "g": (0.0, 3.0),
         "input_t": (0.0, 3.0),
         "z": (0.0, 0.3),
         "sym_z": (0.0, 0.25),
     },
     "EXP": {
-        "t": (0.0, 1.50),
+        "t": (0.0, 3.0),
         "g": (0.0, 3.0),
         "input_t": (0.0, 3.0),
         "z": (0.0, 0.3),
@@ -60,7 +60,7 @@ XLIMS = {
         "t": (0.0, 1.0),
         "g": (0.0, 1.0),
         "input_t": (0.0, 1.0),
-        "z": (-5.0, 20.0),
+        "z": (-25.0, 25.0),
     },
 }
 
@@ -256,7 +256,10 @@ if __name__ == "__main__":
     data_map = defaultdict(list)
     for var in var_names:
         for i in range(NUM_RG):
-            file = f"{folder_names[var]}/{var}_hist_RG{i}.npz"
+            if var == "z":
+                file = f"{folder_names[var]}/{var}_hist_unsym_RG{i}.npz"
+            else:
+                file = f"{folder_names[var]}/{var}_hist_RG{i}.npz"
             counts, bins, centers = load_hist_data(file)
             densities = get_density(counts, bins)
             data_map[var].append([counts, bins, centers, densities])
