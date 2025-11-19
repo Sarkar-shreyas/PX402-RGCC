@@ -4,9 +4,9 @@
 #SBATCH --error=../job_logs/bootstrap/%x_%A.err
 
 # Define the constants for this RG flow
-N=800000 # Total number of samples
-NUM_RG_ITERS=10 # Number of RG steps
-VERSION=1.8S  # Version for tracking changes and matrix used
+N=320000000 # Total number of samples
+NUM_RG_ITERS=12 # Number of RG steps
+VERSION=1.82S  # Version for tracking changes and matrix used
 TYPE="FP" # Type flag to toggle symmetrisation/launder target
 INITIAL=1 # Flag to generate starting distribution/histograms or not
 EXISTING_T="" # Placeholder var to point to data file for non-initial RG steps
@@ -67,7 +67,7 @@ for step in $(seq 0 $(( NUM_RG_ITERS - 1 ))); do
 
         echo " [$(date '+%Y-%m-%d %H:%M:%S')]: Submitted generation job for RG step $step : $gen_job (after ${prev_hist_job}) "
     fi
-    sleep 1
+    #sleep 1
     echo "----------------------------------------------------------------------------------------------------------------"
     hist_job=$(sbatch --parsable \
         --dependency=afterok:${gen_job} \
@@ -82,7 +82,7 @@ for step in $(seq 0 $(( NUM_RG_ITERS - 1 ))); do
     INITIAL=0
 
     EXISTING_T="$laundereddir"
-    sleep 1
+    #sleep 1
 done
 echo "================================================================================================================"
 echo " All ${NUM_RG_ITERS} RG jobs submitted. Final dependency ends at JOB${prev_hist_job} "
