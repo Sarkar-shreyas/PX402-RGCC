@@ -24,7 +24,7 @@ if __name__ == "__main__":
 
     shifted_sample = sym_sample + perturbation
     shifted_t = convert_z_to_t(shifted_sample)
-
+    shifted_t = shifted_t.astype(np.float32)
     print(f"Shifted laundered sample by {perturbation}")
     np.save(output_file, shifted_t)
 

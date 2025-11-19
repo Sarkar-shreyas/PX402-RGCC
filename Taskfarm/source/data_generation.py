@@ -44,10 +44,11 @@ if __name__ == "__main__":
         t = np.load(existing_t_file)
     phases = generate_random_phases(array_size)
     t_array = extract_t_samples(t, array_size)
-    t_prime = generate_t_prime(t_array, phases)
+    t_prime = generate_t_prime(t_array, phases, "Shaw")
     t_filename = os.path.join(
         output_dir, f"t_data_RG{rg_step}_{array_size}_samples.npy"
     )
+    t_prime = t_prime.astype(np.float32)
     np.save(t_filename, t_prime)
     print(f"t data generated for RG step {rg_step} and saved to {t_filename}")
     # if existing_t_file is not None and os.path.exists(existing_t_file):
