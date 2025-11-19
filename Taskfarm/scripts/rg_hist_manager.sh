@@ -14,7 +14,7 @@ N="$1" # Target number of samples
 RG_STEP="$2" # The RG step we're currently at
 SHIFT="${5-}" # Takes in the shift value if running EXP, to change histogram domain
 TYPE="$3" # Type flag to toggle symmetrisation/launder target
-NUM_BATCHES=8 # Number of batches of data to generate/process, same as array size
+NUM_BATCHES=16 # Number of batches of data to generate/process, same as array size
 BATCH_SIZE=$(( N / NUM_BATCHES )) # How many samples exist per batch
 set -euo pipefail
 
@@ -77,7 +77,7 @@ else
     if [[ "$TYPE" == "FP" ]]; then
         PREV_Z_HIST="$jobdatadir/RG${PREV_RG}/hist/sym_z/sym_z_hist_RG${PREV_RG}.npz"
     else
-        PREV_Z_HIST="$jobdatadir/RG${PREV_RG}/hist/z/z_hist_RG${PREV_RG}.npz"
+        PREV_Z_HIST="$jobdatadir/RG${PREV_RG}/hist/z/z_hist_unsym_RG${PREV_RG}.npz"
     fi
 fi
 
@@ -107,7 +107,7 @@ cd "$codedir"
 
 # Target filenames for global histogram per RG step
 OUTPUT_T="$T_DIR/t_hist_RG${RG_STEP}.npz"
-OUTPUT_Z="$Z_DIR/z_hist_RG${RG_STEP}.npz"
+OUTPUT_Z="$Z_DIR/z_hist_unsym_RG${RG_STEP}.npz"
 
 echo " Making histograms for RG step $RG_STEP from $NUM_BATCHES batches "
 
@@ -148,7 +148,7 @@ for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
             "$RG_STEP"
     fi
 
-    sleep 1
+    #sleep 1
 
     # Construct/Append z histogram, with shift
     if [[ ! -f "$OUTPUT_Z" ]]; then
@@ -170,7 +170,7 @@ for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
             "$SHIFT"
     fi
 
-    sleep 5
+    #sleep 5
 done
 
 echo " Made histograms at: "
@@ -216,7 +216,7 @@ for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
             "$sampling_hist" \
             "$launderbatch"
     fi
-    sleep 5
+    #sleep 1
     echo " Batch $batch of t data laundered from $TYPE histogram saved to $launderbatch "
     # Build the input t histogram
     echo " Building histogram for input t data of RG${RG_STEP} "
@@ -234,7 +234,7 @@ for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
             "$INPUT_T" \
             "$RG_STEP"
     fi
-    sleep 5
+    #sleep 5
 done
 
 echo " Input t histogram for RG${RG_STEP} built at ${INPUT_T} "
