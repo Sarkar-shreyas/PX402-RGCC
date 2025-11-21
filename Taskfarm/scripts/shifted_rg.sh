@@ -7,7 +7,7 @@
 N=320000000 # Total number of samples
 NUM_RG_ITERS=12 # Number of RG steps
 NUM_BATCHES=16 # Number of batches to generate/process data over
-VERSION=1.82S # Version for tracking changes and matrix used
+VERSION=1.83C # Version for tracking changes and matrix used
 TYPE="EXP" # Type flag to toggle symmetrisation/launder target
 INITIAL=1 # Flag to generate starting distribution/histograms or not
 EXISTING_T="" # Placeholder var to point to data file for non-initial RG steps
