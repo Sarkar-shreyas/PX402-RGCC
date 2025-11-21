@@ -43,7 +43,7 @@ if __name__ == "__main__":
             array_size, input_hist, input_bin_edges, input_bin_centers
         )
         laundered_t = convert_z_to_t(laundered_data)
-        laundered_t = laundered_t.astype(np.float32)
+
         np.save(output_file, laundered_t)
         print(f"Laundering completed in {time() - start:.3f} seconds")
         print(f"Data in {input_file} laundered and saved to {output_file}")
@@ -72,7 +72,6 @@ if __name__ == "__main__":
         laundered_t = launder(
             array_size, input_hist, input_bin_edges, input_bin_centers
         )
-        laundered_t = laundered_t.astype(np.float32)
         np.save(output_file, laundered_t)
         print(f"Laundering completed in {time() - start:.3f} seconds")
         print(f"Data in {input_file} laundered and saved to {output_file}")
@@ -83,7 +82,6 @@ if __name__ == "__main__":
         print(f"[{date}]: Converting t-data into z-data")
         t = np.load(input_file)
         z = convert_t_to_z(t)
-        z = z.astype(np.float32)
         np.save(output_file, z)
         print(f"Conversion completed in {time() - start:.3f} seconds")
         print(f"t data in {input_file} converted and saved as z data to {output_file}")
