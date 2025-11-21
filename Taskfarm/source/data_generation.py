@@ -44,7 +44,7 @@ if __name__ == "__main__":
         t = np.load(existing_t_file)
     phases = generate_random_phases(array_size)
     t_array = extract_t_samples(t, array_size)
-    t_prime = generate_t_prime(t_array, phases, "Shaw")
+    t_prime = generate_t_prime(t_array, phases, "Cain")
     t_filename = os.path.join(
         output_dir, f"t_data_RG{rg_step}_{array_size}_samples.npy"
     )
