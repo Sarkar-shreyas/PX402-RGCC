@@ -12,57 +12,16 @@ from source.fitters import std_derivative
 import os
 from collections import defaultdict
 import json
+from constants import (
+    DATA_DIR,
+    CURRENT_VERSION,
+    NUM_RG,
+    LEGENDS,
+    XLIMS,
+    YLIMS,
+)
 
-DATA_DIR = "C:/Users/ssark/Desktop/Uni/Year 4 Courses/Physics Final Year Project/Project Code/Taskfarm/Data from taskfarm"
-CURRENT_VERSION = "1.82C"
 TYPE = "FP"
-NUM_RG = 9
-N = 320000000
-LEGENDS = {
-    "FP": {
-        "t": "upper left",
-        "g": "upper right",
-        "input_t": "upper left",
-        "z": "upper left",
-        "sym_z": "upper left",
-    },
-    "EXP": {
-        "t": "upper right",
-        "g": "upper right",
-        "input_t": "upper right",
-        "z": "upper left",
-    },
-}
-YLIMS = {
-    "FP": {
-        "t": (0.0, 3.0),
-        "g": (0.0, 3.0),
-        "input_t": (0.0, 3.0),
-        "z": (0.0, 0.3),
-        "sym_z": (0.0, 0.25),
-    },
-    "EXP": {
-        "t": (0.0, 3.0),
-        "g": (0.0, 3.0),
-        "input_t": (0.0, 3.0),
-        "z": (0.0, 0.3),
-    },
-}
-XLIMS = {
-    "FP": {
-        "t": (0.0, 1.0),
-        "g": (0.0, 1.0),
-        "input_t": (0.0, 1.0),
-        "z": (-25.0, 25.0),
-        "sym_z": (-25.0, 25.0),
-    },
-    "EXP": {
-        "t": (0.0, 1.0),
-        "g": (0.0, 1.0),
-        "input_t": (0.0, 1.0),
-        "z": (-25.0, 25.0),
-    },
-}
 
 
 # ---------- Plotting helpers ---------- #
