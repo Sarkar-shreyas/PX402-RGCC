@@ -1,6 +1,6 @@
 #!/bin/bash
 
-shifts=( 0.0 0.003 0.004 0.005 0.006 0.0075 0.010 )
+shifts=( 0.0 0.003 0.005 0.0075 0.010 )
 
 shift_job=$(sbatch --parsable \
     shifted_rg.sh \
