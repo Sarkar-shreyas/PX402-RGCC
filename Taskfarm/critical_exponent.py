@@ -6,19 +6,39 @@ from source.utilities import (
     calculate_nu,
     get_density,
     hist_moments,
+    launder,
 )
+from scipy.stats import norm
 from source.fitters import estimate_z_peak, fit_z_peaks
 from data_plotting import load_hist_data, construct_moments_dict, plot_data
 import os
 import json
 from time import time
+from constants import DATA_DIR, CURRENT_VERSION, NUM_RG, SHIFTS
 
-DATA_DIR = "C:/Users/ssark/Desktop/Uni/Year 4 Courses/Physics Final Year Project/Project Code/Taskfarm/Data from taskfarm"
-CURRENT_VERSION = "1.82C"
 TYPE = "EXP"
-NUM_RG = 9
-# SHIFTS = [0.0, 0.003, 0.007, 0.009]
-SHIFTS = [0.0, 0.003, 0.005, 0.007, 0.009]
+
+
+def slice_middle(
+    counts: np.ndarray,
+    bins: np.ndarray,
+    centers: np.ndarray,
+    densities: np.ndarray,
+    shift: float,
+) -> tuple:
+    """Slice out the middle of a gaussian histogram"""
+    mask = np.logical_and((centers >= -5.0 + shift), (centers <= 5.0 + shift))
+    indexes = np.where(mask)[0]
+    starting_index = indexes[0]
+    ending_index = indexes[-1]
+    return (
+        counts[starting_index : ending_index + 1],
+        bins[starting_index : ending_index + 2],
+        centers[starting_index : ending_index + 1],
+        densities[starting_index : ending_index + 1],
+    )
+
+
 if __name__ == "__main__":
     version = CURRENT_VERSION
     rg = NUM_RG + 1
@@ -94,28 +114,42 @@ if __name__ == "__main__":
     # ax_1.set_ylim([0, 2])
 
     peaks = np.zeros((rg, len(SHIFTS))).astype(float)
+    min_peaks = np.zeros((rg, len(SHIFTS))).astype(float)
+    max_peaks = np.zeros((rg, len(SHIFTS))).astype(float)
+    peak_errs = np.zeros((rg, len(SHIFTS))).astype(float)
     means = np.zeros((rg, len(SHIFTS))).astype(float)
     stds = np.zeros((rg, len(SHIFTS))).astype(float)
     print("Beginning peak estimations")
     print("-" * 100)
-
+    starting_index = 1
     for j in range(len(SHIFTS)):
         z_moments = []
         z_dist = []
         shift = SHIFTS[j]
+        shift_val = float(shift)
         print(f"Estimating peak for shift {shift}")
         loop = time()
         # peaks[0, j] = estimate_z_peak(fp_counts, fp_bins, fp_centers)
         # means[0, j], stds[0, j] = hist_moments(fp_counts, fp_bins)
         peaks[0, j] = 0.0
+        peak_errs[0, j] = 0.0
         means[0, j] = 0.0
         for i in range(1, rg):
             counts = data_map[shift]["z"][i][0]
             bins = data_map[shift]["z"][i][1]
             centers = data_map[shift]["z"][i][2]
             densities = data_map[shift]["z"][i][3]
-            mean, std = hist_moments(counts, bins)
-            peaks[i, j] = estimate_z_peak(counts, bins, centers)
+            sliced_counts, sliced_bins, sliced_centers, sliced_densities = slice_middle(
+                counts, bins, centers, densities, shift_val
+            )
+            mean, std = hist_moments(sliced_counts, sliced_bins)
+            test = launder(1000000, sliced_counts, sliced_bins, sliced_centers)
+            test_mu, test_std = norm.fit(test)
+            # print(f"Fitted mu = {test_mu}, Calculated mean = {mean}")
+            min_peaks[i, j], max_peaks[i, j], peaks[i, j] = estimate_z_peak(
+                counts, bins, centers
+            )
+            peak_errs[i, j] = max_peaks[i, j] - min_peaks[i, j]
             means[i, j] = mean
             stds[i, j] = std
         # print(
@@ -133,27 +167,51 @@ if __name__ == "__main__":
     other_nus = []
     r2s = []
     other_r2s = []
-
+    min_nus = []
+    max_nus = []
+    nu_errors = []
     # rgs = [i + 1 for i in range(rg)]
-    for i in range(1, rg):
+    for i in range(starting_index, rg):
+        # y = peaks[i, :] - peaks[i, 0]
+        # m = means[i, :] - means[i, 0]
         y = peaks[i, :] - peaks[0, :]
         m = means[i, :] - means[0, :]
 
-        x_fit = x[1:]
-        y_fit = y[1:]
-        m_fit = m[1:]
+        x_fit = x[:]
+        y_fit = y[:]
+        m_fit = m[:]
         # print(f"For RG{i}: Mean diffs: {m}")
         ms, mr2 = fit_z_peaks(x_fit, m_fit)
         slope, r2 = fit_z_peaks(x_fit, y_fit)
         ax_0.set_title("Means")
         ax_1.set_title("Estimated peaks")
-        # if i % 2 == 0:
-        ax_0.scatter(x_fit, m_fit)
-        ax_0.plot(x, ms * x, label=f"RG_{i}")
-        ax_1.scatter(x_fit, y_fit)
-        ax_1.plot(x, slope * x, label=f"RG_{i}")
+        if i in (1, 2, 4, 5, 6, 8):
+            ax_0.scatter(x_fit[1:], m_fit[1:])
+            ax_0.plot(x, ms * x, label=f"RG_{i}")
+            # ax_1.scatter(x_fit, y_fit)
+            e = ax_1.errorbar(
+                x_fit[1:],
+                y_fit[1:],
+                yerr=peak_errs[i, 1:],
+                marker="o",
+                linestyle="none",
+                capsize=3.0,
+            )
+            c = e[0].get_color()
+            # ax_1.set_ylim((0.0, 0.01))
+            x_line = np.linspace(0, 0.01, 200)
+            y_line = slope * x_line
+            ax_1.plot(x_line, y_line, label=f"RG_{i}", color=c)
+
         nu = calculate_nu(slope, i)
         other_nu = calculate_nu(ms, i)
+        min_y = min_peaks[i, :] - min_peaks[0, :]
+        max_y = max_peaks[i, :] - max_peaks[0, :]
+        min_slope, min_r2 = fit_z_peaks(x_fit, min_y[:])
+        max_slope, max_r2 = fit_z_peaks(x_fit, max_y[:])
+        min_nus.append(calculate_nu(min_slope, i))
+        max_nus.append(calculate_nu(max_slope, i))
+        nu_errors.append(np.abs(max_nus[i - 1] - min_nus[i - 1]))
         nus.append(nu)
         other_nus.append(other_nu)
         r2s.append(r2)
@@ -177,24 +235,33 @@ if __name__ == "__main__":
         json.dump(overall_stats, f, indent=2)
     print(f"Overall stats for z saved to {overall_stats_file}")
     print(f"z peaks data plotted and saved to {z_peaks_plot}")
-    system_size = [2**i for i in range(rg - 1)]
+    system_size = [2**i for i in range(starting_index, rg)]
     fig, (ax_2, ax_3) = plt.subplots(1, 2, figsize=(10, 4))
     # ax_2.set_xlim([0, 0.01])
-    # ax_2.set_ylim([0.0, 2])
+    ax_2.set_ylim([2.3, 2.8])
     ax_2.set_title("Scatter plot of Nu vs System size from means")
     ax_2.set_xlabel("2^n")
     ax_2.set_ylabel("Nu")
-    ax_2.set_xticks(system_size, system_size)
+    # ax_2.set_xticks(system_size, system_size)
     ax_3.set_title("Scatter plot of Nu vs System size from peaks")
     ax_3.set_xlabel("2^n")
     ax_3.set_ylabel("Nu")
-    ax_3.set_xticks(system_size, system_size)
+    # ax_3.set_xticks(system_size, system_size)
     # ax_3.set_xlim([0, 0.01])
-    # ax_3.set_ylim([0, 2])
+    ax_3.set_ylim([2, 5])
     # ind = 2
-
-    ax_2.scatter(system_size, other_nus[:])
-    ax_3.scatter(system_size, nus[:])
+    print(nu_errors)
+    ax_2.scatter(system_size, other_nus)
+    ax_3.errorbar(
+        system_size[:-2],
+        nus[:-2],
+        yerr=nu_errors[:-2],
+        marker="o",
+        linestyle="none",
+        capsize=3.0,
+        markersize=4.0,
+    )
+    # ax_3.scatter(system_size, nus)
     plt.savefig(Nu_plot, dpi=150)
     plt.close()
     print(f"Nu data plotted and saved to {Nu_plot}")
