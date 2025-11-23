@@ -10,7 +10,12 @@ from source.utilities import (
 )
 from scipy.stats import norm
 from source.fitters import estimate_z_peak, fit_z_peaks
-from data_plotting import load_hist_data, construct_moments_dict, plot_data
+from data_plotting import (
+    load_hist_data,
+    construct_moments_dict,
+    plot_data,
+    calculate_average_nu,
+)
 import os
 import json
 from time import time
@@ -27,7 +32,7 @@ def slice_middle(
     shift: float,
 ) -> tuple:
     """Slice out the middle of a gaussian histogram"""
-    mask = np.logical_and((centers >= -5.0 + shift), (centers <= 5.0 + shift))
+    mask = np.logical_and((centers >= -25.0 + shift), (centers <= 25.0 + shift))
     indexes = np.where(mask)[0]
     starting_index = indexes[0]
     ending_index = indexes[-1]
@@ -121,7 +126,6 @@ if __name__ == "__main__":
     stds = np.zeros((rg, len(SHIFTS))).astype(float)
     print("Beginning peak estimations")
     print("-" * 100)
-    starting_index = 1
     for j in range(len(SHIFTS)):
         z_moments = []
         z_dist = []
@@ -147,7 +151,7 @@ if __name__ == "__main__":
             test_mu, test_std = norm.fit(test)
             # print(f"Fitted mu = {test_mu}, Calculated mean = {mean}")
             min_peaks[i, j], max_peaks[i, j], peaks[i, j] = estimate_z_peak(
-                counts, bins, centers
+                sliced_counts, sliced_bins, sliced_centers
             )
             peak_errs[i, j] = max_peaks[i, j] - min_peaks[i, j]
             means[i, j] = mean
@@ -170,12 +174,20 @@ if __name__ == "__main__":
     min_nus = []
     max_nus = []
     nu_errors = []
+    starting_index = 1
     # rgs = [i + 1 for i in range(rg)]
     for i in range(starting_index, rg):
-        # y = peaks[i, :] - peaks[i, 0]
-        # m = means[i, :] - means[i, 0]
+        # Subtracting the peaks for the Fixed point distribution to re-center bins
         y = peaks[i, :] - peaks[0, :]
         m = means[i, :] - means[0, :]
+        min_y = min_peaks[i, :] - min_peaks[0, :]
+        max_y = max_peaks[i, :] - max_peaks[0, :]
+
+        # Subtracting the peaks for shift=0.0
+        y = peaks[i, :] - peaks[i, 0]
+        m = means[i, :] - means[i, 0]
+        min_y = min_peaks[i, :] - min_peaks[i, 0]
+        max_y = max_peaks[i, :] - max_peaks[i, 0]
 
         x_fit = x[:]
         y_fit = y[:]
@@ -205,8 +217,7 @@ if __name__ == "__main__":
 
         nu = calculate_nu(slope, i)
         other_nu = calculate_nu(ms, i)
-        min_y = min_peaks[i, :] - min_peaks[0, :]
-        max_y = max_peaks[i, :] - max_peaks[0, :]
+
         min_slope, min_r2 = fit_z_peaks(x_fit, min_y[:])
         max_slope, max_r2 = fit_z_peaks(x_fit, max_y[:])
         min_nus.append(calculate_nu(min_slope, i))
@@ -225,6 +236,7 @@ if __name__ == "__main__":
             "Mean R2": float(mr2),
         }
 
+    print("=" * 100)
     ax_0.legend()
     ax_1.legend()
     z_peaks_plot = f"{plots_dir}/z_peaks.png"
@@ -250,19 +262,22 @@ if __name__ == "__main__":
     # ax_3.set_xlim([0, 0.01])
     ax_3.set_ylim([2, 5])
     # ind = 2
-    print(nu_errors)
     ax_2.scatter(system_size, other_nus)
     ax_3.errorbar(
-        system_size[:-2],
-        nus[:-2],
-        yerr=nu_errors[:-2],
+        system_size[:],
+        nus[:],
+        yerr=nu_errors[:],
         marker="o",
         linestyle="none",
         capsize=3.0,
         markersize=4.0,
     )
+
     # ax_3.scatter(system_size, nus)
     plt.savefig(Nu_plot, dpi=150)
     plt.close()
     print(f"Nu data plotted and saved to {Nu_plot}")
+    print("-" * 100)
+    calculate_average_nu(overall_stats, 6, 10, nu_errors)
+    print("-" * 100)
     print(f"Analysis done after {time() - start:.3f} seconds")
