@@ -22,7 +22,9 @@ def _gauss(x: np.ndarray, a: float, mu: float, sigma: float):
 
 
 def estimate_z_peak(
-    z_hist: np.ndarray, z_bins: np.ndarray, z_bin_centers: np.ndarray
+    z_hist: np.ndarray,
+    z_bins: np.ndarray,
+    z_bin_centers: np.ndarray,
 ) -> tuple:
     """Estimate the average peak location for a full sample by aggregating subset peaks.
 
@@ -43,9 +45,14 @@ def estimate_z_peak(
     float
         Arithmetic mean of the per-subset peak estimates.
     """
+    # Restrict calculations within [-25,25]
+    # z_min = -25.0 + shift
+    # z_max = 25.0 + shift
+    # mask = np.logical_and((z_bin_centers >= z_min), (z_bin_centers <= z_max))
+    # z_hist = z_hist[mask]
     z_length = len(z_hist)
-    top_ten_percent = int(0.1 * z_length)
-    top_indices = np.argsort(z_hist)[-top_ten_percent:]
+    top_five_percent = int(0.05 * z_length)
+    top_indices = np.argsort(z_hist)[-top_five_percent:]
     top_indices = np.sort(top_indices)
     bin_centers = z_bin_centers[top_indices]
     bin_edges = z_bins[top_indices]
@@ -64,10 +71,15 @@ def estimate_z_peak(
         raise ValueError("No parameters were stored from the fit in estimate_z_peak.")
 
     mus = [i for i, j in params]
-    min_mean = float(min(mus))
-    max_mean = float(max(mus))
+    std = np.std(mus, ddof=1)
+    # min_mean = float(min(mus))
+    # max_mean = float(max(mus))
+
     avg_mean = float(np.sum(mus) / 10)
-    # print(f"Min mu = {min_mean}, Max mu = {max_mean}")
+    min_mean = float(avg_mean - std)
+    max_mean = float(avg_mean + std)
+    # print(f"Min bin = {bin_centers[0]}, Max bin = {bin_centers[-1]}")
+    # print(f"Min mean = {float(min(mus))}, Max mean = {float(max(mus))}, std = {std}")
     return (min_mean, max_mean, avg_mean)
 
     # Different approach, grows about center peak till 5% of probability mass is obtained. Used this in previous get_peak_from_subset code.
