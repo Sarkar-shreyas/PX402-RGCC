@@ -41,8 +41,8 @@ def plot_data(var: str, filename: str, data: list, mode: str):
         ax2.set_ylabel(f"Q({var})")
 
         ax1.set_xlim(xlim)
-        ax2.set_xlim((-3.0, 3.0))
-        ax2.set_ylim(ylim)
+        ax2.set_xlim((-1.0, 1.0))
+        ax2.set_ylim((0.15, 0.25))
         # inset = inset_locator.inset_axes(ax, width="25%", height=1.0)
         # inset.set_xlim([-25.0, 25.0])
         for i in range(0, NUM_RG, 1):
@@ -73,7 +73,7 @@ def plot_data(var: str, filename: str, data: list, mode: str):
 
     fig.savefig(filename, dpi=150)
     plt.close(fig)
-    print(f"Figure plotted for {var} to {filename}")
+    # print(f"Figure plotted for {var} to {filename}")
 
 
 def plot_moments(l2: list, moment_list: list[tuple], filename: str):
@@ -113,6 +113,29 @@ def plot_moments(l2: list, moment_list: list[tuple], filename: str):
     moment_fig.tight_layout()
     moment_fig.savefig(filename, dpi=150)
     plt.close(moment_fig)
+
+
+def calculate_average_nu(
+    data: dict,
+    starting_step: int,
+    rg_steps: int,
+    errors: list,
+):
+    loaded_data = defaultdict(list)
+    for i in range(starting_step, rg_steps):
+        loaded_data["Nu"].append(data[f"RG{i}"]["Peak Nu"])
+        loaded_data["Nu error"].append(errors[i])
+        loaded_data["R2"].append(data[f"RG{i}"]["Peak R2"])
+        print(
+            f"At step {i}, Nu = {data[f'RG{i}']['Peak Nu']:.5f}, with slope = {data[f'RG{i}']['Peak Slope']:.5f} and R2 = {data[f'RG{i}']['Peak R2']:.5f}"
+        )
+
+    avg_error = np.mean(loaded_data["Nu error"][:])
+    avg_nu = np.mean(loaded_data["Nu"][:])
+
+    print(
+        f"Average Nu value from RG steps {starting_step}-{rg_steps} = {avg_nu:.5f} \u00b1 {avg_error:.5f}"
+    )
 
 
 # ---------- Stats helpers ---------- #
@@ -181,7 +204,7 @@ def construct_moments_dict(
         stats_file = f"{stats_directory}/{var}_moments.json"
         with open(stats_file, "w") as f:
             json.dump(data, f, indent=2)
-        print(f"Stats for {var} has been saved to {stats_file}")
+        # print(f"Stats for {var} has been saved to {stats_file}")
 
 
 if __name__ == "__main__":
