@@ -44,24 +44,7 @@ def std_derivative(
 
 
 def _gauss(x: np.ndarray, a: float, mu: float, sigma: float):
-    """Compute Gaussian values for curve fitting.
-
-    Parameters
-    ----------
-    x : numpy.ndarray
-        Points at which to evaluate the Gaussian.
-    a : float
-        Amplitude.
-    mu : float
-        Center (mean).
-    sigma : float
-        Standard deviation.
-
-    Returns
-    -------
-    numpy.ndarray
-        Gaussian evaluated at `x`.
-    """
+    """Simple gaussian for curve fit"""
     return a * np.exp(-0.5 * ((x - mu) / sigma) ** 2)
 
 
@@ -101,9 +84,9 @@ def estimate_z_peak(
 
     Notes
     -----
-    This function relies on :func:`launder` to generate a continuous sample
-    from the binned histogram and uses :func:`scipy.stats.norm.fit` to
-    estimate Gaussian parameters for each bootstrap subset.
+    This function relies on `launder` to generate a continuous sample from
+    the binned histogram and uses `scipy.stats.norm.fit` to estimate Gaussian
+    parameters for each bootstrap subset.
     """
     # Restrict calculations within [-25,25]
     # z_min = -25.0 + shift

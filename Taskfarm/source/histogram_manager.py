@@ -163,9 +163,8 @@ if __name__ == "__main__":
     print("-" * 100)
     current_date = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     print(
-        f"[{current_date}] : Histogram job of [RG step {rg_step}] with mode [{mode}]"
+        f"[{current_date}] : Histogram job of [RG step {rg_step}] with mode [{mode}] started for var {var_name} and shift {shift}"
     )
-    print(f"  var={var_name}, shift={shift}")
     data = np.load(input_file)
     if process == 0:
         construct_initial_histogram(data, output_file, var_name, shift)
