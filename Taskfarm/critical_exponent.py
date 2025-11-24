@@ -128,12 +128,9 @@ def main():
     print("Beginning peak estimations")
     print("-" * 100)
     for j in range(len(SHIFTS)):
-        z_moments = []
-        z_dist = []
         shift = SHIFTS[j]
         shift_val = float(shift)
         print(f"Estimating peak for shift {shift}")
-        loop = time()
         # peaks[0, j] = estimate_z_peak(fp_counts, fp_bins, fp_centers)
         # means[0, j], stds[0, j] = hist_moments(fp_counts, fp_bins)
         peaks[0, j] = 0.0
