@@ -1,11 +1,12 @@
+from data_plotting import calculate_average_nu
 from constants import NUM_RG, CURRENT_VERSION, DATA_DIR, N
 import json
 import matplotlib.pyplot as plt
 import pandas as pd
 
 if __name__ == "__main__":
-    filename = f"{DATA_DIR}/v{CURRENT_VERSION}/EXP/stats/overall_stats.json"
-    plots_filename = f"{DATA_DIR}/v{CURRENT_VERSION}/EXP/overall_stats.png"
+    filename = f"{DATA_DIR}/v{CURRENT_VERSION}/overall_stats.json"
+    plots_filename = f"{DATA_DIR}/v{CURRENT_VERSION}/overall_stats.png"
     print(f"Loading data from {filename}")
     with open(filename, "r", encoding="utf-8") as file:
         stats = json.load(file)
@@ -37,7 +38,7 @@ if __name__ == "__main__":
     ax2.scatter(x, data["Mean R2"].iloc[start:])
     ax3.scatter(x, data["Peak Nu"].iloc[start:])
     ax4.scatter(x, data["Mean Nu"].iloc[start:])
-
+    calculate_average_nu(stats, 7, NUM_RG + 1)
     plt.savefig(plots_filename, dpi=150)
     plt.close("Stats")
     print(f"Stats plotted and saved to {plots_filename}")
