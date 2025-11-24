@@ -3,8 +3,11 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --mem-per-cpu=3988
 #SBATCH --cpus-per-task=1
-#SBATCH --array=0-31%8
-#SBATCH --time=08:00:00
+#SBATCH --array=0-31%4
+#SBATCH --time=00:10:00
+#SBATCH --exclude=taskfarm178,taskfarm181
+#SBATCH --signal=B:TERM@30
+#SBATCH --kill-on-invalid-dep=yes
 #SBATCH --job-name=rg_gen
 #SBATCH --output=../job_outputs/bootstrap/%x_%A_%a.out
 #SBATCH --error=../job_logs/bootstrap/%x_%A_%a.err
@@ -132,9 +135,10 @@ fi
 # Move batch back to shared storage
 target_dir="$batchdir/batch_${TASK_ID}"
 mkdir -p "$target_dir"
-rsync -a "$tempbatchdir/" "$target_dir/"
+timeout 45 rsync -a --partial --inplace "$tempbatchdir/" "$target_dir/"
 
 # Free the tmp folder
+wait
 rm -rf "$tempbatchdir"
 echo " Data from $tempbatchdir deleted and moved to $target_dir "
 
@@ -142,3 +146,6 @@ echo "==========================================================================
 echo " Data gen job ${SLURM_ARRAY_JOB_ID} for RG${RG_STEP} completed on : [$(date '+%Y-%m-%d %H:%M:%S')] "
 echo "==================================================================================================="
 echo ""
+
+sync
+exit 0

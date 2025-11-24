@@ -3,8 +3,11 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --mem-per-cpu=3988
 #SBATCH --cpus-per-task=1
-#SBATCH --array=0-31%8
-#SBATCH --time=08:00:00
+#SBATCH --array=0-31%4
+#SBATCH --time=00:10:00
+#SBATCH --exclude=taskfarm178,taskfarm181
+#SBATCH --signal=B:TERM@30
+#SBATCH --kill-on-invalid-dep=yes
 #SBATCH --job-name=gen_shift
 #SBATCH --output=../job_outputs/bootstrap/%x_%A.out
 #SBATCH --error=../job_logs/bootstrap/%x_%A.err
@@ -79,3 +82,7 @@ echo "==========================================================================
 echo " Data shift job ${SLURM_JOB_ID} for Shift ${shift} completed on : [$(date '+%Y-%m-%d %H:%M:%S')] "
 echo "======================================================================================================="
 echo ""
+
+wait
+sync
+exit 0

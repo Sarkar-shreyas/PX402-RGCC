@@ -3,7 +3,10 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --mem-per-cpu=3988
 #SBATCH --cpus-per-task=1
-#SBATCH --time=08:00:00
+#SBATCH --time=01:00:00
+#SBATCH --exclude=taskfarm178,taskfarm181
+#SBATCH --signal=B:TERM@60
+#SBATCH --kill-on-invalid-dep=yes
 #SBATCH --job-name=rg_hist
 #SBATCH --output=../job_outputs/bootstrap/%x_%A.out
 #SBATCH --error=../job_logs/bootstrap/%x_%A.err
@@ -262,4 +265,6 @@ echo " Histogram job ${SLURM_JOB_ID} for RG${RG_STEP} completed on : [$(date '+%
 echo "=============================================================================================="
 echo ""
 
-
+wait
+sync
+exit 0
