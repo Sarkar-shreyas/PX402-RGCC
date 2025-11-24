@@ -44,9 +44,10 @@ def slice_middle(
     )
 
 
-if __name__ == "__main__":
+def main():
     version = CURRENT_VERSION
     rg = NUM_RG + 1
+    main_dir = f"{DATA_DIR}/v{version}"
     stats_dir = f"{DATA_DIR}/v{version}/{TYPE}/stats"
     plots_dir = f"{DATA_DIR}/v{version}/{TYPE}/plots"
     os.makedirs(stats_dir, exist_ok=True)
@@ -165,7 +166,7 @@ if __name__ == "__main__":
     print("=" * 100)
     # print(z_moments)
     overall_stats = defaultdict(dict)
-    overall_stats_file = f"{stats_dir}/overall_stats.json"
+    overall_stats_file = f"{main_dir}/overall_stats.json"
     x = np.array(SHIFTS).astype(float)
     nus = []
     other_nus = []
@@ -239,8 +240,8 @@ if __name__ == "__main__":
     print("=" * 100)
     ax_0.legend()
     ax_1.legend()
-    z_peaks_plot = f"{plots_dir}/z_peaks.png"
-    Nu_plot = f"{plots_dir}/Nu_{len(SHIFTS)}_shifts.png"
+    z_peaks_plot = f"{main_dir}/z_peaks.png"
+    Nu_plot = f"{main_dir}/Nu_{len(SHIFTS)}_shifts.png"
     plt.savefig(z_peaks_plot, dpi=150)
     plt.close()
     with open(overall_stats_file, "w") as f:
@@ -278,6 +279,10 @@ if __name__ == "__main__":
     plt.close()
     print(f"Nu data plotted and saved to {Nu_plot}")
     print("-" * 100)
-    calculate_average_nu(overall_stats, 6, 10, nu_errors)
+    calculate_average_nu(overall_stats, 7, rg)
     print("-" * 100)
     print(f"Analysis done after {time() - start:.3f} seconds")
+
+
+if __name__ == "__main__":
+    main()
