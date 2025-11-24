@@ -14,7 +14,7 @@ N="$1" # Target number of samples
 RG_STEP="$2" # The RG step we're currently at
 SHIFT="${5-}" # Takes in the shift value if running EXP, to change histogram domain
 TYPE="$3" # Type flag to toggle symmetrisation/launder target
-NUM_BATCHES=16 # Number of batches of data to generate/process, same as array size
+NUM_BATCHES=32 # Number of batches of data to generate/process, same as array size
 BATCH_SIZE=$(( N / NUM_BATCHES )) # How many samples exist per batch
 set -euo pipefail
 
@@ -238,6 +238,24 @@ for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
 done
 
 echo " Input t histogram for RG${RG_STEP} built at ${INPUT_T} "
+
+if (( $PREV_RG >= 0 )); then
+    echo " [$(date '+%Y-%m-%d %H:%M:%S')] : Clearing data files for RG${PREV_RG} "
+    prev_dir="$jobdatadir/RG${PREV_RG}"
+    if [[ -d "$prev_dir/batches" ]]; then
+        rm -rf "$prev_dir/batches"
+    fi
+    if [[ -d "$prev_dir/laundered" ]]; then
+        rm -rf "$prev_dir/laundered"
+    fi
+    if [[ "$TYPE" == "EXP" ]]; then
+        if [[ -d "$jobdatadir/Initial" ]]; then
+            rm -rf "$jobdatadir/Initial"
+        fi
+        echo " [$(date '+%Y-%m-%d %H:%M:%S')] : Initial shifted files for Shift ${SHIFT} deleted "
+    fi
+    echo " [$(date '+%Y-%m-%d %H:%M:%S')] : Batch and laundered files for RG${PREV_RG} deleted "
+fi
 
 echo "=============================================================================================="
 echo " Histogram job ${SLURM_JOB_ID} for RG${RG_STEP} completed on : [$(date '+%Y-%m-%d %H:%M:%S')] "
