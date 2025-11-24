@@ -3,7 +3,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --mem-per-cpu=3988
 #SBATCH --cpus-per-task=1
-#SBATCH --array=0-15%8
+#SBATCH --array=0-31%8
 #SBATCH --time=08:00:00
 #SBATCH --job-name=rg_gen
 #SBATCH --output=../job_outputs/bootstrap/%x_%A_%a.out
@@ -136,6 +136,7 @@ rsync -a "$tempbatchdir/" "$target_dir/"
 
 # Free the tmp folder
 rm -rf "$tempbatchdir"
+echo " Data from $tempbatchdir deleted and moved to $target_dir "
 
 echo "==================================================================================================="
 echo " Data gen job ${SLURM_ARRAY_JOB_ID} for RG${RG_STEP} completed on : [$(date '+%Y-%m-%d %H:%M:%S')] "
