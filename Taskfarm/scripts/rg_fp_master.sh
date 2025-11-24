@@ -4,9 +4,9 @@
 #SBATCH --error=../job_logs/bootstrap/%x_%A.err
 
 # Define the constants for this RG flow
-N=320000000 # Total number of samples
-NUM_RG_ITERS=10 # Number of RG steps
-VERSION=1.84S  # Version for tracking changes and matrix used
+N=480000000 # Total number of samples
+NUM_RG_ITERS=12 # Number of RG steps
+VERSION=1.90S  # Version for tracking changes and matrix used
 TYPE="FP" # Type flag to toggle symmetrisation/launder target
 INITIAL=1 # Flag to generate starting distribution/histograms or not
 EXISTING_T="" # Placeholder var to point to data file for non-initial RG steps
@@ -51,8 +51,8 @@ for step in $(seq 0 $(( NUM_RG_ITERS - 1 ))); do
     # Run the first step without any dependency, then set the last histogram job as its dependency
     if [ "$step" -eq 0 ]; then
         gen_job=$(sbatch --parsable \
-        --output=../job_outputs/bootstrap/rg_gen_RG${step}_%x_%A_%a.out \
-        --error=../job_logs/bootstrap/rg_gen_RG${step}_%x_%A_%a.err \
+        --output=../job_outputs/bootstrap/rg_gen_RG${step}_%A_%a.out \
+        --error=../job_logs/bootstrap/rg_gen_RG${step}_%A_%a.err \
         "$scriptsdir/rg_gen_batch.sh"\
             "$N" "$INITIAL" "$EXISTING_T" "$step" "$VERSION" "$TYPE")
 
@@ -81,7 +81,6 @@ for step in $(seq 0 $(( NUM_RG_ITERS - 1 ))); do
     prev_hist_job="$hist_job"
     INITIAL=0
 
-    EXISTING_T="$laundereddir"
     #sleep 1
 done
 echo "================================================================================================================"

@@ -4,16 +4,15 @@
 #SBATCH --error=../job_logs/bootstrap/%x_%A.err
 
 # Define the constants for this RG flow
-N=320000000 # Total number of samples
-NUM_RG_ITERS=10 # Number of RG steps
-NUM_BATCHES=16 # Number of batches to generate/process data over
-VERSION=1.84S # Version for tracking changes and matrix used
+N=480000000 # Total number of samples
+NUM_RG_ITERS=12 # Number of RG steps
+VERSION=1.90S # Version for tracking changes and matrix used
 TYPE="EXP" # Type flag to toggle symmetrisation/launder target
 INITIAL=1 # Flag to generate starting distribution/histograms or not
 EXISTING_T="" # Placeholder var to point to data file for non-initial RG steps
 prev_hist_job="" # Placeholder var for holding previous job ID when setting up dependency
 last_step=$((NUM_RG_ITERS - 1)) # Var to determine which FP distribution to use for generating the shifted dataset, for now we use the latest one
-SAMPLE_SIZE=$(( N / NUM_BATCHES )) # How many samples should be calculated per batch
+
 
 CURRENT_SHIFT="$1" # Takes in the shift value to apply for this round.
 shift # Move onto the next input
@@ -51,7 +50,7 @@ echo " [$(date '+%Y-%m-%d %H:%M:%S')]: Generating initial data for shift ${CURRE
 # Run the job to generate initial shifted data
 shift_job=$(sbatch --parsable \
     --output=../job_outputs/bootstrap/gen_shift_${CURRENT_SHIFT}_%A_%a.out \
-    --error=../job_logs/bootstrap/gen_shift_${CURRENT_SHIFT}_%A_%a.out \
+    --error=../job_logs/bootstrap/gen_shift_${CURRENT_SHIFT}_%A_%a.err \
     "$scriptsdir/gen_shifted_data.sh" \
         "$N" "$VERSION" "$FP_dist" "Initial" "$CURRENT_SHIFT")
 
@@ -95,7 +94,6 @@ for step in $(seq 0 $(( NUM_RG_ITERS - 1 ))); do
     prev_hist_job="$hist_job"
     INITIAL=0
 
-    sleep 5
 done
 echo "================================================================================================================="
 echo " All ${NUM_RG_ITERS} RG jobs for shift ${CURRENT_SHIFT} submitted. Final dependency ends at job ${prev_hist_job} "
