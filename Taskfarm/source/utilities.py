@@ -1,3 +1,13 @@
+"""Utilities for RG analysis: sampling, conversions, I/O and statistics.
+
+This module contains helpers for random-phase generation, initial
+distributions, value transformations between t/g/z parametrizations,
+histogram I/O and common statistical measures used by the RG pipeline.
+"""
+# Some mathematical expressions in this file are long by necessity; disable
+# the line-length rule for this file to keep the formulas readable.
+# flake8: noqa: E501
+
 import numpy as np
 
 # ---------- Constants ---------- #
@@ -21,6 +31,19 @@ G_TOL: float = 1.39e-11
 def save_data(
     hist_vals: np.ndarray, bin_edges: np.ndarray, bin_centers: np.ndarray, filename: str
 ) -> None:
+    """Save histogram arrays to a compressed .npz file.
+
+    Parameters
+    ----------
+    hist_vals : numpy.ndarray
+        Histogram counts (or densities) stored as `histval` in the archive.
+    bin_edges : numpy.ndarray
+        Bin edges array stored as `binedges` in the archive.
+    bin_centers : numpy.ndarray
+        Bin centers array stored as `bincenters` in the archive.
+    filename : str
+        Destination filename (will be written as a compressed `.npz`).
+    """
     np.savez_compressed(
         filename,
         histval=hist_vals,
@@ -291,7 +314,12 @@ def convert_z_to_g(z: np.ndarray) -> np.ndarray:
 
 
 def convert_z_to_t(z: np.ndarray) -> np.ndarray:
-    """Converts z data to t data directly, clipped within bounds corresponding to t in [1.38e-11, 1-1.38e-11], as mentioned by Shaw."""
+    """Convert z data to t data directly.
+
+    The conversion is t = sqrt(1/(1 + exp(z))). Values are suitable for
+    subsequent RG analysis; callers may clip `z` beforehand for numerical
+    stability if required.
+    """
     # z = np.clip(z, -25.0, 25.0)
     return np.sqrt(1.0 / (1.0 + np.exp(z)))
 
@@ -322,7 +350,12 @@ def convert_t_to_z(t: np.ndarray) -> np.ndarray:
 def launder(
     N: int, hist_vals: np.ndarray, bin_edges: np.ndarray, bin_centers: np.ndarray
 ) -> np.ndarray:
-    """A copy of the laundering sample method decoupled from the Probability Distribution class"""
+    """Perform laundering sampling decoupled from the ProbabilityDistribution class.
+
+    The function performs inverse-CDF sampling from the provided binned
+    histogram values to produce `N` continuous samples drawn from the
+    histogram's implied distribution.
+    """
     # Inverse CDF method
     u = np.random.random(size=N)  # random indices
     cdf = hist_vals.cumsum()
@@ -401,6 +434,20 @@ def launder(
 
 
 def get_density(hist_vals: np.ndarray, bin_edges: np.ndarray) -> np.ndarray:
+    """Convert histogram counts into a probability density function.
+
+    Parameters
+    ----------
+    hist_vals : numpy.ndarray
+        Bin counts for the histogram.
+    bin_edges : numpy.ndarray
+        Bin edges array of length `len(hist_vals) + 1`.
+
+    Returns
+    -------
+    numpy.ndarray
+        Probability density (values such that integral over bins = 1).
+    """
     bin_counts = hist_vals.astype(float)
     bin_widths = np.diff(bin_edges)
     total = np.sum(bin_counts)
@@ -436,13 +483,28 @@ def l2_distance(old_hist_val, new_hist_val, old_bins, new_bins) -> float:
 
 
 def mean_squared_distance(old_hist_val, new_hist_val, old_bins, new_bins) -> float:
+    """Compute Shaw's mean-squared distance between two histograms.
+
+    The measure used in Shaw's workflow computes the mean over bins of the
+    square-root of the positive part of (new_density^2 - old_density^2).
+
+    Parameters
+    ----------
+    old_hist_val, new_hist_val : array-like
+        Histogram counts for the old and new distributions respectively.
+    old_bins, new_bins : array-like
+        Corresponding bin-edge arrays.
+
+    Returns
+    -------
+    float
+        The computed mean squared (Shaw) distance.
+    """
     # Shaw's MSD
     old_density = get_density(old_hist_val, old_bins)
     new_density = get_density(new_hist_val, new_bins)
     shaw_integrand = new_density**2 - old_density**2
-    # I'm getting negative values at some points since the shift is large so for now I have to manually clip it
-    # mask = shaw_integrand < 0
-    # print(f"There are {np.sum(mask)} negative differences out of {len(old_density)}")
+    # Clip negative values that can occur when shifts are large
     shaw_integrand = np.clip(shaw_integrand, 0.0, None)
     return float(np.mean(np.sqrt(shaw_integrand)))
 
@@ -501,7 +563,21 @@ def center_z_distribution(z_hist: np.ndarray, z_bins: np.ndarray) -> np.ndarray:
 
 # ---------- Nu calculator ---------- #
 def calculate_nu(slope: float, rg_steps: int = K) -> float:
-    """Calculate critical exponent nu with the formula nu = ln(2^k)/ln(|slope|), where slope is calculated from fit_z_peaks, and k is the RG step number."""
-    nu = np.log(2**rg_steps) / np.log(slope)
+    """Calculate the critical exponent nu from a fitted slope.
+
+    Parameters
+    ----------
+    slope : float
+        Absolute slope obtained from a fit of z_peak vs perturbation.
+    rg_steps : int, optional
+        Number of RG steps (k) used in the scaling relation. Defaults to
+        module-level `K`.
+
+    Returns
+    -------
+    float
+        Computed critical exponent nu using nu = ln(2^k)/ln(|slope|).
+    """
+    nu = np.log(2**rg_steps) / np.log(np.abs(slope))
 
     return float(nu)

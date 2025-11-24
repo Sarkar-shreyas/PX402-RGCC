@@ -1,6 +1,9 @@
 #!/usr/bin/env python
-"""
-This file is in charge of taking in new data arrays and appending their histograms to the existing global histogram. The histograms are constructed using counts for ease of joining.
+"""Build and append histograms for t and z variables.
+
+This module contains helpers used by batch scripts to create initial
+histograms from raw samples and to append new samples into an existing
+histogram archive.
 """
 
 import numpy as np
@@ -17,7 +20,27 @@ from datetime import datetime, timezone
 
 
 def _bin_and_range_manager(var: str, shift: str | None) -> tuple:
-    """Checks the variable name and chooses t or z bins and range accordingly. If a shift is given, returns shifted z bins and range"""
+    """Select bin count and range for variable 't' or 'z'.
+
+    Parameters
+    ----------
+    var : str
+        Variable name, expected to be 't' or 'z' (case insensitive).
+    shift : str or None
+        Optional numeric shift (as string) to add to the z-range. If
+        provided, the returned z-range will be shifted by this amount.
+
+    Returns
+    -------
+    tuple
+        (bins, range) where `bins` is an integer and `range` is a tuple
+        (min, max) suitable for `numpy.histogram`.
+
+    Raises
+    ------
+    ValueError
+        If `var` is not one of 't' or 'z'.
+    """
     if var.strip().lower() == "t":
         return (T_BINS, T_RANGE)
     elif var.strip().lower() == "z":
@@ -36,7 +59,19 @@ def _bin_and_range_manager(var: str, shift: str | None) -> tuple:
 def construct_initial_histogram(
     data: np.ndarray, output_filename: str, var: str, shift: str | None
 ) -> None:
-    """A function to construct the initial histogram for any type of data"""
+    """Construct the initial histogram for the given data.
+
+    Parameters
+    ----------
+    data : numpy.ndarray
+        Raw data samples to histogram.
+    output_filename : str
+        Destination `.npz` filename for the saved histogram.
+    var : str
+        Variable name ('t' or 'z') to select binning parameters.
+    shift : str or None
+        Optional z-range shift to apply when computing bins.
+    """
     # Drop nan values
     data = data[np.isfinite(data)]
     # Get bins and range for this variable and shift
@@ -57,7 +92,18 @@ def append_to_histogram(
     existing_file: str,
     output_file: str,
 ) -> None:
-    """A function to append the input data to an input histogram"""
+    """Append input data to an existing histogram.
+
+    Parameters
+    ----------
+    input_data : numpy.ndarray
+        Raw input samples to append (will be histogrammed).
+    existing_file : str
+        Path to existing `.npz` histogram archive (must contain compatible
+        bin edges).
+    output_file : str
+        Destination `.npz` filename for the updated histogram.
+    """
     # Drop nan values
     input_data = input_data[np.isfinite(input_data)]
 
@@ -117,8 +163,9 @@ if __name__ == "__main__":
     print("-" * 100)
     current_date = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     print(
-        f"[{current_date}] : Histogram job of [RG step {rg_step}] with mode [{mode}] started for var {var_name} and shift {shift}"
+        f"[{current_date}] : Histogram job of [RG step {rg_step}] with mode [{mode}]"
     )
+    print(f"  var={var_name}, shift={shift}")
     data = np.load(input_file)
     if process == 0:
         construct_initial_histogram(data, output_file, var_name, shift)

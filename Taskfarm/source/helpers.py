@@ -1,7 +1,28 @@
 #!/usr/bin/env python
-"""
-This is a placeholder file meant to let me directly either apply laundering to an input array,
-or symmetrise an input histogram for convenience
+"""Convenience CLI helpers for laundering, symmetrising and converting data.
+
+This script exposes a small set of command-line utilities used during the
+data-management step of the RG workflow. It is intentionally thin and wraps
+functionality from :mod:`Taskfarm.source.utilities` to provide a stable
+command-line interface for batch scripts and job arrays.
+
+Supported PROCESS values (first CLI argument):
+
+0 - Launder from z-histogram and convert to t
+    Inputs: ARRAY_SIZE INPUT_FILE OUTPUT_FILE
+
+1 - Symmetrise z-histogram
+    Inputs: ARRAY_SIZE INPUT_FILE OUTPUT_FILE
+
+2 - Launder from t-histogram
+    Inputs: ARRAY_SIZE INPUT_FILE OUTPUT_FILE
+
+3 - Convert t array to z array
+    Inputs: ARRAY_SIZE INPUT_FILE OUTPUT_FILE
+
+The script is designed for use within higher-level shell job scripts that
+orchestrate the RG pipeline. Errors raise SystemExit with a usage message so
+they are visible in logs when a job fails.
 """
 
 import numpy as np

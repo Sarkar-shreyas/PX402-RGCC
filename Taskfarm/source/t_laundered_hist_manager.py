@@ -1,6 +1,8 @@
 #!/usr/bin/env python
-"""
-This is a helper file for making a histogram of input t data
+"""Helpers to construct and append histograms for laundered t data.
+
+This module assists batch jobs that convert laundered t arrays into
+histogram archives and append new t samples to existing archives.
 """
 
 import numpy as np
@@ -18,7 +20,17 @@ def construct_initial_histogram(
     output_filename: str,
     var: str,
 ) -> None:
-    """A function to construct the initial histogram for any type of data"""
+    """Construct the initial histogram for laundered t data.
+
+    Parameters
+    ----------
+    data_file : str
+        Path to the `.npy` file containing laundered t samples.
+    output_filename : str
+        Destination `.npz` filename for the saved histogram.
+    var : str
+        Variable name; expected values: 't' or 'g'.
+    """
     data = np.load(data_file)
     if data.size == 0:
         raise FileNotFoundError(f"Could not load data from {data_file}")
@@ -42,7 +54,19 @@ def append_to_histogram(
     output_file: str,
     range: tuple,
 ) -> None:
-    """A function to append the input data to an input histogram"""
+    """Append laundered t samples to an existing histogram archive.
+
+    Parameters
+    ----------
+    input_file : str
+        Path to the `.npy` file with laundered t samples.
+    existing_file : str
+        Path to the existing histogram `.npz` file.
+    output_file : str
+        Destination `.npz` filename for the updated histogram.
+    range : tuple
+        Range to use when computing counts (passed to numpy.histogram).
+    """
     # Load the input data, should be a .npy file
     data = np.load(input_file)
     data = data[np.isfinite(data)]

@@ -1,3 +1,17 @@
+"""Create shifted (perturbed) t-samples from a symmetrized Q(z) histogram.
+
+This script loads a symmetrized z-histogram (saved as an `.npz` archive with
+arrays `histval`, `binedges`, `bincenters`), generates `num_samples` via
+the laundering routine, applies a constant shift (perturbation) to the z
+samples, converts the shifted z-values to amplitudes `t`, and saves the
+resulting t-array as a `.npy` file.
+
+Typical usage:
+    python shift_z.py NUM_SAMPLES INPUT_HIST.npz OUTPUT_T.npy SHIFT
+
+Where `SHIFT` is a floating-point perturbation added to all z samples.
+"""
+
 import numpy as np
 from .utilities import launder, convert_z_to_t
 import sys

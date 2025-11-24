@@ -1,3 +1,10 @@
+"""Fitting helpers and peak estimation utilities for RG analysis.
+
+This module contains small helpers used to fit curves and extract peak
+locations from binned z-histograms. It is intentionally lightweight so these
+helpers can be imported into batch scripts without heavy dependencies.
+"""
+
 import numpy as np
 from numpy.polynomial import polynomial
 
@@ -10,6 +17,26 @@ from .utilities import launder
 def std_derivative(
     rgs: np.ndarray | list, stds: np.ndarray | list, smoothing_factor: float
 ) -> np.ndarray | list:
+    """Estimate the derivative of a standard-deviation curve using a spline.
+
+    This helper smooths the input (rgs, stds) curve using a UnivariateSpline
+    with smoothing parameter `s=smoothing_factor` and returns the derivative
+    evaluated at the provided `stds` points.
+
+    Parameters
+    ----------
+    rgs : array-like
+        Independent variable values (e.g. RG step numbers or system sizes).
+    stds : array-like
+        Standard-deviation measurements corresponding to `rgs`.
+    smoothing_factor : float
+        Smoothing parameter passed to `scipy.interpolate.UnivariateSpline`.
+
+    Returns
+    -------
+    numpy.ndarray
+        Derivative values of the fitted spline evaluated at `stds`.
+    """
     spline = UnivariateSpline(rgs, stds, s=smoothing_factor)
     derivative_line = spline.derivative()
     std_primes = derivative_line(stds)
@@ -17,7 +44,24 @@ def std_derivative(
 
 
 def _gauss(x: np.ndarray, a: float, mu: float, sigma: float):
-    """Simple gaussian for curve fit"""
+    """Compute Gaussian values for curve fitting.
+
+    Parameters
+    ----------
+    x : numpy.ndarray
+        Points at which to evaluate the Gaussian.
+    a : float
+        Amplitude.
+    mu : float
+        Center (mean).
+    sigma : float
+        Standard deviation.
+
+    Returns
+    -------
+    numpy.ndarray
+        Gaussian evaluated at `x`.
+    """
     return a * np.exp(-0.5 * ((x - mu) / sigma) ** 2)
 
 
@@ -26,24 +70,40 @@ def estimate_z_peak(
     z_bins: np.ndarray,
     z_bin_centers: np.ndarray,
 ) -> tuple:
-    """Estimate the average peak location for a full sample by aggregating subset peaks.
+    """Estimate peak location from a binned z-histogram using bootstrapped fitting.
 
-    The input sample is split into 10 equal (or near-equal) subsets. For each
-    subset the ``get_peak_from_subset`` function is used to estimate a local
-    peak. The arithmetic mean of these per-subset peak estimates is returned.
+    The function identifies the top 5% of bins by histogram height, resamples
+    (via laundering) from those bins to obtain synthetic z samples, splits
+    the synthetic sample into 10 subsets, fits a Gaussian to each subset via
+    `scipy.stats.norm.fit`, and returns a tuple describing the spread of the
+    fitted means.
 
     Parameters
     ----------
-    z_sample : numpy.ndarray
-        One-dimensional array of sampled z values from a Probability_Distribution
-        object. The array should contain enough samples to be split into the
-        default 10 subsets; if it contains fewer elements, some subsets will be
-        empty and ``get_peak_from_subset`` will handle them.
+    z_hist : numpy.ndarray
+        Histogram counts (not density) for the z distribution.
+    z_bins : numpy.ndarray
+        Histogram bin edges (length = n_bins + 1) corresponding to `z_hist`.
+    z_bin_centers : numpy.ndarray
+        Centers of the histogram bins (length = n_bins).
 
     Returns
     -------
-    float
-        Arithmetic mean of the per-subset peak estimates.
+    tuple
+        (min_mean, max_mean, avg_mean) where `avg_mean` is the arithmetic mean
+        of the 10 fitted Gaussian means and `min_mean`/`max_mean` are the
+        mean ± std-dev of those fitted means (one-sigma bounds).
+
+    Raises
+    ------
+    ValueError
+        If the selected y-values are empty or no fit parameters are produced.
+
+    Notes
+    -----
+    This function relies on :func:`launder` to generate a continuous sample
+    from the binned histogram and uses :func:`scipy.stats.norm.fit` to
+    estimate Gaussian parameters for each bootstrap subset.
     """
     # Restrict calculations within [-25,25]
     # z_min = -25.0 + shift
@@ -233,7 +293,11 @@ def estimate_z_peak(
 
 # ---------- Fitting helper ---------- #
 def fit_z_peaks(x: np.ndarray, y: np.ndarray) -> tuple:
-    """Fit a linear relationship between x and y data using different methods.
+    """Fit a straight line to x vs y using a degree-1 polynomial and return slope and R².
+
+    This function fits a first-degree polynomial to the provided `x` and
+    `y` data (via `numpy.polynomial.Polynomial.fit` / `numpy.polyfit`) and
+    computes the coefficient of determination (R²) from the residual.
 
     Parameters
     ----------
@@ -241,30 +305,19 @@ def fit_z_peaks(x: np.ndarray, y: np.ndarray) -> tuple:
         Independent variable data.
     y : numpy.ndarray
         Dependent variable data.
-    method : str, optional
-        Fitting method to use, by default "ls". Options are:
-        - "ls": Custom least squares implementation
-        - "linear": scipy.stats.linregress
-        - "poly": numpy.polynomial.polynomial.Polynomial.fit
 
     Returns
     -------
     tuple
-        A tuple containing (slope, r_squared):
-        - slope: absolute value of the fitted slope
-        - r_squared: coefficient of determination (R²)
-
-    Raises
-    ------
-    KeyError
-        If an invalid fitting method is specified.
+        (abs_slope, r_squared) where `abs_slope` is the absolute value of the
+        fitted slope and `r_squared` is the coefficient of determination.
 
     Notes
     -----
-    All methods perform linear regression but use different implementations:
-    - "ls" uses a manual least squares calculation
-    - "linear" uses scipy's implementation
-    - "poly" uses numpy's polynomial fitting
+    The implementation uses `numpy.polynomial.Polynomial.fit` to obtain the
+    residual and `numpy.polyfit` to extract the linear coefficient. This
+    function assumes finite numeric data and does not perform input
+    validation beyond relying on NumPy routines.
     """
     passns, p = polynomial.Polynomial.fit(x, y, deg=1, full=True)
     resid = p[0]

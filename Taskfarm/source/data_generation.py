@@ -1,6 +1,22 @@
 #!/usr/bin/env python
-"""
-This file will handle the data generation for every RG step. It will generate arrays in batches of size N, looped within the slurm script
+"""Batch data-generation script for RG steps.
+
+This script is intended to be executed from the command-line (or a job
+script) to produce the next-step amplitude samples `t'` for a single RG
+step. It supports two modes:
+
+- Start from an initial analytic distribution (P(t)=2t-like) and generate
+    samples of size `ARRAY_SIZE`.
+- Continue from an existing `.npy` file containing prior samples.
+
+Generated arrays are saved as `.npy` files to the specified output
+directory. The script intentionally performs minimal in-process
+post-processing so it can be run in parallel across job array tasks.
+
+Usage
+-----
+See the `if __name__ == "__main__"` block for CLI usage details:
+`data_generation.py ARRAY_SIZE OUTPUT_DIR INITIAL RG_STEP [EXISTING_T_FILE]`.
 """
 
 import os

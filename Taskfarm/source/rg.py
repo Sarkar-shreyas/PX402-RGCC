@@ -1,7 +1,26 @@
 #!/usr/bin/env python
-"""
-This file will load the histogram from a previous rg step and the current step
-Then, it'll compute the L2 distance, mean and std, returning those values, along with whether its converged or not.
+"""Histogram comparison and convergence checker for RG iterations.
+
+This command-line utility compares two histograms (old and current) produced
+during the renormalization-group (RG) workflow. It computes summary statistics
+including the L2 distance between distributions, the mean and standard
+deviation of the current histogram, and a boolean `converged` flag determined
+by thresholds defined in :mod:`Taskfarm.source.utilities`.
+
+Usage
+-----
+        python rg.py RG_STEP OLD_HIST.npz CURRENT_HIST.npz OUTPUT.npz
+
+The produced `OUTPUT.npz` contains the following fields:
+- `l2_dist`: L2 distance between the old and current histograms (float or
+    `np.nan` when no previous histogram exists)
+- `mean`: mean of the current histogram (float)
+- `std`: standard deviation of the current histogram (float)
+- `converged`: boolean indicating whether convergence criteria were met
+
+Convergence is determined by comparing the L2 distance to `DIST_TOLERANCE`
+and change in standard deviation to `STD_TOLERANCE` (see
+`:mod:Taskfarm.source.utilities` for parameter definitions).
 """
 
 import numpy as np
