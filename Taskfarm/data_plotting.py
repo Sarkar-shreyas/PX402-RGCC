@@ -119,22 +119,23 @@ def calculate_average_nu(
     data: dict,
     starting_step: int,
     rg_steps: int,
-    errors: list,
 ):
     loaded_data = defaultdict(list)
+
     for i in range(starting_step, rg_steps):
         loaded_data["Nu"].append(data[f"RG{i}"]["Peak Nu"])
-        loaded_data["Nu error"].append(errors[i])
+        # loaded_data["Nu error"].append(errors[i - 1])
         loaded_data["R2"].append(data[f"RG{i}"]["Peak R2"])
         print(
             f"At step {i}, Nu = {data[f'RG{i}']['Peak Nu']:.5f}, with slope = {data[f'RG{i}']['Peak Slope']:.5f} and R2 = {data[f'RG{i}']['Peak R2']:.5f}"
         )
 
-    avg_error = np.mean(loaded_data["Nu error"][:])
+    # avg_error = np.mean(loaded_data["Nu error"][:])
+    avg_error = np.max(loaded_data["Nu"][:]) - np.min(loaded_data["Nu"][:])
     avg_nu = np.mean(loaded_data["Nu"][:])
 
     print(
-        f"Average Nu value from RG steps {starting_step}-{rg_steps} = {avg_nu:.5f} \u00b1 {avg_error:.5f}"
+        f"Average Nu value from RG steps {starting_step}-{rg_steps - 1} = {avg_nu:.5f} \u00b1 {avg_error:.5f}"
     )
 
 
