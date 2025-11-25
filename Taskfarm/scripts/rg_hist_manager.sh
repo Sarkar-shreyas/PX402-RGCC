@@ -3,7 +3,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --mem-per-cpu=3988
 #SBATCH --cpus-per-task=1
-#SBATCH --time=01:00:00
+#SBATCH --time=02:00:00
 #SBATCH --exclude=taskfarm178,taskfarm181
 #SBATCH --signal=B:TERM@60
 #SBATCH --kill-on-invalid-dep=yes
@@ -112,7 +112,23 @@ cd "$codedir"
 OUTPUT_T="$T_DIR/t_hist_RG${RG_STEP}.npz"
 OUTPUT_Z="$Z_DIR/z_hist_unsym_RG${RG_STEP}.npz"
 
+# Local directories to reduce shared I/O load
+tempdir="${TMPDIR:-/tmp}/rg_hist_RG${RG_STEP}"
+tempdir_t="$tempdir/t"
+tempdir_z="$tempdir/z"
+tempdir_input="$tempdir/input_t"
+
+mkdir -p "$tempdir_t" "$tempdir_z" "$tempdir_input"
+
+temp_output_t="$tempdir_t/t_hist_RG${RG_STEP}.npz"
+temp_output_z="$tempdir_z/z_hist_unsym_RG${RG_STEP}.npz"
+temp_input_t="$tempdir_input/input_t_hist_RG${RG_STEP}.npz"
+
 echo " Making histograms for RG step $RG_STEP from $NUM_BATCHES batches "
+echo " Local histograms stored at: "
+echo " t        : $temp_output_t "
+echo " z        : $temp_output_z "
+echo " input t  : $temp_input_t "
 
 # Histogram jobs for every batch of data
 for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
@@ -134,32 +150,32 @@ for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
 
     echo " Converted t' data to z data "
     # Construct/Append t' histogram, t has no shift
-    if [[ ! -f "$OUTPUT_T" ]]; then
+    if [[ ! -f "$temp_output_t" ]]; then
         python -m "source.histogram_manager" \
             0 \
             "t" \
             "$batch_t" \
-            "$OUTPUT_T" \
+            "$temp_output_t" \
             "$RG_STEP"
     else
         python -m "source.histogram_manager" \
             1 \
             "t" \
             "$batch_t" \
-            "$OUTPUT_T" \
-            "$OUTPUT_T" \
+            "$temp_output_t" \
+            "$temp_output_t" \
             "$RG_STEP"
     fi
 
     #sleep 1
 
     # Construct/Append z histogram, with shift
-    if [[ ! -f "$OUTPUT_Z" ]]; then
+    if [[ ! -f "$temp_output_z" ]]; then
         python -m "source.histogram_manager"\
             0 \
             "z" \
             "$batch_z" \
-            "$OUTPUT_Z" \
+            "$temp_output_z" \
             "$RG_STEP" \
             "$SHIFT"
     else
@@ -167,16 +183,24 @@ for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
             1 \
             "z" \
             "$batch_z" \
-            "$OUTPUT_Z" \
-            "$OUTPUT_Z" \
+            "$temp_output_z" \
+            "$temp_output_z" \
             "$RG_STEP" \
             "$SHIFT"
     fi
 
     #sleep 5
 done
+# Check for debugging
+ls -lh "$tempdir_t" "$tempdir_z"
 
-echo " Made histograms at: "
+# Copy over the histograms from temp storage to shared fs
+mv "$temp_output_t" "$OUTPUT_T"
+mv "$temp_output_z" "$OUTPUT_Z"
+
+echo " Histograms moved from temp directory to shared FS "
+
+echo " Final histograms at: "
 echo " T: $OUTPUT_T "
 echo " Z: $OUTPUT_Z "
 
@@ -203,6 +227,7 @@ fi
 # Point to the input t histogram so we can construct it
 INPUT_T="$INPUT_DIR/input_t_hist_RG${RG_STEP}.npz"
 
+
 for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
     launderbatch="$laundereddir/t_laundered_RG${RG_STEP}_batch_${batch}.npy"
     # Produce batches of laundered data, from z if TYPE=FP and from t otherwise
@@ -223,24 +248,30 @@ for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
     echo " Batch $batch of t data laundered from $TYPE histogram saved to $launderbatch "
     # Build the input t histogram
     echo " Building histogram for input t data of RG${RG_STEP} "
-    if [[ ! -f "$INPUT_T" ]]; then
+    if [[ ! -f "$temp_input_t" ]]; then
         python -m "source.t_laundered_hist_manager" \
             0 \
             "$launderbatch" \
-            "$INPUT_T" \
+            "$temp_input_t" \
             "$RG_STEP"
     else
         python -m "source.t_laundered_hist_manager" \
             1 \
             "$launderbatch" \
-            "$INPUT_T" \
-            "$INPUT_T" \
+            "$temp_input_t" \
+            "$temp_input_t" \
             "$RG_STEP"
     fi
     #sleep 5
 done
+# Check for debugging
+ls -lh "$tempdir_input"
 
-echo " Input t histogram for RG${RG_STEP} built at ${INPUT_T} "
+# Move back to shared FS
+mv "$temp_input_t" "$INPUT_T"
+
+echo " Input t histogram moved from temp storage to shared FS "
+echo " Input t histogram for RG${RG_STEP} saved to ${INPUT_T} "
 
 if (( $PREV_RG >= 0 )); then
     echo " [$(date '+%Y-%m-%d %H:%M:%S')] : Clearing data files for RG${PREV_RG} "
@@ -259,6 +290,9 @@ if (( $PREV_RG >= 0 )); then
     fi
     echo " [$(date '+%Y-%m-%d %H:%M:%S')] : Batch and laundered files for RG${PREV_RG} deleted "
 fi
+
+# Clean up temp directory
+rm -rf "$tempdir"
 
 echo "=============================================================================================="
 echo " Histogram job ${SLURM_JOB_ID} for RG${RG_STEP} completed on : [$(date '+%Y-%m-%d %H:%M:%S')] "
