@@ -116,7 +116,7 @@ def main():
     ax_1.set_title("Scatter plot and line fit of z peaks")
     ax_1.set_xlabel("z_0")
     ax_1.set_ylabel("z_peak")
-    ax_1.set_xlim([0, 0.01])
+    ax_1.set_xlim([0, float(max(SHIFTS)) + 0.001])
     # ax_1.set_ylim([0, 2])
 
     peaks = np.zeros((rg, len(SHIFTS))).astype(float)
@@ -163,6 +163,8 @@ def main():
     print("=" * 100)
     # print(z_moments)
     overall_stats = defaultdict(dict)
+    peak_data = defaultdict(dict)
+    peak_data_file = f"{main_dir}/peaks.json"
     overall_stats_file = f"{main_dir}/overall_stats.json"
     x = np.array(SHIFTS).astype(float)
     nus = []
@@ -175,18 +177,27 @@ def main():
     starting_index = 1
     # rgs = [i + 1 for i in range(rg)]
     for i in range(starting_index, rg):
+        # Without subtracting anything
+        # y = peaks[i, :]
+        # m = means[i, :]
+        # min_y = min_peaks[i, :]
+        # max_y = max_peaks[i, :]
+
         # Subtracting the peaks for the Fixed point distribution to re-center bins
-        y = peaks[i, :] - peaks[0, :]
-        m = means[i, :] - means[0, :]
-        min_y = min_peaks[i, :] - min_peaks[0, :]
-        max_y = max_peaks[i, :] - max_peaks[0, :]
+        # y = peaks[i, :] - peaks[0, :]
+        # m = means[i, :] - means[0, :]
+        # min_y = min_peaks[i, :] - min_peaks[0, :]
+        # max_y = max_peaks[i, :] - max_peaks[0, :]
 
         # Subtracting the peaks for shift=0.0
         y = peaks[i, :] - peaks[i, 0]
         m = means[i, :] - means[i, 0]
         min_y = min_peaks[i, :] - min_peaks[i, 0]
         max_y = max_peaks[i, :] - max_peaks[i, 0]
-
+        # y -= peaks[i, 0]
+        # m -= means[i, 0]
+        # min_y -= min_peaks[i, 0]
+        # max_y -= max_peaks[i, 0]
         x_fit = x[:]
         y_fit = y[:]
         m_fit = m[:]
@@ -195,7 +206,7 @@ def main():
         slope, r2 = fit_z_peaks(x_fit, y_fit)
         ax_0.set_title("Means")
         ax_1.set_title("Estimated peaks")
-        if i in (1, 2, 4, 5, 6, 8):
+        if i in (1, 2, 3, 4, 5, 6, 7):
             ax_0.scatter(x_fit[1:], m_fit[1:])
             ax_0.plot(x, ms * x, label=f"RG_{i}")
             # ax_1.scatter(x_fit, y_fit)
@@ -205,7 +216,7 @@ def main():
                 yerr=peak_errs[i, 1:],
                 marker="o",
                 linestyle="none",
-                capsize=3.0,
+                capsize=2.5,
             )
             c = e[0].get_color()
             # ax_1.set_ylim((0.0, 0.01))
@@ -225,6 +236,12 @@ def main():
         other_nus.append(other_nu)
         r2s.append(r2)
         other_r2s.append(mr2)
+        peak_data[f"RG{i}"] = {
+            "Peaks": list(peaks[i, :]),
+            "Min Peaks": list(min_peaks[i, :]),
+            "Max Peaks": list(max_peaks[i, :]),
+            "Peak Errors": list(peak_errs[i, :]),
+        }
         overall_stats[f"RG{i}"] = {
             "Peak Nu": float(nu),
             "Mean Nu": float(other_nu),
@@ -243,7 +260,10 @@ def main():
     plt.close()
     with open(overall_stats_file, "w") as f:
         json.dump(overall_stats, f, indent=2)
+    with open(peak_data_file, "w") as f:
+        json.dump(peak_data, f, indent=2)
     print(f"Overall stats for z saved to {overall_stats_file}")
+    print(f"Peak data saved to {peak_data_file}")
     print(f"z peaks data plotted and saved to {z_peaks_plot}")
     system_size = [2**i for i in range(starting_index, rg)]
     fig, (ax_2, ax_3) = plt.subplots(1, 2, figsize=(10, 4))
