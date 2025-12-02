@@ -25,27 +25,29 @@ import numpy as np
 from .utilities import (
     generate_initial_t_distribution,
     generate_random_phases,
-    generate_t_prime,
     extract_t_samples,
+    rg_data_workflow,
 )
 
 if __name__ == "__main__":
     # Load input params, checking if we're starting RG steps or continuing from an input sample
-    if len(sys.argv) == 5:
+    if len(sys.argv) == 6:
         array_size = int(sys.argv[1].strip())
         output_dir = sys.argv[2].strip()
         initial = int(sys.argv[3].strip())
         rg_step = int(sys.argv[4].strip())
+        solver = int(sys.argv[5].strip())
         existing_t_file = "None"
-    elif len(sys.argv) == 6:
+    elif len(sys.argv) == 7:
         array_size = int(sys.argv[1].strip())
         output_dir = sys.argv[2].strip()
         initial = int(sys.argv[3].strip())
         rg_step = int(sys.argv[4].strip())
-        existing_t_file = sys.argv[5].strip()
+        solver = int(sys.argv[5].strip())
+        existing_t_file = sys.argv[6].strip()
     else:
         raise SystemExit(
-            "Usage: data_generation.py ARRAY_SIZE OUTPUT_DIR INITIAL RG_STEP [EXISTING_T_FILE]"
+            "Usage: data_generation.py ARRAY_SIZE OUTPUT_DIR INITIAL RG_STEP SOLVER [EXISTING_T_FILE]"
         )
 
     print("-" * 100)
@@ -58,9 +60,17 @@ if __name__ == "__main__":
     else:
         print(f"Using t data from {existing_t_file}")
         t = np.load(existing_t_file)
-    phases = generate_random_phases(array_size)
+    if solver == 0:
+        i = 4
+    elif solver == 1:
+        i = 8
+    else:
+        raise ValueError(
+            "Unsupported solver selected. Solver: 0 = Analytic, 1 = Numerical"
+        )
+    phases = generate_random_phases(array_size, i)
     t_array = extract_t_samples(t, array_size)
-    t_prime = generate_t_prime(t_array, phases, "Shaw")
+    t_prime = rg_data_workflow(solver, t_array, phases, array_size, "Shaw")
     t_filename = os.path.join(
         output_dir, f"t_data_RG{rg_step}_{array_size}_samples.npy"
     )
