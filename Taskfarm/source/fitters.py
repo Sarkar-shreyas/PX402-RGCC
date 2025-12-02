@@ -115,12 +115,12 @@ def estimate_z_peak(
 
     mus = [i for i, j in params]
     std = np.std(mus, ddof=1)
-    # min_mean = float(min(mus))
-    # max_mean = float(max(mus))
-
+    min_mean = float(min(mus))
+    max_mean = float(max(mus))
+    # print(f"Min = {min_mean}, Max= {max_mean}, std = {std}")
     avg_mean = float(np.sum(mus) / 10)
-    min_mean = float(avg_mean - std)
-    max_mean = float(avg_mean + std)
+    # min_mean = float(avg_mean - std)
+    # max_mean = float(avg_mean + std)
     # print(f"Min bin = {bin_centers[0]}, Max bin = {bin_centers[-1]}")
     # print(f"Min mean = {float(min(mus))}, Max mean = {float(max(mus))}, std = {std}")
     return (min_mean, max_mean, avg_mean)
