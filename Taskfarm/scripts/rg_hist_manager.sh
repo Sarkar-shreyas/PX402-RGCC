@@ -4,7 +4,6 @@
 #SBATCH --mem-per-cpu=3988
 #SBATCH --cpus-per-task=1
 #SBATCH --time=05:00:00
-#SBATCH --exclude=taskfarm178,taskfarm181
 #SBATCH --signal=B:TERM@60
 #SBATCH --kill-on-invalid-dep=yes
 #SBATCH --job-name=rg_hist

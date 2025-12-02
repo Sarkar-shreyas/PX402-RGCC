@@ -4,8 +4,7 @@
 #SBATCH --mem-per-cpu=3988
 #SBATCH --cpus-per-task=1
 #SBATCH --array=0-31%4
-#SBATCH --time=00:10:00
-#SBATCH --exclude=taskfarm178,taskfarm181
+#SBATCH --time=01:00:00
 #SBATCH --signal=B:TERM@30
 #SBATCH --kill-on-invalid-dep=yes
 #SBATCH --job-name=rg_gen
@@ -15,9 +14,10 @@
 # Define the constants for this RG flow
 VERSION="$5" # Version for tracking changes and matrix used
 TYPE="$6" # Type flag to toggle symmetrisation/launder target
-SHIFT="${7-}" # Takes in the shift value if running EXP, mostly for folder location
+SHIFT="${8-}" # Takes in the shift value if running EXP, mostly for folder location
 N="$1" # Target number of samples
 RG_STEP="$4" # The RG step we're currently at
+SOLVER="$7" # Flag to determine what method to use
 INITIAL="$2" # Flag to generate starting distribution/histograms or not
 NUM_BATCHES=$((SLURM_ARRAY_TASK_MAX + 1)) # Number of batches to generate/process data over, same as array size
 BATCH_SIZE=$(( N / NUM_BATCHES )) # How many samples should be calculated per batch
@@ -123,13 +123,15 @@ if [[ -n "$T_INPUT" ]]; then
         "$batchsubdir" \
         "$INITIAL" \
         "$RG_STEP" \
+        "$SOLVER" \
         "$T_INPUT"
 else
     python -m "source.data_generation" \
     "$BATCH_SIZE" \
     "$batchsubdir" \
     "$INITIAL" \
-    "$RG_STEP"
+    "$RG_STEP" \
+    "$SOLVER"
 fi
 
 # Move batch back to shared storage

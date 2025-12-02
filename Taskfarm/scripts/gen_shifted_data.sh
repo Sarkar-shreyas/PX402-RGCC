@@ -4,8 +4,7 @@
 #SBATCH --mem-per-cpu=3988
 #SBATCH --cpus-per-task=1
 #SBATCH --array=0-31%4
-#SBATCH --time=00:10:00
-#SBATCH --exclude=taskfarm178,taskfarm181
+#SBATCH --time=01:00:00
 #SBATCH --signal=B:TERM@30
 #SBATCH --kill-on-invalid-dep=yes
 #SBATCH --job-name=gen_shift
