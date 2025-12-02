@@ -38,7 +38,7 @@ if __name__ == "__main__":
     ax2.scatter(x, data["Mean R2"].iloc[start:])
     ax3.scatter(x, data["Peak Nu"].iloc[start:])
     ax4.scatter(x, data["Mean Nu"].iloc[start:])
-    calculate_average_nu(stats, 7, NUM_RG + 1)
+    calculate_average_nu(stats, 7, 10)
     plt.savefig(plots_filename, dpi=150)
     plt.close("Stats")
     print(f"Stats plotted and saved to {plots_filename}")

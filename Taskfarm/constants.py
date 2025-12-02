@@ -1,4 +1,4 @@
-N = 320000000
+N = 480000000
 DATA_DIR = "C:/Users/ssark/Desktop/Uni/Year 4 Courses/Physics Final Year Project/Project Code/Taskfarm/Data from taskfarm"
 CURRENT_VERSION = "1.90S"
 # NUM_RG = 9
@@ -6,7 +6,8 @@ CURRENT_VERSION = "1.90S"
 NUM_RG = 12
 # SHIFTS = [0.0, 0.003, 0.005, 0.007, 0.009]
 # SHIFTS = ["0.0", "0.003", "0.005", "0.0075", "0.010"]
-SHIFTS = ["0.0", "0.003", "0.004", "0.005", "0.006", "0.0075", "0.010"]
+# SHIFTS = ["0.0", "0.003", "0.004", "0.005", "0.006", "0.0075", "0.010"]
+SHIFTS = ["0.0", "0.003", "0.004", "0.005", "0.006"]
 
 LEGENDS = {
     "FP": {
