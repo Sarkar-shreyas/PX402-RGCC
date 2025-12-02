@@ -9,6 +9,7 @@ histogram I/O and common statistical measures used by the RG pipeline.
 # flake8: noqa: E501
 
 import numpy as np
+from time import time
 
 # ---------- Constants ---------- #
 # N: int = 1 * (10**6)
@@ -20,6 +21,8 @@ Z_PERTURBATION: float = 0.007
 DIST_TOLERANCE: float = 0.001
 STD_TOLERANCE: float = 0.0005
 T_RANGE: tuple = (0.0, 1.0)
+SOLVER: dict = {"Analytic": 0, "Numerical": 1}
+SAMPLER: dict = {"cdf": 0, "rej": 1}
 EXPRESSION: str = "Shaw"
 G_TOL: float = 1.39e-11
 # EXPRESSION = "Shreyas"
@@ -55,7 +58,7 @@ def save_data(
 # ---------- Data generators ---------- #
 
 
-def generate_random_phases(N: int) -> np.ndarray:
+def generate_random_phases(N: int, i: int = 4) -> np.ndarray:
     """Generate random phase angles for RG transformation.
 
     Creates an array of uniformly distributed random phases in [0, 2π]
@@ -69,9 +72,9 @@ def generate_random_phases(N: int) -> np.ndarray:
     Returns
     -------
     numpy.ndarray
-        Array of shape (N, 4) containing random phases in [0, 2π].
+        Array of shape (N, i) containing random phases in [0, 2π].
     """
-    phi_sample = np.random.uniform(0, 2 * np.pi, (N, 4))
+    phi_sample = np.random.uniform(0, 2 * np.pi, (N, i))
     return phi_sample
 
 
@@ -121,7 +124,98 @@ def extract_t_samples(t: np.ndarray, N: int) -> np.ndarray:
     return t_sample
 
 
-# ---------- t prime definition ---------- #
+def solve_matrix_eq(
+    ts: np.ndarray, phis: np.ndarray, batch_size: int = 100000
+) -> np.ndarray:
+    """
+    Generates the A matrix from the given t, r and phi matrices
+    """
+
+    t1, t2, t3, t4, t5 = ts.T
+    r1 = np.sqrt(1 - t1 * t1)
+    r2 = np.sqrt(1 - t2 * t2)
+    r3 = np.sqrt(1 - t3 * t3)
+    r4 = np.sqrt(1 - t4 * t4)
+    r5 = np.sqrt(1 - t5 * t5)
+    phi12, phi15, phi23, phi31, phi34, phi42, phi45, phi53 = phis.T
+    # fmt: off
+    # A = np.array(
+    #     [
+    #         [1, 0, 0, 0, 0, -r1 * np.exp(1j * phi31), 0, 0, 0, 0],
+    #         [0, 1, 0, 0, 0, t1 * np.exp(1j * phi31), 0, 0, 0, 0],
+    #         [0, -t2 * np.exp(1j * phi12), 1, 0, 0, 0, 0, -r2 * np.exp(1j * phi42), 0, 0],
+    #         [0, -r2 * np.exp(1j * phi12), 0, 1, 0, 0, 0, t2 * np.exp(1j * phi42), 0, 0],
+    #         [0, 0, -r3 * np.exp(1j * phi23), 0, 1, 0, 0, 0, 0, -t3 * np.exp(1j * phi53)],
+    #         [0, 0, t3 * np.exp(1j * phi23), 0, 0, 1, 0, 0, 0, -r3 * np.exp(1j * phi53)],
+    #         [0, 0, 0, 0, t4 * np.exp(1j * phi34), 0, 1, 0, 0, 0],
+    #         [0, 0, 0, 0, -r4 * np.exp(1j * phi34), 0, 0, 1, 0, 0],
+    #         [-t5 * np.exp(1j * phi15), 0, 0, 0, 0, 0, -r5 * np.exp(1j * phi45), 0, 1, 0],
+    #         [-r5 * np.exp(1j * phi15), 0, 0, 0, 0, 0, t5 * np.exp(1j * phi45), 0, 0, 1],
+    #     ], dtype=np.complex128
+    # )
+    # b = np.array([t1,r1,0,0,0,0,0,0,0,0], dtype=np.complex128)
+    # fmt: on
+    # Initialise a batch-size array of A and b to do the solve in batches
+    A = np.zeros((batch_size, 10, 10), dtype=np.complex128)
+    b = np.zeros((batch_size, 10, 1), dtype=np.complex128)
+
+    # Since it is initialised as a 3d array, we have to manually assign the values to indexes across every batch
+    # Row 1
+    A[:, 0, 0] = 1
+    A[:, 0, 5] = -r1 * np.exp(1j * phi31)
+
+    # Row 2
+    A[:, 1, 1] = 1
+    A[:, 1, 5] = t1 * np.exp(1j * phi31)
+
+    # Row 3
+    A[:, 2, 1] = -t2 * np.exp(1j * phi12)
+    A[:, 2, 2] = 1
+    A[:, 2, 7] = -r2 * np.exp(1j * phi42)
+
+    # Row 4
+    A[:, 3, 1] = -r2 * np.exp(1j * phi12)
+    A[:, 3, 3] = 1
+    A[:, 3, 7] = t2 * np.exp(1j * phi42)
+
+    # Row 5
+    A[:, 4, 2] = -r3 * np.exp(1j * phi23)
+    A[:, 4, 4] = 1
+    A[:, 4, 9] = -t3 * np.exp(1j * phi53)
+
+    # Row 6
+    A[:, 5, 2] = t3 * np.exp(1j * phi23)
+    A[:, 5, 5] = 1
+    A[:, 5, 9] = -r3 * np.exp(1j * phi53)
+
+    # Row 7
+    A[:, 6, 4] = t4 * np.exp(1j * phi34)
+    A[:, 6, 6] = 1
+
+    # Row 8
+    A[:, 7, 4] = -r4 * np.exp(1j * phi34)
+    A[:, 7, 7] = 1
+
+    # Row 9
+    A[:, 8, 0] = -t5 * np.exp(1j * phi15)
+    A[:, 8, 6] = -r5 * np.exp(1j * phi45)
+    A[:, 8, 8] = 1
+
+    # Row 10
+    A[:, 9, 0] = -r5 * np.exp(1j * phi15)
+    A[:, 9, 6] = t5 * np.exp(1j * phi45)
+    A[:, 9, 9] = 1
+
+    # Assign b data
+    b[:, 0, 0] = t1
+    b[:, 1, 0] = r1
+
+    x = np.linalg.solve(A, b)
+
+    return x[:, 8]
+
+
+# ---------- t prime computation ---------- #
 def generate_t_prime(
     t: np.ndarray, phi: np.ndarray, expression: str = EXPRESSION
 ) -> np.ndarray:
@@ -250,6 +344,39 @@ def generate_t_prime(
     return t_prime
     # return t_prime[np.isfinite(t_prime)]
     # return np.clip(t_prime, 1.39e-11, 1 - 1.39e-11)
+
+
+def numerical_t_prime(ts: np.ndarray, phis: np.ndarray, N: int) -> np.ndarray:
+    """
+    A function to compute tprime numerically using np.linalg.solve
+    """
+    start = time()
+    num_batches = 20
+    batch_size = N // num_batches
+    print(
+        f"Beginning numerical computation with {num_batches} batches of size {batch_size}"
+    )
+    tprime = np.empty(shape=(N, 1))
+    for i in range(0, num_batches):
+        index_slice = slice(i * batch_size, (i + 1) * batch_size)
+        tprime[index_slice] = np.abs(
+            solve_matrix_eq(ts[index_slice], phis[index_slice], batch_size)
+        )
+
+    print(f"Numerical computation done in {time() - start:.3f} seconds ")
+    return tprime
+
+
+def rg_data_workflow(
+    solver: int, ts: np.ndarray, phis: np.ndarray, N: int, expr: str
+) -> np.ndarray:
+    """Perform the RG workflow based on solver flag"""
+    if solver == 0:  # Then we use the analytic form of tprime
+        tprime = generate_t_prime(ts, phis, expr)
+        return tprime
+    else:
+        tprime = numerical_t_prime(ts, phis, N)
+        return tprime
 
 
 # ---------- Variable conversion helpers ---------- #
@@ -431,6 +558,14 @@ def launder(
     #     remaining -= to_accept
 
     # return accepted
+
+
+def inverse_cdf_sampler():
+    pass
+
+
+def rejection_sampler():
+    pass
 
 
 def get_density(hist_vals: np.ndarray, bin_edges: np.ndarray) -> np.ndarray:
