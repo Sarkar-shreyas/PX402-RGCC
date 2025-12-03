@@ -157,7 +157,7 @@ def solve_matrix_eq(
     # fmt: on
     # Initialise a batch-size array of A and b to do the solve in batches
     A = np.zeros((batch_size, 10, 10), dtype=np.complex128)
-    b = np.zeros((batch_size, 10, 1), dtype=np.complex128)
+    b = np.zeros((batch_size, 10, 1), dtype=np.float64)
 
     # Since it is initialised as a 3d array, we have to manually assign the values to indexes across every batch
     # Row 1
@@ -351,7 +351,7 @@ def numerical_t_prime(ts: np.ndarray, phis: np.ndarray, N: int) -> np.ndarray:
     A function to compute tprime numerically using np.linalg.solve
     """
     start = time()
-    num_batches = 20
+    num_batches = 30
     batch_size = N // num_batches
     print(
         f"Beginning numerical computation with {num_batches} batches of size {batch_size}"
