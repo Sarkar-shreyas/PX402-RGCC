@@ -255,6 +255,6 @@ if __name__ == "__main__":
     print("Plots for t, g and input t data have been made")
     print("-" * 100)
     construct_moments_dict(stats_dir, plots_dir, var_names, data_map)
-    print("-" * 100)
+    # print("-" * 100)
     # print(data_map["sym_z"][0][1])
     print("Analysis done.")
