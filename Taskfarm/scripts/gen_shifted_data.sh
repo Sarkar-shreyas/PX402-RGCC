@@ -38,8 +38,8 @@ stepdir="$jobdatadir/${STEP}" # The data directory for this RG step
 mkdir -p "$outputdir" "$logsdir" # Make them in case they aren't already there
 mkdir -p "$joboutdir" "$jobdatadir" "$stepdir" # Make them in case they aren't already there
 
-exec >"$joboutdir/${SLURM_JOB_NAME}_JOB${SLURM_JOB_ID}.out" # Redirect outputs to be within their own folders, together with the data they produce
-exec 2>"$logsdir/${SLURM_JOB_NAME}_JOB${SLURM_JOB_ID}.err" # Redirect error logs to be within their own folders for easy grouping
+exec >"$joboutdir/${SLURM_JOB_NAME}_JOB${SLURM_ARRAY_JOB_ID}_TASK${TASK_ID}.out" # Redirect outputs to be within their own folders, together with the data they produce
+exec 2>"$logsdir/${SLURM_JOB_NAME}_JOB${SLURM_ARRAY_JOB_ID}_TASK${TASK_ID}.err" # Redirect error logs to be within their own folders for easy grouping
 
 # General job information
 echo "==================================================="
