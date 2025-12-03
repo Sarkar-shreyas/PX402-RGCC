@@ -1,5 +1,6 @@
 N = 480000000
 DATA_DIR = "C:/Users/ssark/Desktop/Uni/Year 4 Courses/Physics Final Year Project/Project Code/Taskfarm/Data from taskfarm"
+# CURRENT_VERSION = "2.00S"
 CURRENT_VERSION = "1.90S"
 # NUM_RG = 9
 # NUM_RG = 10
