@@ -6,10 +6,13 @@ from source.utilities import (
     generate_random_phases,
     generate_t_prime,
     extract_t_samples,
+    get_density,
 )
 import matplotlib.pyplot as plt
+import json
 
-if __name__ == "__main__":
+
+def test_tprime():
     # ---------- Load data ---------- #
     data = np.load(
         "C:/Users/ssark/Desktop/Uni/Year 4 Courses/Physics Final Year Project/Project Code/Taskfarm/Data from taskfarm/v1.8S/EXP/shift_0.0/hist/z/z_hist_RG0.npz"
@@ -119,3 +122,74 @@ if __name__ == "__main__":
     ax1.set_ylabel("Q(z)")
     ax1.set_title("Plots of sym and unsym z")
     plt.show()
+
+
+def compare_histograms():
+    # Load the FP histograms for symmetrised z at RG8
+    cain_path = "C:/Users/ssark/Desktop/Uni/Year 4 Courses/Physics Final Year Project/Project Code/Taskfarm/Data from taskfarm/v1.82C/FP"
+    jack_path = "C:/Users/ssark/Desktop/Uni/Year 4 Courses/Physics Final Year Project/Project Code/Taskfarm/Data from taskfarm/v1.84J/FP"
+    shaw_320_path = "C:/Users/ssark/Desktop/Uni/Year 4 Courses/Physics Final Year Project/Project Code/Taskfarm/Data from taskfarm/v1.84S/FP"
+    shaw_480_path = "C:/Users/ssark/Desktop/Uni/Year 4 Courses/Physics Final Year Project/Project Code/Taskfarm/Data from taskfarm/v1.90S/FP"
+    shaw_480_numeric_path = "C:/Users/ssark/Desktop/Uni/Year 4 Courses/Physics Final Year Project/Project Code/Taskfarm/Data from taskfarm/v2.00S/FP"
+    paths = {
+        "320": {"cain": cain_path, "jack": jack_path, "shaw": shaw_320_path},
+        "480": {"analytic": shaw_480_path, "numeric": shaw_480_numeric_path},
+    }
+    hist_path = "/hist/sym_z/sym_z_hist_RG8.npz"
+    t_hist_path = "/hist/input_t/input_t_hist_RG8.npz"
+    stats_path = "/stats/sym_z_moments.json"
+    t_stats_path = "/stats/input_t/input_t_moments.json"
+    names = ["cain", "jack", "shaw320", "shaw480A", "shaw480N"]
+    fig, (ax0, ax1) = plt.subplots(1, 2, figsize=(12, 6))
+    ax0.set_title("FP histograms for symmetrised z at RG8")
+    ax1.set_title("Standard deviations for symmetrised z at RG8")
+    ax0.set_xlabel("z")
+    ax1.set_xlabel("Datasets")
+    ax0.set_ylabel("Q(z)")
+    ax1.set_ylabel("Standard deviation")
+    ax0.set_xlim((-1.0, 1.0))
+    ax0.set_ylim((0.17, 0.21))
+    ax1.set_ylim((2.171, 2.1715))
+    i = 0
+    for _ in paths:
+        for expr, filename in paths[_].items():
+            hist_file = filename + hist_path
+            stats_file = filename + stats_path
+            data = np.load(hist_file)
+            hist_density = get_density(data["histval"], data["binedges"])
+            ax0.plot(
+                data["bincenters"][::],
+                hist_density[::],
+                label=f"{expr.title()}",
+            )
+
+            with open(stats_file, "r") as f:
+                stats = json.load(f)
+
+            moments = stats["RG_8"]
+            ax1.scatter(names[i], moments["std"])
+            i += 1
+
+    ax0.legend(loc="upper left")
+    plt.savefig("FP comparisons.png", dpi=150)
+    plt.close(fig)
+    # cain_320 = np.load(
+    #     "C:/Users/ssark/Desktop/Uni/Year 4 Courses/Physics Final Year Project/Project Code/Taskfarm/Data from taskfarm/v1.82C/FP/hist/sym_z/sym_z_hist_RG8.npz"
+    # )
+    # jack_320 = np.load(
+    #     "C:/Users/ssark/Desktop/Uni/Year 4 Courses/Physics Final Year Project/Project Code/Taskfarm/Data from taskfarm/v1.84J/FP/hist/sym_z/sym_z_hist_RG8.npz"
+    # )
+    # shaw_320 = np.load(
+    #     "C:/Users/ssark/Desktop/Uni/Year 4 Courses/Physics Final Year Project/Project Code/Taskfarm/Data from taskfarm/v1.84S/FP/hist/sym_z/sym_z_hist_RG8.npz"
+    # )
+    # shaw_480 = np.load(
+    #     "C:/Users/ssark/Desktop/Uni/Year 4 Courses/Physics Final Year Project/Project Code/Taskfarm/Data from taskfarm/v1.90S/FP/hist/sym_z/sym_z_hist_RG8.npz"
+    # )
+    # shaw_480_numeric = np.load(
+    #     "C:/Users/ssark/Desktop/Uni/Year 4 Courses/Physics Final Year Project/Project Code/Taskfarm/Data from taskfarm/v2.00S/FP/hist/sym_z/sym_z_hist_RG8.npz"
+    # )
+
+
+if __name__ == "__main__":
+    # test_tprime()
+    compare_histograms()
