@@ -104,7 +104,7 @@ def estimate_z_peak(
     sample = launder(10000000, y_values, bin_edges, bin_centers)
     if len(y_values) == 0:
         raise ValueError("The y values array is empty.")
-
+    overall_peak, _ = norm.fit(sample)
     length = np.random.permutation(len(sample))
     subsets = np.array_split(sample[length], 10)
     # subsets = [bin_values[needed[i]] for i in range(10)]
@@ -123,7 +123,8 @@ def estimate_z_peak(
     # max_mean = float(avg_mean + std)
     # print(f"Min bin = {bin_centers[0]}, Max bin = {bin_centers[-1]}")
     # print(f"Min mean = {float(min(mus))}, Max mean = {float(max(mus))}, std = {std}")
-    return (min_mean, max_mean, avg_mean)
+    print(f"Avg peak = {avg_mean}, Overall peak = {overall_peak}")
+    return (min_mean, max_mean, overall_peak)
 
     # Different approach, grows about center peak till 5% of probability mass is obtained. Used this in previous get_peak_from_subset code.
 
