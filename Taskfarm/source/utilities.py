@@ -10,6 +10,7 @@ histogram I/O and common statistical measures used by the RG pipeline.
 
 import numpy as np
 from time import time
+from datetime import datetime, timezone
 
 # ---------- Constants ---------- #
 # N: int = 1 * (10**6)
@@ -53,6 +54,10 @@ def save_data(
         binedges=bin_edges,
         bincenters=bin_centers,
     )
+
+
+def get_current_date():
+    return datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
 
 # ---------- Data generators ---------- #

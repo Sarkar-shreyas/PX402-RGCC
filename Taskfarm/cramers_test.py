@@ -10,15 +10,11 @@ from source.utilities import (
     Z_RANGE,
     launder,
     get_density,
+    get_current_date,
 )
 from time import time
-from datetime import datetime, timezone
 from constants import DATA_DIR, CURRENT_VERSION, NUM_RG
 import matplotlib.pyplot as plt
-
-
-def get_current_date():
-    return datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def generate_phases(n: int, i: int) -> np.ndarray:
