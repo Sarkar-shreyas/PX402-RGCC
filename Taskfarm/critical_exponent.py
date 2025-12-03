@@ -54,7 +54,8 @@ def main():
     os.makedirs(plots_dir, exist_ok=True)
     data_map = defaultdict(dict)
     vars = ["t", "input_t", "z"]
-
+    print(f"Performing peak estimation for v{CURRENT_VERSION}")
+    print("=" * 100)
     # Load the FP distribution
     fp_file = f"{DATA_DIR}/v{version}/FP/hist/sym_z/sym_z_hist_RG{NUM_RG - 1}.npz"
     fp_counts, fp_bins, fp_centers = load_hist_data(fp_file)
