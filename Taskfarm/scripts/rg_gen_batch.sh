@@ -38,11 +38,9 @@ tempbatchdir="$tempdir/RG${RG_STEP}/batch_${TASK_ID}" # The temp directory to wr
 
 # If we're doing an EXP run, set the directories accordingly
 if [[ -n "${SHIFT}" ]]; then
-    jobsdir="$basedir/jobs/v${VERSION}/$TYPE/shift_${SHIFT}" # Where metadata will be
     logsdir="$basedir/job_logs/v${VERSION}/$TYPE/shift_${SHIFT}/${SLURM_JOB_NAME}/RG${RG_STEP}" # Where logs will be sent
     outputdir="$basedir/job_outputs/v${VERSION}/$TYPE/shift_${SHIFT}" # Where the outputs will live
 else
-    jobsdir="$basedir/jobs/v${VERSION}/$TYPE" # Where metadata will be
     logsdir="$basedir/job_logs/v${VERSION}/$TYPE/${SLURM_JOB_NAME}/RG${RG_STEP}" # Where logs will be sent
     outputdir="$basedir/job_outputs/v${VERSION}/$TYPE" # Where the outputs will live
 fi
@@ -54,7 +52,7 @@ batchsubdir="$tempbatchdir"
 
 
 # Make these now so that it does it every time we run this job
-mkdir -p "$outputdir" "$logsdir" "$jobsdir"
+mkdir -p "$outputdir" "$logsdir"
 mkdir -p "$joboutdir" "$jobdatadir" "$batchdir"
 mkdir -p "$tempbatchdir"
 exec >"$joboutdir/${SLURM_JOB_NAME}_JOB${SLURM_ARRAY_JOB_ID}_TASK${TASK_ID}.out" # Redirect outputs to be within their own folders, together with the data they produce

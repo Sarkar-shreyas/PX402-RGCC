@@ -26,11 +26,9 @@ codedir="$basedir/code" # Where the code lives
 
 # If we're doing an EXP run, set the directories accordingly
 if [[ -n "${SHIFT}" ]]; then
-    jobsdir="$basedir/jobs/v${VERSION}/$TYPE/shift_${SHIFT}" # Where metadata will be
     logsdir="$basedir/job_logs/v${VERSION}/$TYPE/shift_${SHIFT}/${SLURM_JOB_NAME}/RG${RG_STEP}" # Where logs will be sent
     outputdir="$basedir/job_outputs/v${VERSION}/$TYPE/shift_${SHIFT}" # Where the outputs will live
 else
-    jobsdir="$basedir/jobs/v${VERSION}/$TYPE" # Where metadata will be
     logsdir="$basedir/job_logs/v${VERSION}/$TYPE/${SLURM_JOB_NAME}/RG${RG_STEP}" # Where logs will be sent
     outputdir="$basedir/job_outputs/v${VERSION}/$TYPE" # Where the outputs will live
 fi
@@ -50,7 +48,7 @@ INPUT_DIR="$histdir/input_t" # Histogram of laundered input t for next RG step
 SYM_DIR="$histdir/sym_z" # Histogram of symmetrised z for FP runs
 
 mkdir -p "$T_DIR" "$Z_DIR" "$INPUT_DIR" "$SYM_DIR"
-mkdir -p "$outputdir" "$logsdir" "$jobsdir" # Make these now so that it does it every time we run this job
+mkdir -p "$outputdir" "$logsdir" # Make these now so that it does it every time we run this job
 mkdir -p "$joboutdir" "$jobdatadir" "$batchdir" "$histdir" "$statsdir" "$laundereddir"
 
 exec >"$joboutdir/${SLURM_JOB_NAME}_JOB${SLURM_JOB_ID}.out" # Redirect outputs to be within their own folders, together with the data they produce
