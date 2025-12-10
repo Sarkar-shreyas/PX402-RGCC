@@ -1,10 +1,11 @@
 import numpy as np
-import matplotlib
-from typing import Optional
-from mpl_toolkits.axes_grid1 import inset_locator
 
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
+# import matplotlib
+from typing import Optional
+# from mpl_toolkits.axes_grid1 import inset_locator
+
+# matplotlib.use("Agg")
+# import matplotlib.pyplot as plt
 import time
 from .utils import convert_t_to_z, convert_z_to_t
 from .distribution_production import (
@@ -180,24 +181,24 @@ def rg_iterations_for_fp(
     # Setup variables for iteration and storage
     previous_Qz: Probability_Distribution | None = None
     parameter_storage = []
-    fig, (ax0, ax1) = plt.subplots(1, 2, figsize=(10, 4))
-    ax0.set_xlim(-5, 5)
-    ax0.set_ylim(0.0, 0.3)
-    ax0.set_xlabel("z")
-    ax0.set_ylabel("Q(z)")
-    ax0.set_title("Evolution of Q(z)")
+    # fig, (ax0, ax1) = plt.subplots(1, 2, figsize=(10, 4))
+    # ax0.set_xlim(-5, 5)
+    # ax0.set_ylim(0.0, 0.3)
+    # ax0.set_xlabel("z")
+    # ax0.set_ylabel("Q(z)")
+    # ax0.set_title("Evolution of Q(z)")
 
-    # ax1.set_xlim(0, 1)
-    # ax1.set_ylim(0.0, 4)
-    ax1.set_xlabel("t")
-    ax1.set_ylabel("P(t)")
-    ax1.set_title("Evolution of P(t)")
-    ax1.plot(P_t.bin_centers, P_t.histogram_values, label="Initial")
-    ax2 = inset_locator.inset_axes(ax0, width="30%", height=0.6)
-    ax2.set_xlim(-25, 25)
-    ax2.set_ylim(0, 0.3)
-    ax2.set_xlabel("z")
-    ax2.set_ylabel("Q(z)")
+    # # ax1.set_xlim(0, 1)
+    # # ax1.set_ylim(0.0, 4)
+    # ax1.set_xlabel("t")
+    # ax1.set_ylabel("P(t)")
+    # ax1.set_title("Evolution of P(t)")
+    # ax1.plot(P_t.bin_centers, P_t.histogram_values, label="Initial")
+    # ax2 = inset_locator.inset_axes(ax0, width="30%", height=0.6)
+    # ax2.set_xlim(-25, 25)
+    # ax2.set_ylim(0, 0.3)
+    # ax2.set_xlabel("z")
+    # ax2.set_ylabel("Q(z)")
     inner_start_time = time.time()
     print("-" * 100)
     print("Beginning procedure")
@@ -223,17 +224,17 @@ def rg_iterations_for_fp(
         # Recenter z and initialise histogram
         current_Qz = Probability_Distribution(next_z)
         current_Qz = center_z_distribution(current_Qz)
-        if _ in set(range(1, K, 2)):
-            z_centers = 0.5 * (current_Qz.bin_edges[:-1] + current_Qz.bin_edges[1:])
-            ax0.plot(
-                z_centers[::20],
-                current_Qz.histogram_values[::20],
-                label=f"Iteration {_}",
-            )
-            t_centers = 0.5 * (P_t.bin_edges[:-1] + P_t.bin_edges[1:])
-            ax1.plot(t_centers, P_t.histogram_values, label=f"Iteration {_}")
-            ax2.plot(z_centers[::20], current_Qz.histogram_values[::20])
-            print(f"Values have been plotted for iteration {_}")
+        # if _ in set(range(1, K, 2)):
+        #     z_centers = 0.5 * (current_Qz.bin_edges[:-1] + current_Qz.bin_edges[1:])
+        #     ax0.plot(
+        #         z_centers[::20],
+        #         current_Qz.histogram_values[::20],
+        #         label=f"Iteration {_}",
+        #     )
+        #     t_centers = 0.5 * (P_t.bin_edges[:-1] + P_t.bin_edges[1:])
+        #     ax1.plot(t_centers, P_t.histogram_values, label=f"Iteration {_}")
+        #     ax2.plot(z_centers[::20], current_Qz.histogram_values[::20])
+        #     print(f"Values have been plotted for iteration {_}")
 
         # Check for convergence
         if previous_Qz is not None:
@@ -247,14 +248,14 @@ def rg_iterations_for_fp(
                 num_convergences += 1
                 print(f"Converged at iteration #{_}")
                 if num_convergences == 3 or _ == K - 1:
-                    ax0.legend()
-                    ax1.legend()
-                    plt.savefig(
-                        f"plots/{EXPRESSION}_converged_z_dist_with_{N}_iters.png",
-                        dpi=150,
-                    )
-                    print("Updated plot file with FP distribution")
-                    print("-" * 100)
+                    # ax0.legend()
+                    # ax1.legend()
+                    # plt.savefig(
+                    #     f"plots/{EXPRESSION}_converged_z_dist_with_{N}_iters.png",
+                    #     dpi=150,
+                    # )
+                    # print("Updated plot file with FP distribution")
+                    # print("-" * 100)
                     return current_Qz, P_t, parameter_storage
             else:
                 print(f"Didn't converge in iteration {_}, onto the next.")
@@ -269,11 +270,11 @@ def rg_iterations_for_fp(
         previous_Qz = current_Qz
 
     # If it didn't converge, return the final set of data
-    ax0.legend(loc="upper left")
-    ax1.legend()
+    # ax0.legend(loc="upper left")
+    # ax1.legend()
     print("Updated plot file without convergence")
     print("-" * 100)
-    plt.savefig(f"plots/{EXPRESSION}_z_dist_with_{N}_iters.png", dpi=150)
+    # plt.savefig(f"plots/{EXPRESSION}_z_dist_with_{N}_iters.png", dpi=150)
     return previous_Qz, P_t, parameter_storage  # type: ignore
 
 

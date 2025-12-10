@@ -21,7 +21,7 @@ Expression Selection:
 - EXPRESSION: Which RG transformation to use ("Shaw", "Shreyas", "Cain", "Jack")
 """
 
-N: int = 5 * (10**7)
+N: int = 5 * (10**5)
 K: int = 9
 T_BINS: int = 1000
 Z_BINS: int = 50000

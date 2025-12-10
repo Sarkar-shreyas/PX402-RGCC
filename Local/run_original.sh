@@ -8,10 +8,6 @@
 #SBATCH --output=../job_outputs/bootstrap/%x_%A_%a.out
 #SBATCH --error=../job_logs/bootstrap/%x_%A_%a.err
 
-export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
-export MKL_NUM_THREADS=$SLURM_CPUS_PER_TASK
-export OPENBLAS_NUM_THREADS=$SLURM_CPUS_PER_TASK
-
 module purge
 module load GCC/13.3.0 SciPy-bundle/2024.05 matplotlib/3.9.2
 
@@ -27,13 +23,13 @@ joblogdir="$logsdir/$jobkey"
 joboutdir="$outputdir/$jobkey"
 mkdir -p "$joblogdir" "$joboutdir" "$joboutdir/output" "$joboutdir/data"
 
-exec > >(tee -a "$joboutdir/output/task_${task}.out")
-exec 2> >(tee -a "$joblogdir/task_${task}.err" >&2)
+exec >"$joboutdir/output/${SLURM_JOB_NAME}_${SLURM_JOB_ID}.out"
+exec 2>"$joblogdir/${SLURM_JOB_NAME}_${SLURM_JOB_ID}.err"
 
-N=30000000
+N=20000000
 K=8
 
-echo "Task $SLURM_ARRAY_TASK_ID -> N=$N K=$K output=$joboutdir"
+echo "Task $SLURM_JOB_ID -> N=$N K=$K output=$joboutdir"
 
 cd "$codedir"
 export PYTHONPATH="$codedir:$PYTHONPATH"
