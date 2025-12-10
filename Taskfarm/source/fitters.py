@@ -114,16 +114,16 @@ def estimate_z_peak(
         raise ValueError("No parameters were stored from the fit in estimate_z_peak.")
 
     mus = [i for i, j in params]
-    std = np.std(mus, ddof=1)
+    # std = np.std(mus, ddof=1)
     min_mean = float(min(mus))
     max_mean = float(max(mus))
     # print(f"Min = {min_mean}, Max= {max_mean}, std = {std}")
-    avg_mean = float(np.sum(mus) / 10)
+    # avg_mean = float(np.sum(mus) / 10)
     # min_mean = float(avg_mean - std)
     # max_mean = float(avg_mean + std)
     # print(f"Min bin = {bin_centers[0]}, Max bin = {bin_centers[-1]}")
     # print(f"Min mean = {float(min(mus))}, Max mean = {float(max(mus))}, std = {std}")
-    print(f"Avg peak = {avg_mean}, Overall peak = {overall_peak}")
+    # print(f"Avg peak = {avg_mean}, Overall peak = {overall_peak}")
     return (min_mean, max_mean, overall_peak)
 
     # Different approach, grows about center peak till 5% of probability mass is obtained. Used this in previous get_peak_from_subset code.
