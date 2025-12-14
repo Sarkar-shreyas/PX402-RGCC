@@ -1,17 +1,17 @@
 from data_plotting import calculate_average_nu
-from constants import NUM_RG, CURRENT_VERSION, DATA_DIR, N
+from constants import NUM_RG, CURRENT_VERSION, data_dir, N
 import json
 import matplotlib.pyplot as plt
 import pandas as pd
 
 if __name__ == "__main__":
-    filename = f"{DATA_DIR}/v{CURRENT_VERSION}/overall_stats.json"
-    plots_filename = f"{DATA_DIR}/v{CURRENT_VERSION}/overall_stats.png"
+    filename = f"{data_dir}/v{CURRENT_VERSION}/overall_stats.json"
+    plots_filename = f"{data_dir}/v{CURRENT_VERSION}/overall_stats.png"
     print(f"Loading data from {filename}")
     with open(filename, "r", encoding="utf-8") as file:
         stats = json.load(file)
     data = pd.read_json(filename, orient="index")
-    start = 1
+    start = 4
     # print(type(stats))
     # print(data.head())
     # print(data["Peak R2"])

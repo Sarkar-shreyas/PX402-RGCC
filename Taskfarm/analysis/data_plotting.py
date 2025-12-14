@@ -13,7 +13,7 @@ import os
 from collections import defaultdict
 import json
 from constants import (
-    DATA_DIR,
+    data_dir,
     CURRENT_VERSION,
     NUM_RG,
     LEGENDS,
@@ -215,9 +215,9 @@ if __name__ == "__main__":
     var_names = ["t", "z", "input_t", "sym_z"]
     z_vars = ["z", "sym_z"]
     other_vars = ["t", "input_t"]
-    hist_dir = f"{DATA_DIR}/v{version}/{TYPE}/hist"
-    stats_dir = f"{DATA_DIR}/v{version}/{TYPE}/stats"
-    plots_dir = f"{DATA_DIR}/v{version}/{TYPE}/plots"
+    hist_dir = f"{data_dir}/v{version}/{TYPE}/hist"
+    stats_dir = f"{data_dir}/v{version}/{TYPE}/stats"
+    plots_dir = f"{data_dir}/v{version}/{TYPE}/plots"
     t_folder = f"{hist_dir}/t"
     z_folder = f"{hist_dir}/z"
     input_folder = f"{hist_dir}/input_t"
