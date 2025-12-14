@@ -13,7 +13,7 @@ from source.utilities import (
     get_current_date,
 )
 from time import time
-from constants import DATA_DIR, CURRENT_VERSION, NUM_RG
+from constants import data_dir, CURRENT_VERSION, NUM_RG
 import matplotlib.pyplot as plt
 
 
@@ -203,10 +203,10 @@ def main(t_filename: str, z_filename: str):
 
 if __name__ == "__main__":
     t_filename = (
-        f"{DATA_DIR}/v{CURRENT_VERSION}/FP/hist/input_t/input_t_hist_RG{NUM_RG - 1}.npz"
+        f"{data_dir}/v{CURRENT_VERSION}/FP/hist/input_t/input_t_hist_RG{NUM_RG - 1}.npz"
     )
     z_filename = (
-        f"{DATA_DIR}/v{CURRENT_VERSION}/FP/hist/sym_z/sym_z_hist_RG{NUM_RG - 1}.npz"
+        f"{data_dir}/v{CURRENT_VERSION}/FP/hist/sym_z/sym_z_hist_RG{NUM_RG - 1}.npz"
     )
     main(t_filename, z_filename)
     print(f"Analysis completed on {get_current_date()}")
