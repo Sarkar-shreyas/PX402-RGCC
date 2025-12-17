@@ -16,7 +16,7 @@ post-processing so it can be run in parallel across job array tasks.
 Usage
 -----
 See the `if __name__ == "__main__"` block for CLI usage details:
-`data_generation.py ARRAY_SIZE OUTPUT_DIR INITIAL RG_STEP [EXISTING_T_FILE]`.
+`data_generation.py ARRAY_SIZE OUTPUT_DIR INITIAL RG_STEP METHOD EXPR [EXISTING_T_FILE]`.
 """
 
 import os
@@ -31,23 +31,25 @@ from .utilities import (
 
 if __name__ == "__main__":
     # Load input params, checking if we're starting RG steps or continuing from an input sample
-    if len(sys.argv) == 6:
+    if len(sys.argv) == 7:
         array_size = int(sys.argv[1].strip())
         output_dir = sys.argv[2].strip()
         initial = int(sys.argv[3].strip())
         rg_step = int(sys.argv[4].strip())
-        solver = int(sys.argv[5].strip())
+        method = sys.argv[5].strip().lower()
+        expr = sys.argv[6].strip().lower()
         existing_t_file = "None"
-    elif len(sys.argv) == 7:
+    elif len(sys.argv) == 8:
         array_size = int(sys.argv[1].strip())
         output_dir = sys.argv[2].strip()
         initial = int(sys.argv[3].strip())
         rg_step = int(sys.argv[4].strip())
-        solver = int(sys.argv[5].strip())
-        existing_t_file = sys.argv[6].strip()
+        method = sys.argv[5].strip().lower()
+        expr = sys.argv[6].strip().lower()
+        existing_t_file = sys.argv[7].strip()
     else:
         raise SystemExit(
-            "Usage: data_generation.py ARRAY_SIZE OUTPUT_DIR INITIAL RG_STEP SOLVER [EXISTING_T_FILE]"
+            "Usage: data_generation.py ARRAY_SIZE OUTPUT_DIR INITIAL RG_STEP METHOD EXPR [EXISTING_T_FILE]"
         )
 
     print("-" * 100)
@@ -60,17 +62,17 @@ if __name__ == "__main__":
     else:
         print(f"Using t data from {existing_t_file}")
         t = np.load(existing_t_file)
-    if solver == 0:
+    if method == "a":
         i = 4
-    elif solver == 1:
+    elif method == "n":
         i = 8
     else:
         raise ValueError(
-            "Unsupported solver selected. Solver: 0 = Analytic, 1 = Numerical"
+            "Unsupported method selected. method: a = Analytic, n = Numerical"
         )
     phases = generate_random_phases(array_size, i)
     t_array = extract_t_samples(t, array_size)
-    t_prime = rg_data_workflow(solver, t_array, phases, array_size, "Shaw")
+    t_prime = rg_data_workflow(method, t_array, phases, array_size, expr)
     t_filename = os.path.join(
         output_dir, f"t_data_RG{rg_step}_{array_size}_samples.npy"
     )

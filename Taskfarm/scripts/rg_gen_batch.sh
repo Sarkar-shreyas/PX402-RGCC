@@ -17,7 +17,8 @@ TYPE="$6" # Type flag to toggle symmetrisation/launder target
 SHIFT="${8-}" # Takes in the shift value if running EXP, mostly for folder location
 N="$1" # Target number of samples
 RG_STEP="$4" # The RG step we're currently at
-SOLVER="$7" # Flag to determine what method to use
+METHOD="$7" # Flag to determine what method to use
+EXPR="$8" # Flag to determine which expression to use
 INITIAL="$2" # Flag to generate starting distribution/histograms or not
 NUM_BATCHES=$((SLURM_ARRAY_TASK_MAX + 1)) # Number of batches to generate/process data over, same as array size
 BATCH_SIZE=$(( N / NUM_BATCHES )) # How many samples should be calculated per batch
@@ -78,6 +79,8 @@ echo "      Config for data gen of batch no. $TASK_ID for RG step $RG_STEP "
 echo "---------------------------------------------------------------------"
 echo " RG step           : $RG_STEP"
 echo " Total samples     : $N"
+echo " Method            : $METHOD "
+echo " Expression        : $EXPR "
 echo " No. of batches    : $NUM_BATCHES"
 echo " Batch size        : $BATCH_SIZE"
 echo " Batch directory   : $batchdir"
@@ -121,7 +124,8 @@ if [[ -n "$T_INPUT" ]]; then
         "$batchsubdir" \
         "$INITIAL" \
         "$RG_STEP" \
-        "$SOLVER" \
+        "$METHOD" \
+        "$EXPR" \
         "$T_INPUT"
 else
     python -m "source.data_generation" \
@@ -129,7 +133,8 @@ else
     "$batchsubdir" \
     "$INITIAL" \
     "$RG_STEP" \
-    "$SOLVER"
+    "$METHOD" \
+    "$EXPR"
 fi
 
 # Move batch back to shared storage

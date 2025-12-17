@@ -4,14 +4,15 @@
 #SBATCH --error=../job_logs/bootstrap/%x_%A.err
 
 # Define the constants for this RG flow
-N=480000000 # Total number of samples
-NUM_RG_ITERS=10 # Number of RG steps
-VERSION=2.00S  # Version for tracking changes and matrix used
+N="$2" # Total number of samples
+NUM_RG_ITERS="$3" # Number of RG steps
+VERSION="$1"  # Version for tracking changes and matrix used
 TYPE="FP" # Type flag to toggle symmetrisation/launder target
 INITIAL=1 # Flag to generate starting distribution/histograms or not
 EXISTING_T="" # Placeholder var to point to data file for non-initial RG steps
 prev_hist_job="" # Placeholder var for holding previous job ID when setting up dependency
-solver=1 # Flag to determine whether to use analytic or numerical solvers
+method="$4" # Flag to determine whether to use analytic or numerical methods
+expr="$5" # Flag to determine which expression to use
 
 basedir="$(cd "$SLURM_SUBMIT_DIR/.."&&pwd)" # Our root directory
 joboutdir="$basedir/job_outputs/v${VERSION}/$TYPE" # Where the output files will go
@@ -55,7 +56,7 @@ for step in $(seq 0 $(( NUM_RG_ITERS - 1 ))); do
         --output=../job_outputs/bootstrap/rg_gen_RG${step}_%A_%a.out \
         --error=../job_logs/bootstrap/rg_gen_RG${step}_%A_%a.err \
         "$scriptsdir/rg_gen_batch.sh"\
-            "$N" "$INITIAL" "$EXISTING_T" "$step" "$VERSION" "$TYPE" "$solver")
+            "$N" "$INITIAL" "$EXISTING_T" "$step" "$VERSION" "$TYPE" "$method" "$expr")
 
         echo " [$(date '+%Y-%m-%d %H:%M:%S')]: Submitted generation job for RG step $step : $gen_job "
     else
@@ -64,7 +65,7 @@ for step in $(seq 0 $(( NUM_RG_ITERS - 1 ))); do
         --output=../job_outputs/bootstrap/rg_gen_RG${step}_%A_%a.out \
         --error=../job_logs/bootstrap/rg_gen_RG${step}_%A_%a.err \
         "$scriptsdir/rg_gen_batch.sh"\
-            "$N" "$INITIAL" "$EXISTING_T" "$step" "$VERSION" "$TYPE" "$solver")
+            "$N" "$INITIAL" "$EXISTING_T" "$step" "$VERSION" "$TYPE" "$method" "$expr")
 
         echo " [$(date '+%Y-%m-%d %H:%M:%S')]: Submitted generation job for RG step $step : $gen_job (after ${prev_hist_job}) "
     fi

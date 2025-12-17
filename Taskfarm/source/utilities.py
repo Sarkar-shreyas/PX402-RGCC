@@ -22,7 +22,6 @@ Z_PERTURBATION: float = 0.007
 DIST_TOLERANCE: float = 0.001
 STD_TOLERANCE: float = 0.0005
 T_RANGE: tuple = (0.0, 1.0)
-SOLVER: dict = {"Analytic": 0, "Numerical": 1}
 SAMPLER: dict = {"cdf": 0, "rej": 1}
 EXPRESSION: str = "Shaw"
 G_TOL: float = 1.39e-11
@@ -56,8 +55,15 @@ def save_data(
     )
 
 
-def get_current_date():
-    return datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+def get_current_date(format: str = "full") -> str:
+    if format == "day":
+        return datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
+    elif format == "hour":
+        return datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H")
+    elif format == "min":
+        return datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M")
+    else:
+        return datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
 
 # ---------- Data generators ---------- #
@@ -259,7 +265,7 @@ def generate_t_prime(
     r4 = np.sqrt(1 - t4 * t4)
     r5 = np.sqrt(1 - t5 * t5)
 
-    if expression == "Jack":
+    if expression.strip().lower() == "j":
         numerator = (
             -np.exp(1j * phi2) * r3 * t1 * t4
             - np.exp(1j * (phi3 + phi2)) * t2 * t4
@@ -277,18 +283,18 @@ def generate_t_prime(
             - np.exp(1j * phi2) * r3 * t4 * t5
             - np.exp(1j * (phi2 + phi3)) * t1 * t2 * t4 * t5
         )
-    elif expression == "Shreyas":
-        # My matrix (Blue)
-        numerator = (r1 * t2 * (1 - np.exp(1j * phi4) * t3 * t4 * t5)) - (
-            np.exp(1j * phi3)
-            * r5
-            * (r3 * t2 + np.exp(1j * (phi2 - phi1)) * r2 * r4 * t1 * t3)
-        )
+    # elif expression.strip().lower() == "sa":
+    #     # My matrix (Blue)
+    #     numerator = (r1 * t2 * (1 - np.exp(1j * phi4) * t3 * t4 * t5)) - (
+    #         np.exp(1j * phi3)
+    #         * r5
+    #         * (r3 * t2 + np.exp(1j * (phi2 - phi1)) * r2 * r4 * t1 * t3)
+    #     )
 
-        denominator = (r3 - np.exp(1j * phi3) * r1 * r5) * (
-            r3 - np.exp(1j * phi2) * r2 * r4
-        ) + (t3 + np.exp(1j * phi4) * t4 * t5) * (t3 + np.exp(1j * phi1) * t1 * t2)
-    elif expression == "Cain":
+    #     denominator = (r3 - np.exp(1j * phi3) * r1 * r5) * (
+    #         r3 - np.exp(1j * phi2) * r2 * r4
+    #     ) + (t3 + np.exp(1j * phi4) * t4 * t5) * (t3 + np.exp(1j * phi1) * t1 * t2)
+    elif expression.strip().lower() == "c":
         numerator = (
             +t1 * t5 * (r2 * r3 * r4 * np.exp(1j * phi3) - 1)
             + t2
@@ -301,7 +307,7 @@ def generate_t_prime(
         denominator = +(r3 - r2 * r4 * np.exp(1j * phi3)) * (
             r3 - r1 * r5 * np.exp(1j * phi2)
         ) + (t3 - t4 * t5 * np.exp(1j * phi4)) * (t3 - t1 * t2 * np.exp(1j * phi1))
-    elif expression == "Shaw":
+    elif expression.strip().lower() == "s":
         # Shaw's form (2023 thesis paper)
         numerator = (
             +(t1 * t5)
@@ -320,7 +326,7 @@ def generate_t_prime(
             - (t1 * t2 * t4 * t5 * np.exp(1j * (phi1 + phi4)))
             + (t3 * t4 * t5 * np.exp(1j * phi4))
         )
-    elif expression == "test":
+    elif expression.strip().lower() == "t":
         numerator = (
             -t1 * t5
             + (np.exp(1j * (phi1 + phi4 - phi2)) * (r1 * r3 * r5 * t2 * t4))
@@ -353,7 +359,7 @@ def generate_t_prime(
 
 def numerical_t_prime(ts: np.ndarray, phis: np.ndarray, N: int) -> np.ndarray:
     """
-    A function to compute tprime numerically using np.linalg.solve
+    A function to compute tprime numerically using np.linalg.solve. Defaults to using Shaw's matrix
     """
     start = time()
     num_batches = 30
@@ -373,10 +379,10 @@ def numerical_t_prime(ts: np.ndarray, phis: np.ndarray, N: int) -> np.ndarray:
 
 
 def rg_data_workflow(
-    solver: int, ts: np.ndarray, phis: np.ndarray, N: int, expr: str
+    method: str, ts: np.ndarray, phis: np.ndarray, N: int, expr: str
 ) -> np.ndarray:
-    """Perform the RG workflow based on solver flag"""
-    if solver == 0:  # Then we use the analytic form of tprime
+    """Perform the RG workflow based on method flag"""
+    if method == "a":  # Then we use the analytic form of tprime
         tprime = generate_t_prime(ts, phis, expr)
         return tprime
     else:
