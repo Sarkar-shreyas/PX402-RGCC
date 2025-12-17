@@ -14,6 +14,8 @@ from source.utilities import (
 from time import time
 import psutil
 import os
+import sys
+from constants import taskfarm_dir
 
 process = psutil.Process(os.getpid())
 
@@ -366,7 +368,7 @@ def check_single_node():
     i2 = np.full(shape=(1000, 1), fill_value=0.0)
     i3 = np.full(shape=(1000, 1), fill_value=0.0)
     i4 = np.full(shape=(1000, 1), fill_value=0.0)
-    I = np.concatenate([i1, i2, i3, i4], axis=0)
+    I = np.concatenate([i1, i2, i3, i4], axis=1)
     S = np.zeros(shape=(1000, 4, 4), dtype=np.complex128)
     S[:, 0, 0] = t * tau
     S[:, 0, 1] = r * tau
@@ -386,14 +388,28 @@ def check_single_node():
 
 
 if __name__ == "__main__":
+    print(f"Program started on {get_current_date()}")
     start_time = time()
     n = int(1e6)
     num_phases = 16
+    original_output = sys.stdout
+    output_folder = f"{taskfarm_dir}/QSHE/outputs"
+    plots_folder = f"{taskfarm_dir}/QSHE/plots"
+    day_output_folder = f"{output_folder}/{get_current_date('day')}"
+    hour_output_folder = f"{output_folder}/{get_current_date('hour')}"
+    output_file_name = f"{hour_output_folder}/qshe_{n}_outputs.txt"
+    os.makedirs(output_folder, exist_ok=True)
+    os.makedirs(plots_folder, exist_ok=True)
+    os.makedirs(day_output_folder, exist_ok=True)
+    os.makedirs(hour_output_folder, exist_ok=True)
+    print(f"Output being printed to {output_file_name}")
+    output_file = open(output_file_name, "w")
+    sys.stdout = output_file
     print(f"Program started on {get_current_date()}")
     print(f"Starting numerical solver for QSHE matrix with {n} samples")
     print("-" * 100)
     # Generate initial arrays
-    check_single_node()
+    # check_single_node()
     # get_memory_usage("Memory usage before generating initial data")
     starting_t = generate_initial_t_distribution(n)
     # starting_t = np.random.uniform(0, 1, n)
@@ -480,9 +496,14 @@ if __name__ == "__main__":
     plot_file_name = f"qshe_t_dist_{n}.png"
     plt.savefig(plot_file_name, dpi=150)
     plt.close()
+    print(f"Plot saved to {plot_file_name}")
+    get_memory_usage("Overall memory usage for this analysis")
     print(
         f"Overall analysis done on {get_current_date()} after {time() - start_time:.3f} seconds"
     )
-    print(f"Plot saved to {plot_file_name}")
-    get_memory_usage("Overall memory usage for this analysis")
     print("=" * 100)
+    output_file.close()
+    sys.stdout = original_output
+    print(
+        f"Overall analysis done on {get_current_date()} after {time() - start_time:.3f} seconds"
+    )
