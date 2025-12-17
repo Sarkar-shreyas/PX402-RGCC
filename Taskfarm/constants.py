@@ -59,3 +59,4 @@ XLIMS = {
 }
 
 data_dir = os.getenv("DATA_DIR")
+taskfarm_dir = os.getenv("TASKFARM_DIR")
