@@ -38,9 +38,9 @@ from .utilities import (
 )
 
 if __name__ == "__main__":
-    if len(sys.argv) != 5:
+    if len(sys.argv) != 6:
         raise SystemExit(
-            " Usage: helpers.py PROCESS ARRAY_SIZE INPUT_FILE OUTPUT_FILE \n"
+            " Usage: helpers.py PROCESS ARRAY_SIZE INPUT_FILE OUTPUT_FILE SAMPLER \n"
             " PROCESS 0 : Launder from z-histogram + Convert to t \n"
             " PROCESS 1 : Symmetrise z-histogram \n"
             " PROCESS 2 : Launder from t-histogram \n"
@@ -50,6 +50,7 @@ if __name__ == "__main__":
     array_size = int(sys.argv[2].strip())
     input_file = sys.argv[3].strip()
     output_file = sys.argv[4].strip()
+    sampler = sys.argv[5].strip().lower()
     start = time()
     date = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     if process == 0:
@@ -61,7 +62,7 @@ if __name__ == "__main__":
         input_bin_edges = input_data["binedges"]
         input_bin_centers = input_data["bincenters"]
         laundered_data = launder(
-            array_size, input_hist, input_bin_edges, input_bin_centers
+            array_size, input_hist, input_bin_edges, input_bin_centers, sampler
         )
         laundered_t = convert_z_to_t(laundered_data)
 
@@ -91,7 +92,7 @@ if __name__ == "__main__":
         input_bin_edges = input_data["binedges"]
         input_bin_centers = input_data["bincenters"]
         laundered_t = launder(
-            array_size, input_hist, input_bin_edges, input_bin_centers
+            array_size, input_hist, input_bin_edges, input_bin_centers, sampler
         )
         np.save(output_file, laundered_t)
         print(f"Laundering completed in {time() - start:.3f} seconds")
