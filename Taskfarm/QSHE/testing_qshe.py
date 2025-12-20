@@ -10,14 +10,21 @@ from source.utilities import (
     generate_random_phases,
     extract_t_samples,
     get_current_date,
+    get_density,
+    launder,
 )
 from time import time
 import psutil
 import os
 import sys
-from constants import taskfarm_dir
+from constants import taskfarm_dir, data_dir, CURRENT_VERSION, NUM_RG
 
 process = psutil.Process(os.getpid())
+
+
+def generate_phase_array(n: int, dimensions: int, phi: float) -> np.ndarray:
+    """Populates the phase arrays with a constant phi value"""
+    return np.full(shape=(n, dimensions), fill_value=phi, dtype=np.float64)
 
 
 def get_memory_usage(item: str = "") -> None:
@@ -72,115 +79,6 @@ def solve_qshe_matrix_eq(
 
     # Now we need to assign data for 20 [0-19] rows... TODO: See if there's a more efficient way at some point
     # Matrix M
-    # # Row 0
-    # M[:, 0, 0] = 1
-    # M[:, 0, 9] = t1 * tau1 * np.exp(1j * phi31)
-    # M[:, 0, 19] = -f1 * np.exp(1j * phi51)
-
-    # # Row 1
-    # M[:, 1, 1] = 1
-    # M[:, 1, 7] = f1 * np.exp(1j * phi21)
-    # M[:, 1, 9] = -r1 * tau1 * np.exp(1j * phi31)
-
-    # # Row 2
-    # M[:, 2, 2] = 1
-    # M[:, 2, 7] = t1 * tau1 * np.exp(1j * phi21)
-    # M[:, 2, 19] = -r1 * tau1 * np.exp(1j * phi51)
-
-    # # Row 3
-    # M[:, 3, 3] = 1
-    # M[:, 3, 7] = -r1 * tau1 * np.exp(1j * phi21)
-    # M[:, 3, 9] = -f1 * np.exp(1j * phi31)
-    # M[:, 3, 19] = t1 * tau1 * np.exp(1j * phi51)
-
-    # # Row 4
-    # M[:, 4, 0] = -r2 * tau2 * np.exp(1j * phi12)
-    # M[:, 4, 4] = 1
-    # M[:, 4, 11] = -f2 * np.exp(1j * phi32)
-    # M[:, 4, 12] = t2 * tau2 * np.exp(1j * phi42)
-
-    # # Row 5
-    # M[:, 5, 0] = t2 * tau2 * np.exp(1j * phi12)
-    # M[:, 5, 5] = 1
-    # M[:, 5, 12] = -r2 * tau2 * np.exp(1j * phi42)
-
-    # # Row 6
-    # M[:, 6, 0] = f2 * np.exp(1j * phi12)
-    # M[:, 6, 6] = 1
-    # M[:, 6, 11] = -r2 * tau2 * np.exp(1j * phi32)
-
-    # # Row 7
-    # M[:, 7, 7] = 1
-    # M[:, 7, 11] = t2 * tau2 * np.exp(1j * phi32)
-    # M[:, 7, 12] = -f2 * np.exp(1j * phi42)
-
-    # # Row 8
-    # M[:, 8, 2] = -f3 * np.exp(1j * phi13)
-    # M[:, 8, 5] = -r3 * tau3 * np.exp(1j * phi23)
-    # M[:, 8, 8] = 1
-    # M[:, 8, 16] = t3 * tau3 * np.exp(1j * phi53)
-
-    # # Row 9
-    # M[:, 9, 5] = t3 * tau3 * np.exp(1j * phi23)
-    # M[:, 9, 9] = 1
-    # M[:, 9, 15] = f3 * np.exp(1j * phi43)
-    # M[:, 9, 16] = -r3 * tau3 * np.exp(1j * phi53)
-
-    # # Row 10
-    # M[:, 10, 2] = -r3 * tau3 * np.exp(1j * phi13)
-    # M[:, 10, 5] = f3 * np.exp(1j * phi23)
-    # M[:, 10, 10] = 1
-    # M[:, 10, 15] = t3 * tau3 * np.exp(1j * phi43)
-
-    # # Row 11
-    # M[:, 11, 2] = t3 * tau3 * np.exp(1j * phi13)
-    # M[:, 11, 11] = 1
-    # M[:, 11, 15] = -r3 * tau3 * np.exp(1j * phi43)
-    # M[:, 11, 16] = -f3 * np.exp(1j * phi53)
-
-    # # Row 12
-    # M[:, 12, 8] = -r4 * tau4 * np.exp(1j * phi34)
-    # M[:, 12, 12] = 1
-    # M[:, 12, 17] = -f4 * np.exp(1j * phi54)
-
-    # # Row 13
-    # M[:, 13, 6] = f4 * np.exp(1j * phi24)
-    # M[:, 13, 8] = t4 * tau4 * np.exp(1j * phi34)
-    # M[:, 13, 13] = 1
-
-    # # Row 14
-    # M[:, 14, 6] = t4 * tau4 * np.exp(1j * phi24)
-    # M[:, 14, 8] = f4 * np.exp(1j * phi34)
-    # M[:, 14, 14] = 1
-    # M[:, 14, 18] = -r4 * tau4 * np.exp(1j * phi54)
-
-    # # Row 15
-    # M[:, 15, 6] = -r4 * tau4 * np.exp(1j * phi24)
-    # M[:, 15, 15] = 1
-    # M[:, 15, 18] = t4 * tau4 * np.exp(1j * phi54)
-
-    # # Row 16
-    # M[:, 16, 1] = -r5 * tau5 * np.exp(1j * phi15)
-    # M[:, 16, 13] = t5 * tau5 * np.exp(1j * phi45)
-    # M[:, 16, 16] = 1
-
-    # # Row 17
-    # M[:, 17, 1] = t5 * tau5 * np.exp(1j * phi15)
-    # M[:, 17, 10] = f5 * np.exp(1j * phi35)
-    # M[:, 17, 13] = -r5 * tau5 * np.exp(1j * phi45)
-    # M[:, 17, 17] = 1
-
-    # # Row 18
-    # M[:, 18, 1] = f5 * np.exp(1j * phi15)
-    # M[:, 18, 10] = t5 * tau5 * np.exp(1j * phi35)
-    # M[:, 18, 18] = 1
-
-    # # Row 19
-    # M[:, 19, 10] = -r5 * tau5 * np.exp(1j * phi35)
-    # M[:, 19, 13] = -f5 * np.exp(1j * phi45)
-    # M[:, 19, 19] = 1
-
-    # Matrix M2
     # Row 0
     M[:, 0, 0] = 1
     M[:, 0, 4] = -r1 * tau1 * np.exp(1j * phi31)
@@ -291,8 +189,8 @@ def solve_qshe_matrix_eq(
     # Set values for the 4 Inputs for testing
     I1_up = 1.0
     I3_down = 0.0
-    I8_up = 0.0
     I10_down = 0.0
+    I8_up = 0.0
     # # b matrix for M
     # b[:, 0, 0] = r1 * tau1 * I1
     # b[:, 1, 0] = 1j * t1 * tau1 * I1
@@ -364,11 +262,6 @@ def check_single_node():
     r = np.sqrt(1 - t**2)
     f = np.sqrt(1 - tau**2)
 
-    i1 = np.full(shape=(1000, 1), fill_value=1.0)
-    i2 = np.full(shape=(1000, 1), fill_value=0.0)
-    i3 = np.full(shape=(1000, 1), fill_value=0.0)
-    i4 = np.full(shape=(1000, 1), fill_value=0.0)
-    I = np.concatenate([i1, i2, i3, i4], axis=1)
     S = np.zeros(shape=(1000, 4, 4), dtype=np.complex128)
     S[:, 0, 0] = t * tau
     S[:, 0, 1] = r * tau
@@ -383,8 +276,15 @@ def check_single_node():
     S[:, 3, 2] = r * tau
     S[:, 3, 0] = f
 
-    x = np.linalg.solve(S, I)
-    print(np.abs(x))
+    S_transpose = np.conjugate(np.transpose(S, (0, 2, 1)))
+    id_matrix = np.eye(4, dtype=np.complex128)[None, :, :]
+
+    projection = S_transpose @ S
+    error = np.max(np.abs(projection - id_matrix))
+    print(f"Max error = {error}")
+    assert np.allclose(id_matrix, projection, atol=1e-12, rtol=0)
+    print("The S matrix is unitary")
+    # sys.exit(0)
 
 
 if __name__ == "__main__":
@@ -392,31 +292,40 @@ if __name__ == "__main__":
     start_time = time()
     n = int(1e6)
     num_phases = 16
+    check_single_node()
+    # Folder setup
     original_output = sys.stdout
     output_folder = f"{taskfarm_dir}/QSHE/outputs"
-    plots_folder = f"{taskfarm_dir}/QSHE/plots"
+    plots_folder = f"{taskfarm_dir}/QSHE/plots/{get_current_date('day')}"
     day_output_folder = f"{output_folder}/{get_current_date('day')}"
-    hour_output_folder = f"{output_folder}/{get_current_date('hour')}"
-    output_file_name = f"{hour_output_folder}/qshe_{n}_outputs.txt"
+    output_file_name = f"{day_output_folder}/qshe_{n}_outputs.txt"
     os.makedirs(output_folder, exist_ok=True)
     os.makedirs(plots_folder, exist_ok=True)
     os.makedirs(day_output_folder, exist_ok=True)
-    os.makedirs(hour_output_folder, exist_ok=True)
     print(f"Output being printed to {output_file_name}")
     output_file = open(output_file_name, "w")
     sys.stdout = output_file
     print(f"Program started on {get_current_date()}")
     print(f"Starting numerical solver for QSHE matrix with {n} samples")
     print("-" * 100)
+
+    # Load latest FP distribution
+    fp_file = f"{data_dir}/v{CURRENT_VERSION}/FP/hist/t/t_hist_RG{NUM_RG - 1}.npz"
+    fp_data = np.load(fp_file)
+    fp_hist = fp_data["histval"]
+    fp_bins = fp_data["binedges"]
+    fp_centers = fp_data["bincenters"]
+    fp_density = get_density(fp_hist, fp_bins)
+
     # Generate initial arrays
-    # check_single_node()
-    # get_memory_usage("Memory usage before generating initial data")
-    starting_t = generate_initial_t_distribution(n)
-    # starting_t = np.random.uniform(0, 1, n)
+    # starting_t = launder(n, fp_density, fp_bins, fp_centers, "i")
+    # starting_t = generate_initial_t_distribution(n)
+    starting_t = np.full(shape=n, fill_value=1 / np.sqrt(2), dtype=np.float64)
     # starting_tau = generate_initial_t_distribution(n)
-    starting_tau = np.full(shape=(n), fill_value=0.5, dtype=np.float64)
+    starting_tau = np.full(shape=n, fill_value=0.9, dtype=np.float64)
     # starting_tau = np.random.uniform(0, 1, n)
     phases = generate_random_phases(n, num_phases)
+    # phases = generate_phase_array(n, num_phases, 0.0)
     t_samples = extract_t_samples(starting_t, n)
     tau_samples = extract_t_samples(starting_tau, n)
     print(
@@ -424,11 +333,11 @@ if __name__ == "__main__":
     )
     # get_memory_usage("Memory usage after generating initial data")
     print("-" * 100)
-    # Run the solver
-    plt.figure(figsize=(12, 6))
-    plt.title("Distribution of t")
-    plt.xlabel("t")
-    plt.ylabel("P(t)")
+    # Set up initial plots
+    plt.figure(num="outputs", figsize=(12, 6))
+    plt.title("Distribution of outputs")
+    plt.xlabel("values")
+    plt.ylabel("P(output)")
     plt.ylim((0, 4))
     starting_hist, starting_bins = np.histogram(
         starting_t, T_BINS, T_RANGE, density=True
@@ -438,8 +347,17 @@ if __name__ == "__main__":
         starting_hist,
         label="Initial",
     )
-    externals = [2, 9, 10, 17]
+    # externals = [2, 9, 12, 19]
+    # label_dict = {
+    #     2: "O3_up",
+    #     9: "O10_up",
+    #     19: "O1_down",
+    #     12: "O8_down",
+    # }
+    externals = [i for i in range(20)]
+    label_dict = {i: f"O{i}_up" if i < 10 else f"O{i}_down" for i in range(20)}
     all_data = defaultdict()
+    # Run the solver and extract each output
     for index in externals:
         data = numerical_solver(t_samples, tau_samples, phases, n, index)
         all_data[f"{index}"] = data
@@ -453,50 +371,76 @@ if __name__ == "__main__":
         # Get some statistics
         over_mask = data > 1.0
         under_mask = data < 0.0
-        print(f"Min t = {np.min(data):.5f}, Max t = {np.max(data):.5f}")
+        print(f"Min t = {np.min(data)}, Max t = {np.max(data)}")
         print(
             f"t values > 1.0 = {over_mask.sum()}, t values < 0.0 = {under_mask.sum()}"
         )
-        print(f"Mean = {np.mean(data):.5f}, Median = {np.median(data):.5f}")
+        print(f"Mean = {np.mean(data)}, Median = {np.median(data)}")
         # Plot the data
         hist, bins = np.histogram(data, T_BINS, T_RANGE, density=True)
         centers = 0.5 * (bins[:-1] + bins[1:])
-        plt.plot(centers, hist, label=f"Raw_t_index_{index}")
-        # clipped_hist, clipped_bins = np.histogram(
-        #     clipped_data, T_BINS, T_RANGE, density=True
-        # )
-        # r_hist, r_bins = np.histogram(r_data, T_BINS, T_RANGE, density=True)
-        # clipped_r_hist, clipped_r_bins = np.histogram(
-        #     clipped_r, T_BINS, T_RANGE, density=True
-        # )
-        # plt.plot(centers, clipped_hist, label="Clipped t data")
-        # plt.plot(centers, r_hist, label="Raw r data")
-        # plt.plot(centers, clipped_r_hist, label="Clipped r data")
+        plt.plot(centers, hist, label=f"{label_dict[index]}")
+        # plt.scatter(data[0], data[0], label=f"{label_dict[index]}")
         print("-" * 100)
     get_memory_usage("Memory usage after handling all 4 outputs")
     print("-" * 100)
     o3_up = all_data["2"]
     o10_up = all_data["9"]
-    o1_down = all_data["10"]
-    o8_down = all_data["17"]
-    k = 0
-    for i in [o3_up, o10_up, o8_down]:
-        test_data = np.abs(i) / np.sqrt(1 - np.abs(o1_down) ** 2)
-        over = test_data > 1.0
-        under = test_data < 1.0
-        print(f"Min t = {np.min(test_data):.5f}, Max t = {np.max(test_data):.5f}")
-        print(f"t values > 1.0 = {over.sum()}, t values < 0.0 = {under.sum()}")
-        print(f"Mean = {np.mean(test_data):.5f}, Median = {np.median(test_data):.5f}")
-        test_hist, test_bins = np.histogram(test_data, T_BINS, T_RANGE, density=True)
-        test_centers = 0.5 * (test_bins[1:] + test_bins[:-1])
-        plt.plot(test_centers, test_hist, label=f"Index {k} over o1 down")
-        k += 1
-        print("-" * 100)
+    o1_down = all_data["12"]
+    o8_down = all_data["19"]
     plt.legend(loc="upper left")
-    plot_file_name = f"qshe_t_dist_{n}.png"
-    plt.savefig(plot_file_name, dpi=150)
-    plt.close()
-    print(f"Plot saved to {plot_file_name}")
+    output_plot_file_name = f"{plots_folder}/qshe_outputs_dist_{n}.png"
+    plt.savefig(output_plot_file_name, dpi=150)
+    plt.close("outputs")
+    print(f"Outputs plot saved to {output_plot_file_name}")
+
+    # Now extract individual renormalised parameters and plot them
+    # f_prime = o8_down
+    # tau_prime = np.sqrt(1 - f_prime**2)
+    # t_prime = o3_up / tau_prime
+    # r_prime = o10_up / tau_prime
+
+    # renormalised_data = [f_prime, tau_prime, t_prime, r_prime]
+    # # Analyse the data obtained
+    # print("=" * 100)
+    # for _ in renormalised_data:
+    #     over = _ > 1.0
+    #     under = _ < 0.0
+    #     print(f"Min = {np.min(_)}, Max = {np.max(_)}")
+    #     print(f"Values above 1.0 = {over.sum()}, Values under 0.0 = {under.sum()}")
+    #     print(f"Mean = {np.mean(_)}, Median = {np.median(_)}")
+    #     print("-" * 100)
+    # # Set up the figure for the renormalised variables
+    # plt.figure("variables", figsize=(12, 6))
+    # plt.title("Distribution of renormalised parameters")
+    # plt.xlabel("var")
+    # plt.ylabel("P(var)")
+    # plt.xlim((0, 1))
+    # plt.ylim((0, 4))
+
+    # # Build histograms for the 4 renormalised parameters
+    # f_prime_hist, f_prime_bins = np.histogram(f_prime, T_BINS, T_RANGE, density=True)
+    # f_prime_centers = 0.5 * (f_prime_bins[1:] + f_prime_bins[:-1])
+    # tau_prime_hist, tau_prime_bins = np.histogram(
+    #     tau_prime, T_BINS, T_RANGE, density=True
+    # )
+    # tau_prime_centers = 0.5 * (tau_prime_bins[1:] + tau_prime_bins[:-1])
+    # t_prime_hist, t_prime_bins = np.histogram(t_prime, T_BINS, T_RANGE, density=True)
+    # t_prime_centers = 0.5 * (t_prime_bins[1:] + t_prime_bins[:-1])
+    # r_prime_hist, r_prime_bins = np.histogram(r_prime, T_BINS, T_RANGE, density=True)
+    # r_prime_centers = 0.5 * (r_prime_bins[1:] + r_prime_bins[:-1])
+
+    # # Plot the renormalised parameters
+    # plt.plot(f_prime_centers, f_prime_hist, label="f'")
+    # plt.plot(tau_prime_centers, tau_prime_hist, label="tau'")
+    # plt.plot(t_prime_centers, t_prime_hist, label="t'")
+    # plt.plot(r_prime_centers, r_prime_hist, label="r'")
+    # plt.legend(loc="upper left")
+    # var_plot_file_name = f"{plots_folder}/qshe_vars_dist_{n}.png"
+    # plt.savefig(var_plot_file_name, dpi=150)
+    # plt.close("variables")
+    # print(f"Variables plot saved to {var_plot_file_name}")
+
     get_memory_usage("Overall memory usage for this analysis")
     print(
         f"Overall analysis done on {get_current_date()} after {time() - start_time:.3f} seconds"
