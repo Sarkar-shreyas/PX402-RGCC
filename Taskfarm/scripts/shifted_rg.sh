@@ -4,15 +4,17 @@
 #SBATCH --error=../job_logs/bootstrap/%x_%A.err
 
 # Define the constants for this RG flow
-N=480000000 # Total number of samples
-NUM_RG_ITERS=10 # Number of RG steps
-VERSION=2.00S # Version for tracking changes and matrix used
+N="$2" # Total number of samples
+NUM_RG_ITERS="$3" # Number of RG steps
+VERSION="$1" # Version for tracking changes and matrix used
 TYPE="EXP" # Type flag to toggle symmetrisation/launder target
 INITIAL=1 # Flag to generate starting distribution/histograms or not
 EXISTING_T="" # Placeholder var to point to data file for non-initial RG steps
 prev_hist_job="" # Placeholder var for holding previous job ID when setting up dependency
 last_step=$((NUM_RG_ITERS - 1)) # Var to determine which FP distribution to use for generating the shifted dataset, for now we use the latest one
-solver=1 # Flag to determine whether to use analytic or numerical solvers
+METHOD="$4" # Flag to determine whether to use analytic or numerical solvers
+expr="$5" # Flag to determine which expression to use
+sampler="$6" # Flag to determine which type of sampler to use
 
 CURRENT_SHIFT="$1" # Takes in the shift value to apply for this round.
 shift # Move onto the next input
@@ -76,7 +78,7 @@ for step in $(seq 0 $(( NUM_RG_ITERS - 1 ))); do
     --output=../job_outputs/bootstrap/rg_gen_RG${step}_%A_%a.out \
     --error=../job_logs/bootstrap/rg_gen_RG${step}_%A_%a.err \
     "$scriptsdir/rg_gen_batch.sh" \
-        "$N" "$INITIAL" "$EXISTING_T" "$step" "$VERSION" "$TYPE" "$solver" "$CURRENT_SHIFT")
+        "$N" "$INITIAL" "$EXISTING_T" "$step" "$VERSION" "$TYPE" "$METHOD" "$expr" "$CURRENT_SHIFT")
 
     echo " [$(date '+%Y-%m-%d %H:%M:%S')]: Submitted generation job for RG step $step : $gen_job (after ${gen_job_dep}) "
 
@@ -86,7 +88,7 @@ for step in $(seq 0 $(( NUM_RG_ITERS - 1 ))); do
         --output=../job_outputs/bootstrap/rg_hist_RG${step}_%A.out \
         --error=../job_logs/bootstrap/rg_hist_RG${step}_%A.err \
         "$scriptsdir/rg_hist_manager.sh" \
-        "$N" "$step" "$TYPE" "$VERSION" "$CURRENT_SHIFT")
+        "$N" "$step" "$TYPE" "$VERSION" "$sampler" "$CURRENT_SHIFT")
 
     echo "-----------------------------------------------------------------------------------------------------------------"
     echo " [$(date '+%Y-%m-%d %H:%M:%S')]: Submitted histogram job for RG step $step  : $hist_job (after ${gen_job}) "

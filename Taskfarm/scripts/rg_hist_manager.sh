@@ -11,11 +11,12 @@
 #SBATCH --error=../job_logs/bootstrap/%x_%A.err
 
 # Define the constants for this RG flow
-VERSION="$4" # Version for tracking changes and matrix used
 N="$1" # Target number of samples
 RG_STEP="$2" # The RG step we're currently at
-SHIFT="${5-}" # Takes in the shift value if running EXP, to change histogram domain
 TYPE="$3" # Type flag to toggle symmetrisation/launder target
+VERSION="$4" # Version for tracking changes and matrix used
+sampler="$5" # Flag to determine which type of sampler to use
+SHIFT="${6-}" # Takes in the shift value if running EXP, to change histogram domain
 NUM_BATCHES=32 # Number of batches of data to generate/process, same as array size
 BATCH_SIZE=$(( N / NUM_BATCHES )) # How many samples exist per batch
 set -euo pipefail
@@ -143,7 +144,8 @@ for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
         3 \
         "$BATCH_SIZE" \
         "$batch_t" \
-        "$batch_z"
+        "$batch_z" \
+        "$sampler"
 
     echo " Converted t' data to z data "
     # Construct/Append t' histogram, t has no shift
@@ -208,7 +210,9 @@ if [[ "$TYPE" == "FP" ]]; then
         1 \
         "$N" \
         "$OUTPUT_Z" \
-        "$symmetrised_z"
+        "$symmetrised_z" \
+        "$sampler"
+
     sampling_hist="$symmetrised_z"
     echo " Symmetrised z histogram saved to: $symmetrised_z "
 else
@@ -233,13 +237,15 @@ for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
             0 \
             "$BATCH_SIZE" \
             "$sampling_hist" \
-            "$launderbatch"
+            "$launderbatch" \
+            "$sampler"
     else
         python -m "source.helpers" \
             2 \
             "$BATCH_SIZE" \
             "$sampling_hist" \
-            "$launderbatch"
+            "$launderbatch" \
+            "$sampler"
     fi
     #sleep 1
     echo " Batch $batch of t data laundered from $TYPE histogram saved to $launderbatch "

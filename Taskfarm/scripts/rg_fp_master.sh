@@ -13,6 +13,7 @@ EXISTING_T="" # Placeholder var to point to data file for non-initial RG steps
 prev_hist_job="" # Placeholder var for holding previous job ID when setting up dependency
 method="$4" # Flag to determine whether to use analytic or numerical methods
 expr="$5" # Flag to determine which expression to use
+sampler="$6" # Flag to determine which type of sampler to use
 
 basedir="$(cd "$SLURM_SUBMIT_DIR/.."&&pwd)" # Our root directory
 joboutdir="$basedir/job_outputs/v${VERSION}/$TYPE" # Where the output files will go
@@ -76,7 +77,7 @@ for step in $(seq 0 $(( NUM_RG_ITERS - 1 ))); do
         --output=../job_outputs/bootstrap/rg_hist_RG${step}_%A.out \
         --error=../job_logs/bootstrap/rg_hist_RG${step}_%A.err \
         "$scriptsdir/rg_hist_manager.sh" \
-        "$N" "$step" "$TYPE" "$VERSION")
+        "$N" "$step" "$TYPE" "$VERSION" "$sampler")
     echo "----------------------------------------------------------------------------------------------------------------"
     echo " [$(date '+%Y-%m-%d %H:%M:%S')]: Submitted histogram job for RG step $step  : $hist_job (after ${gen_job}) "
     # Keep track of the job ID for setting up dependencies in order
