@@ -8,21 +8,21 @@
 #SBATCH --signal=B:TERM@30
 #SBATCH --kill-on-invalid-dep=yes
 #SBATCH --job-name=gen_shift
-#SBATCH --output=../job_outputs/bootstrap/%x_%A.out
-#SBATCH --error=../job_logs/bootstrap/%x_%A.err
+#SBATCH --output=../job_outputs/bootstrap/%x_%A_%a.out
+#SBATCH --error=../job_logs/bootstrap/%x_%A_%a.err
+set -euo pipefail
 
 # Define the constants for this RG flow
-N="$1" # Total number of samples
-VERSION="$2" # Version for tracking changes and matrix used
+VERSION="$1" # Version for tracking changes and matrix used
+N="$2" # Total number of samples
 INPUT_FILE="$3" # The input histogram we launder and shift from
 STEP="$4" # The RG step we're currently at
-shift="$5" # Takes in the shift value to apply for this round.
+SEED="$5" # Starting seed
+shift="$6" # Takes in the shift value to apply for this round.
 TYPE="EXP" # Type flag to toggle symmetrisation/launder target
 NUM_BATCHES=$((SLURM_ARRAY_TASK_MAX + 1)) # Number of batches to generate/process data over, same as array size
 BATCH_SIZE=$(( N / NUM_BATCHES )) # How many samples should be calculated per batch
 TASK_ID=${SLURM_ARRAY_TASK_ID} # Array task ID for easy tracking
-
-set -euo pipefail
 
 # Libraries needed
 module purge
@@ -75,6 +75,7 @@ python -m "source.shift_z" \
     "$BATCH_SIZE" \
     "$INPUT_FILE" \
     "$OUTPUT_FILE" \
+    "$SEED" \
     "$shift"
 
 echo "======================================================================================================="

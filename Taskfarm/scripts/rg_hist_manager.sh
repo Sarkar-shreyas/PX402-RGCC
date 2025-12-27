@@ -11,14 +11,15 @@
 #SBATCH --error=../job_logs/bootstrap/%x_%A.err
 
 # Define the constants for this RG flow
-N="$1" # Target number of samples
-RG_STEP="$2" # The RG step we're currently at
-TYPE="$3" # Type flag to toggle symmetrisation/launder target
-VERSION="$4" # Version for tracking changes and matrix used
-sampler="$5" # Flag to determine which type of sampler to use
-SHIFT="${6-}" # Takes in the shift value if running EXP, to change histogram domain
-NUM_BATCHES=32 # Number of batches of data to generate/process, same as array size
-BATCH_SIZE=$(( N / NUM_BATCHES )) # How many samples exist per batch
+TYPE="$1" # Type flag to toggle symmetrisation/launder target
+VERSION="$2" # Version for tracking changes and matrix used
+N="$3" # Target number of samples
+RG_STEP="$4" # The RG step we're currently at
+SEED="$5" # Starting seed
+launder="$6" # Flag to determine which type of launder to use
+symmetrise="$7" # Flag to determine whether to symmetrise data or not
+SHIFT="${8-}" # Takes in the shift value if running EXP, to change histogram domain
+
 set -euo pipefail
 
 # Directories we're using
@@ -54,6 +55,17 @@ mkdir -p "$joboutdir" "$jobdatadir" "$batchdir" "$histdir" "$statsdir" "$launder
 
 exec >"$joboutdir/${SLURM_JOB_NAME}_JOB${SLURM_JOB_ID}.out" # Redirect outputs to be within their own folders, together with the data they produce
 exec 2>"$logsdir/${SLURM_JOB_NAME}_JOB${SLURM_JOB_ID}.err" # Redirect error logs to be within their own folders for easy grouping
+
+NUM_BATCHES=$(find "$batchdir" -maxdepth 1 -type d -name "batch_*" | wc -l) # Number of batches of data to generate/process, same as array size
+
+# If no batch folders were detected, the gen job went wrong so just terminate early
+if [[ "$NUM_BATCHES" -le 0 ]]; then
+    echo "[ERROR]: No batch_* directories found in $batchdir" >&2
+    ls -lah "$jobdatadir/RG${RG_STEP}" || true
+    exit 1
+fi
+
+BATCH_SIZE=$(( N / NUM_BATCHES )) # How many samples exist per batch
 
 # General job information
 echo "==================================================="
@@ -132,6 +144,12 @@ echo " input t  : $temp_input_t "
 for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
     BATCH_DIR="$batchdir/batch_${batch}"
 
+    # Make sure the batch folder exists
+    if [[ ! -d "$BATCH_DIR" ]]; then
+        echo "[ERROR]: The batch directory is empty: $BATCH_DIR" >&2
+        exit 1
+    fi
+
     batch_t="$BATCH_DIR/t_data_RG${RG_STEP}_${BATCH_SIZE}_samples.npy"
     batch_z="$BATCH_DIR/z_data_RG${RG_STEP}_batch_${batch}.npy"
 
@@ -145,7 +163,8 @@ for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
         "$BATCH_SIZE" \
         "$batch_t" \
         "$batch_z" \
-        "$sampler"
+        "$launder" \
+        "$SEED"
 
     echo " Converted t' data to z data "
     # Construct/Append t' histogram, t has no shift
@@ -204,14 +223,15 @@ echo " T: $OUTPUT_T "
 echo " Z: $OUTPUT_Z "
 
 # Symmetrisation if its an FP run
-if [[ "$TYPE" == "FP" ]]; then
+if [[ "$symmetrise" == "1" ]]; then
     symmetrised_z="$SYM_DIR/sym_z_hist_RG${RG_STEP}.npz"
     python -m "source.helpers" \
         1 \
         "$N" \
         "$OUTPUT_Z" \
         "$symmetrised_z" \
-        "$sampler"
+        "$launder" \
+        "$SEED"
 
     sampling_hist="$symmetrised_z"
     echo " Symmetrised z histogram saved to: $symmetrised_z "
@@ -238,14 +258,16 @@ for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
             "$BATCH_SIZE" \
             "$sampling_hist" \
             "$launderbatch" \
-            "$sampler"
+            "$launder" \
+            "$SEED"
     else
         python -m "source.helpers" \
             2 \
             "$BATCH_SIZE" \
             "$sampling_hist" \
             "$launderbatch" \
-            "$sampler"
+            "$launder" \
+            "$SEED"
     fi
     #sleep 1
     echo " Batch $batch of t data laundered from $TYPE histogram saved to $launderbatch "

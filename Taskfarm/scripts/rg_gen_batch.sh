@@ -12,19 +12,20 @@
 #SBATCH --error=../job_logs/bootstrap/%x_%A_%a.err
 
 # Define the constants for this RG flow
-VERSION="$5" # Version for tracking changes and matrix used
-TYPE="$6" # Type flag to toggle symmetrisation/launder target
-SHIFT="${8-}" # Takes in the shift value if running EXP, mostly for folder location
-N="$1" # Target number of samples
+TYPE="$1" # Type flag to toggle symmetrisation/launder target
+VERSION="$2" # Version for tracking changes and matrix used
+N="$3" # Target number of samples
 RG_STEP="$4" # The RG step we're currently at
-METHOD="$7" # Flag to determine what method to use
-EXPR="$8" # Flag to determine which expression to use
-INITIAL="$2" # Flag to generate starting distribution/histograms or not
+SEED="$5" # Starting seed
+METHOD="$6" # Flag to determine what method to use
+EXPR="$7" # Flag to determine which expression to use
+INITIAL="$8" # Flag to generate starting distribution/histograms or not
+EXISTING_T_FILE="$9" # Placeholder var to point to data file for non-initial RG steps
+SHIFT="${10-}" # Takes in the shift value if running EXP, mostly for folder location
 NUM_BATCHES=$((SLURM_ARRAY_TASK_MAX + 1)) # Number of batches to generate/process data over, same as array size
 BATCH_SIZE=$(( N / NUM_BATCHES )) # How many samples should be calculated per batch
 TASK_ID=${SLURM_ARRAY_TASK_ID} # Array task ID for easy tracking
 
-EXISTING_T_FILE="$3" # Placeholder var to point to data file for non-initial RG steps
 set -euo pipefail
 
 # Libraries needed
@@ -124,6 +125,7 @@ if [[ -n "$T_INPUT" ]]; then
         "$batchsubdir" \
         "$INITIAL" \
         "$RG_STEP" \
+        "$SEED" \
         "$METHOD" \
         "$EXPR" \
         "$T_INPUT"
@@ -133,6 +135,7 @@ else
     "$batchsubdir" \
     "$INITIAL" \
     "$RG_STEP" \
+    "$SEED" \
     "$METHOD" \
     "$EXPR"
 fi
@@ -140,13 +143,15 @@ fi
 # Move batch back to shared storage
 target_dir="$batchdir/batch_${TASK_ID}"
 mkdir -p "$target_dir"
-timeout 45 rsync -a --partial --inplace "$tempbatchdir/" "$target_dir/"
+if timeout 45 rsync -a --partial --inplace "$tempbatchdir/" "$target_dir/"; then
+    rm -rf "$tempbatchdir"
+    echo " Data from $tempbatchdir deleted and moved to $target_dir "
+else
+    echo " [Warning]: rsync failed for batch ${TASK_ID}, leaving tmp at $tempbatchdir" >&2
+    exit 1
+fi
 
 # Free the tmp folder
-wait
-rm -rf "$tempbatchdir"
-echo " Data from $tempbatchdir deleted and moved to $target_dir "
-
 echo "==================================================================================================="
 echo " Data gen job ${SLURM_ARRAY_JOB_ID} for RG${RG_STEP} completed on : [$(date '+%Y-%m-%d %H:%M:%S')] "
 echo "==================================================================================================="
