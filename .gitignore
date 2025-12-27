@@ -8,7 +8,7 @@ simplify.py
 /data
 .png
 __pycache__/
-*.npz
+archived/
 *.out
 *.err
 *.json
