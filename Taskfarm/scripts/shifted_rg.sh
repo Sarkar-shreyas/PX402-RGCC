@@ -3,22 +3,26 @@
 #SBATCH --output=../job_outputs/bootstrap/%x_%A.out
 #SBATCH --error=../job_logs/bootstrap/%x_%A.err
 
-# Define the constants for this RG flow
-N="$2" # Total number of samples
-NUM_RG_ITERS="$3" # Number of RG steps
-VERSION="$1" # Version for tracking changes and matrix used
+# Assign input vars
 TYPE="EXP" # Type flag to toggle symmetrisation/launder target
+VERSION="$1" # Version for tracking changes and matrix used
+N="$2" # Total number of samples
+NUM_RG_ITERS="$3" # Number of RG steps, K
+SEED="$4" # Starting seed
+FP_NUM="$5" # Var to determine which FP distribution to use for generating the shifted dataset
+method="$6" # Flag to determine whether to use analytic or numerical solvers
+expr="$7" # Flag to determine which expression to use
+launder="$8" # Flag to determine which type of launder to use
+symmetrise="$9"
+CURRENT_SHIFT="$10" # Takes in the shift value to apply for this round.
+shift 10 # Move onto the next input
+REMAINING_SHIFTS=("$@") # Store the remaining shifts from the array
+
 INITIAL=1 # Flag to generate starting distribution/histograms or not
 EXISTING_T="" # Placeholder var to point to data file for non-initial RG steps
 prev_hist_job="" # Placeholder var for holding previous job ID when setting up dependency
-last_step=$((NUM_RG_ITERS - 1)) # Var to determine which FP distribution to use for generating the shifted dataset, for now we use the latest one
-METHOD="$4" # Flag to determine whether to use analytic or numerical solvers
-expr="$5" # Flag to determine which expression to use
-sampler="$6" # Flag to determine which type of sampler to use
 
-CURRENT_SHIFT="$1" # Takes in the shift value to apply for this round.
-shift # Move onto the next input
-REMAINING_SHIFTS=("$@") # Store the remaining shifts from the array
+set -euo pipefail
 
 basedir="$(cd "$SLURM_SUBMIT_DIR/.."&&pwd)" # Our root directory
 joboutdir="$basedir/job_outputs/v${VERSION}/$TYPE/shift_${CURRENT_SHIFT}" # Where the output files will go
@@ -45,7 +49,7 @@ echo "==================================================="
 echo ""
 
 # Where the FP distribution we'll use to generate shifted data lives
-FP_dist="$basedir/job_outputs/v${VERSION}/FP/data/RG${last_step}/hist/sym_z/sym_z_hist_RG${last_step}.npz"
+FP_dist="$basedir/job_outputs/v${VERSION}/FP/data/RG${FP_NUM}/hist/sym_z/sym_z_hist_RG${FP_NUM}.npz"
 
 
 echo " [$(date '+%Y-%m-%d %H:%M:%S')]: Generating initial data for shift ${CURRENT_SHIFT} "
@@ -54,7 +58,7 @@ shift_job=$(sbatch --parsable \
     --output=../job_outputs/bootstrap/gen_shift_${CURRENT_SHIFT}_%A_%a.out \
     --error=../job_logs/bootstrap/gen_shift_${CURRENT_SHIFT}_%A_%a.err \
     "$scriptsdir/gen_shifted_data.sh" \
-        "$N" "$VERSION" "$FP_dist" "Initial" "$CURRENT_SHIFT")
+        "$VERSION" "$N" "$FP_dist" "Initial" "$SEED" "$CURRENT_SHIFT")
 
 echo " [$(date '+%Y-%m-%d %H:%M:%S')]: Submitted shift job ${shift_job} for shift ${CURRENT_SHIFT}"
 # For each RG, we queue data generation and then histogram jobs, dependencies ensure they run in sequence
@@ -78,7 +82,7 @@ for step in $(seq 0 $(( NUM_RG_ITERS - 1 ))); do
     --output=../job_outputs/bootstrap/rg_gen_RG${step}_%A_%a.out \
     --error=../job_logs/bootstrap/rg_gen_RG${step}_%A_%a.err \
     "$scriptsdir/rg_gen_batch.sh" \
-        "$N" "$INITIAL" "$EXISTING_T" "$step" "$VERSION" "$TYPE" "$METHOD" "$expr" "$CURRENT_SHIFT")
+        "$TYPE" "$VERSION" "$N" "$step" "$SEED" "$method" "$expr" "$INITIAL" "$EXISTING_T" "$CURRENT_SHIFT")
 
     echo " [$(date '+%Y-%m-%d %H:%M:%S')]: Submitted generation job for RG step $step : $gen_job (after ${gen_job_dep}) "
 
@@ -88,7 +92,7 @@ for step in $(seq 0 $(( NUM_RG_ITERS - 1 ))); do
         --output=../job_outputs/bootstrap/rg_hist_RG${step}_%A.out \
         --error=../job_logs/bootstrap/rg_hist_RG${step}_%A.err \
         "$scriptsdir/rg_hist_manager.sh" \
-        "$N" "$step" "$TYPE" "$VERSION" "$sampler" "$CURRENT_SHIFT")
+        "$TYPE" "$VERSION" "$N" "$step" "$SEED" "$launder" "$symmetrise" "$CURRENT_SHIFT")
 
     echo "-----------------------------------------------------------------------------------------------------------------"
     echo " [$(date '+%Y-%m-%d %H:%M:%S')]: Submitted histogram job for RG step $step  : $hist_job (after ${gen_job}) "
@@ -116,11 +120,13 @@ if [[ "${#REMAINING_SHIFTS[@]}" -gt 0 ]]; then
         next_shift_job=$(sbatch --parsable \
             --dependency=afterok:${prev_hist_job} \
             "$scriptsdir/shifted_rg.sh" \
+            "$VERSION" "$N" "$NUM_RG_ITERS" "$SEED" "$FP_NUM" "$method" "$expr" "$launder" "$symmetrise" \
             "$next_shift" "${new_remaining[@]}")
     else
         next_shift_job=$(sbatch --parsable \
             --dependency=afterok:${prev_hist_job} \
             "$scriptsdir/shifted_rg.sh" \
+            "$VERSION" "$N" "$NUM_RG_ITERS" "$SEED" "$FP_NUM" "$method" "$expr" "$launder" "$symmetrise" \
             "$next_shift")
     fi
     echo " Shift job chain queued for all shifts "

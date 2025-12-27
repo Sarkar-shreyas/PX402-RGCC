@@ -4,16 +4,21 @@
 #SBATCH --error=../job_logs/bootstrap/%x_%A.err
 
 # Define the constants for this RG flow
+TYPE="FP" # Type flag to toggle symmetrisation/launder target
+VERSION="$1"  # Version for tracking changes and matrix used
 N="$2" # Total number of samples
 NUM_RG_ITERS="$3" # Number of RG steps
-VERSION="$1"  # Version for tracking changes and matrix used
-TYPE="FP" # Type flag to toggle symmetrisation/launder target
+SEED="$4" # Starting seed
+method="$5" # Flag to determine whether to use analytic or numerical methods
+expr="$6" # Flag to determine which expression to use
+launder="$7" # Flag to determine which type of launder to use
+symmetrise="$8" # Flag to determine whether to symmetrise data or not
+
 INITIAL=1 # Flag to generate starting distribution/histograms or not
 EXISTING_T="" # Placeholder var to point to data file for non-initial RG steps
 prev_hist_job="" # Placeholder var for holding previous job ID when setting up dependency
-method="$4" # Flag to determine whether to use analytic or numerical methods
-expr="$5" # Flag to determine which expression to use
-sampler="$6" # Flag to determine which type of sampler to use
+
+set -euo pipefail
 
 basedir="$(cd "$SLURM_SUBMIT_DIR/.."&&pwd)" # Our root directory
 joboutdir="$basedir/job_outputs/v${VERSION}/$TYPE" # Where the output files will go
@@ -57,7 +62,7 @@ for step in $(seq 0 $(( NUM_RG_ITERS - 1 ))); do
         --output=../job_outputs/bootstrap/rg_gen_RG${step}_%A_%a.out \
         --error=../job_logs/bootstrap/rg_gen_RG${step}_%A_%a.err \
         "$scriptsdir/rg_gen_batch.sh"\
-            "$N" "$INITIAL" "$EXISTING_T" "$step" "$VERSION" "$TYPE" "$method" "$expr")
+            "$TYPE" "$VERSION" "$N" "$step" "$SEED" "$method" "$expr" "$INITIAL" "$EXISTING_T" )
 
         echo " [$(date '+%Y-%m-%d %H:%M:%S')]: Submitted generation job for RG step $step : $gen_job "
     else
@@ -66,7 +71,7 @@ for step in $(seq 0 $(( NUM_RG_ITERS - 1 ))); do
         --output=../job_outputs/bootstrap/rg_gen_RG${step}_%A_%a.out \
         --error=../job_logs/bootstrap/rg_gen_RG${step}_%A_%a.err \
         "$scriptsdir/rg_gen_batch.sh"\
-            "$N" "$INITIAL" "$EXISTING_T" "$step" "$VERSION" "$TYPE" "$method" "$expr")
+            "$TYPE" "$VERSION" "$N" "$step" "$SEED" "$method" "$expr" "$INITIAL" "$EXISTING_T" )
 
         echo " [$(date '+%Y-%m-%d %H:%M:%S')]: Submitted generation job for RG step $step : $gen_job (after ${prev_hist_job}) "
     fi
@@ -77,7 +82,7 @@ for step in $(seq 0 $(( NUM_RG_ITERS - 1 ))); do
         --output=../job_outputs/bootstrap/rg_hist_RG${step}_%A.out \
         --error=../job_logs/bootstrap/rg_hist_RG${step}_%A.err \
         "$scriptsdir/rg_hist_manager.sh" \
-        "$N" "$step" "$TYPE" "$VERSION" "$sampler")
+        "$TYPE" "$VERSION" "$N" "$step" "$SEED" "$launder" "$symmetrise")
     echo "----------------------------------------------------------------------------------------------------------------"
     echo " [$(date '+%Y-%m-%d %H:%M:%S')]: Submitted histogram job for RG step $step  : $hist_job (after ${gen_job}) "
     # Keep track of the job ID for setting up dependencies in order
