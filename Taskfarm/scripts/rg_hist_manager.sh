@@ -171,7 +171,6 @@ for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
         "$BATCH_SIZE" \
         "$batch_t" \
         "$batch_z" \
-        "$RESAMPLE" \
         "$JOB_SEED"
 
     echo " Converted t' data to z data "
@@ -273,7 +272,6 @@ for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
             "$BATCH_SIZE" \
             "$sampling_hist" \
             "$launderbatch" \
-            "$RESAMPLE" \
             "$JOB_SEED"
     else
         python -m "source.helpers" \
@@ -281,7 +279,6 @@ for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
             "$BATCH_SIZE" \
             "$sampling_hist" \
             "$launderbatch" \
-            "$RESAMPLE" \
             "$JOB_SEED"
     fi
     #sleep 1

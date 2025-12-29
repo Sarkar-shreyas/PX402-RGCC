@@ -46,7 +46,7 @@ if __name__ == "__main__":
         initial = int(sys.argv[3].strip())
         rg_step = int(sys.argv[4].strip())
         seed = int(sys.argv[5].strip())
-        existing_t_file = sys.argv[8].strip()
+        existing_t_file = sys.argv[6].strip()
     else:
         raise SystemExit(
             "Usage: data_generation.py ARRAY_SIZE OUTPUT_DIR INITIAL RG_STEP SEED [EXISTING_T_FILE]"

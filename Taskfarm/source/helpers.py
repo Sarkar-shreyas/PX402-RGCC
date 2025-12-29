@@ -42,7 +42,7 @@ from source.config import get_rg_config
 if __name__ == "__main__":
     if len(sys.argv) != 6:
         raise SystemExit(
-            " Usage: helpers.py PROCESS ARRAY_SIZE INPUT_FILE OUTPUT_FILE RESAMPLE SEED \n"
+            " Usage: helpers.py PROCESS ARRAY_SIZE INPUT_FILE OUTPUT_FILE SEED \n"
             " PROCESS 0 : Launder from z-histogram + Convert to t \n"
             " PROCESS 1 : Symmetrise z-histogram \n"
             " PROCESS 2 : Launder from t-histogram \n"
