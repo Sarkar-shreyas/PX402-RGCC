@@ -35,16 +35,16 @@ module load GCC/13.3.0 SciPy-bundle/2024.05
 # Directories we're using
 basedir="$(cd "$SLURM_SUBMIT_DIR/.."&&pwd)" # Our root directory
 codedir="$basedir/code" # Where the code lives
-tempdir="${TMPDIR:-/tmp}/${SLURM_JOB_NAME}_${SLURM_ARRAY_JOB_ID}" # The temp directory we'll use, unique to each job ID
+tempdir="${TMPDIR:-/tmp}/${SLURM_JOB_NAME}_${SLURM_ARRAY_JOB_ID}_${TASK_ID}" # The temp directory we'll use, unique to each job ID
 tempbatchdir="$tempdir/RG${RG_STEP}/batch_${TASK_ID}" # The temp directory to write batch data to
 
 # If we're doing an EXP run, set the directories accordingly
 if [[ -n "${SHIFT}" ]]; then
-    logsdir="$basedir/job_logs/v${VERSION}/$TYPE/shift_${SHIFT}/${SLURM_JOB_NAME}/RG${RG_STEP}" # Where logs will be sent
-    outputdir="$basedir/job_outputs/v${VERSION}/$TYPE/shift_${SHIFT}" # Where the outputs will live
+    logsdir="$basedir/job_logs/${VERSION}/$TYPE/shift_${SHIFT}/${SLURM_JOB_NAME}/RG${RG_STEP}" # Where logs will be sent
+    outputdir="$basedir/job_outputs/${VERSION}/$TYPE/shift_${SHIFT}" # Where the outputs will live
 else
-    logsdir="$basedir/job_logs/v${VERSION}/$TYPE/${SLURM_JOB_NAME}/RG${RG_STEP}" # Where logs will be sent
-    outputdir="$basedir/job_outputs/v${VERSION}/$TYPE" # Where the outputs will live
+    logsdir="$basedir/job_logs/${VERSION}/$TYPE/${SLURM_JOB_NAME}/RG${RG_STEP}" # Where logs will be sent
+    outputdir="$basedir/job_outputs/${VERSION}/$TYPE" # Where the outputs will live
 fi
 # Common directories regardless of TYPE
 joboutdir="$outputdir/output/${SLURM_JOB_NAME}/RG${RG_STEP}" # Where the output files will go

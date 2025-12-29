@@ -1,92 +1,70 @@
 #!/bin/bash
 
 # Set default params
-VERSION=2.10
-TYPE=FP
-METHOD="a"
-EXPR="s"
-LAUNDER="i"
-SYMMETRISE=1
-N=480000000
-SEED=10
-K=10
+CONFIG=""
+SETS=()
+OUT=""
 
 set -euo pipefail
 
 # Read command line input
-while getopts 'v:n:k:m:e:l:s:y:h' OPTION; do
-    case "${OPTION}" in
-        v)
-            VERSION="$OPTARG" ;;
-        n)
-            N="$OPTARG" ;;
-        k)
-            K="$OPTARG" ;;
-        m)
-            METHOD="$OPTARG" ;;
-        e)
-            EXPR="$OPTARG" ;;
-        l)
-            LAUNDER="$OPTARG" ;;
-        s)
-            SEED="$OPTARG" ;;
-        y)
-            SYMMETRISE="$OPTARG" ;;
-        h)
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -c|--config)
+            CONFIG="$2";
+            shift 2;;
+        --set)
+            SETS+=("$2");
+            shift 2;;
+        -o|--out)
+            OUT="$2";
+            shift 2;;
+        -h|--help)
             echo "============================================================================="
             echo "                              RG SCRIPT HELPER "
             echo "-----------------------------------------------------------------------------"
-            echo " -v   : Version/run name "
-            echo " -n   : Number of samples to generate "
-            echo " -k   : Number of RG steps to run "
-            echo " -s   : Starting seed value "
-            echo " -m   : Method of computation (a = analytic, n = numerical)"
-            echo " -e   : Expression to use for analytic method (c = Cain, s = Shaw, j = Jack) "
-            echo " -l   : Launder method (r = rejection, i = inverse CDF) "
-            echo " -y   : Symmetrise z data per step? (1 = yes, 0 = no)"
-            echo " -h   : help "
+            echo " -c | --config   : Config file path "
+            echo " --set           : Override settings ( Eg; --set 'engine.method = numerical' )"
+            echo " -o | --out      : Output folder for updated config "
+            echo " -h | --help     : Help "
             echo "============================================================================="
             echo "";
             exit 0 ;;
+        --)
+            shift; break;;
         *)
+            echo "Unknown arg $1"
             echo "============================================================================="
             echo "                              RG SCRIPT HELPER "
             echo "-----------------------------------------------------------------------------"
-            echo " -v   : Version/run name "
-            echo " -n   : Number of samples to generate "
-            echo " -k   : Number of RG steps to run "
-            echo " -s   : Starting seed value "
-            echo " -m   : Method of computation (a = analytic, n = numerical)"
-            echo " -e   : Expression to use for analytic method (c = Cain, s = Shaw, j = Jack) "
-            echo " -l   : Launder method (r = rejection, i = inverse CDF) "
-            echo " -y   : Symmetrise z data per step? (1 = yes, 0 = no)"
-            echo " -h   : help "
+            echo " -c | --config   : Config file path "
+            echo " --set           : Override settings ( Eg; --set 'engine.method = numerical' )"
+            echo " -o | --out      : Output folder for updated config "
+            echo " -h | --help     : Help "
             echo "============================================================================="
             echo "";
             exit 2 ;;
     esac
 done
 
-echo "====================================================="
-echo "                  RG WORKFLOW CONFIG "
-echo "-----------------------------------------------------"
-echo " Version            : $VERSION "
-echo " Type               : $TYPE "
-echo " Number of samples  : $N "
-echo " Number of RG steps : $K "
-echo " Starting seed      : $SEED "
-echo " t' Method          : $METHOD "
-echo " Expression         : $EXPR "
-echo " Launder method     : $LAUNDER "
-echo " Symmetrising?      : $SYMMETRISE "
-echo " Date of job        : [$(date '+%Y-%m-%d %H:%M:%S')] "
-echo "====================================================="
-echo ""
+if [[ -z "${CONFIG}" ]]; then
+    echo "Missing --config path" >&2
+    exit 2
+fi
 
-VERSIONSTR="${VERSION}${EXPR}"
+basedir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."&&pwd)" # Our root directory
+codedir="$basedir/code" # Where the code lives
+scriptsdir="$basedir/scripts" # Where all shell scripts live
+export PYTHONPATH="$codedir:$PYTHONPATH"
+UPDATED_CONFIG="$(
+    python "$codedir/source/parse_config.py" \
+    --config "$CONFIG" \
+    $(printf -- ' --set %q' "${SETS[@]}") \
+    ${OUT:+--out "$OUT"}
+)"
 
 rg_job=$(sbatch --parsable \
-        "rg_fp_master.sh" \
-        "$VERSIONSTR" "$N" "$K" "$SEED" "$METHOD" "$EXPR" "$LAUNDER" "$SYMMETRISE" )
+        "$scriptsdir/rg_fp_master.sh" \
+        "$UPDATED_CONFIG" )
 
 echo " [$(date '+%Y-%m-%d %H:%M:%S')]: Submitted RG job with id $rg_job "

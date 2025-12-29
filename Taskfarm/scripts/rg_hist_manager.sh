@@ -11,13 +11,13 @@
 #SBATCH --error=../job_logs/bootstrap/%x_%A.err
 
 # Define the constants for this RG flow
-TYPE="$1" # Type flag to toggle symmetrisation/launder target
+TYPE="$1" # Mode of RG workflow
 VERSION="$2" # Version for tracking changes and matrix used
 N="$3" # Target number of samples
 RG_STEP="$4" # The RG step we're currently at
 SEED="$5" # Starting seed
-launder="$6" # Flag to determine which type of launder to use
-symmetrise="$7" # Flag to determine whether to symmetrise data or not
+RESAMPLE="$6" # Flag to determine which type of resample to use
+SYMMETRISE="$7" # Flag to determine whether to symmetrise data or not
 SHIFT="${8-}" # Takes in the shift value if running EXP, to change histogram domain
 
 set -euo pipefail
@@ -28,11 +28,11 @@ codedir="$basedir/code" # Where the code lives
 
 # If we're doing an EXP run, set the directories accordingly
 if [[ -n "${SHIFT}" ]]; then
-    logsdir="$basedir/job_logs/v${VERSION}/$TYPE/shift_${SHIFT}/${SLURM_JOB_NAME}/RG${RG_STEP}" # Where logs will be sent
-    outputdir="$basedir/job_outputs/v${VERSION}/$TYPE/shift_${SHIFT}" # Where the outputs will live
+    logsdir="$basedir/job_logs/${VERSION}/$TYPE/shift_${SHIFT}/${SLURM_JOB_NAME}/RG${RG_STEP}" # Where logs will be sent
+    outputdir="$basedir/job_outputs/${VERSION}/$TYPE/shift_${SHIFT}" # Where the outputs will live
 else
-    logsdir="$basedir/job_logs/v${VERSION}/$TYPE/${SLURM_JOB_NAME}/RG${RG_STEP}" # Where logs will be sent
-    outputdir="$basedir/job_outputs/v${VERSION}/$TYPE" # Where the outputs will live
+    logsdir="$basedir/job_logs/${VERSION}/$TYPE/${SLURM_JOB_NAME}/RG${RG_STEP}" # Where logs will be sent
+    outputdir="$basedir/job_outputs/${VERSION}/$TYPE" # Where the outputs will live
 fi
 
 # Common directories regardless of TYPE
@@ -123,7 +123,7 @@ OUTPUT_T="$T_DIR/t_hist_RG${RG_STEP}.npz"
 OUTPUT_Z="$Z_DIR/z_hist_unsym_RG${RG_STEP}.npz"
 
 # Local directories to reduce shared I/O load
-tempdir="${TMPDIR:-/tmp}/rg_hist_RG${RG_STEP}"
+tempdir="${TMPDIR:-/tmp}/rg_hist_${SLURM_JOB_ID}_RG${RG_STEP}"
 tempdir_t="$tempdir/t"
 tempdir_z="$tempdir/z"
 tempdir_input="$tempdir/input_t"
@@ -163,7 +163,7 @@ for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
         "$BATCH_SIZE" \
         "$batch_t" \
         "$batch_z" \
-        "$launder" \
+        "$RESAMPLE" \
         "$SEED"
 
     echo " Converted t' data to z data "
@@ -223,14 +223,14 @@ echo " T: $OUTPUT_T "
 echo " Z: $OUTPUT_Z "
 
 # Symmetrisation if its an FP run
-if [[ "$symmetrise" == "1" ]]; then
+if [[ "$SYMMETRISE" == "1" ]]; then
     symmetrised_z="$SYM_DIR/sym_z_hist_RG${RG_STEP}.npz"
     python -m "source.helpers" \
         1 \
         "$N" \
         "$OUTPUT_Z" \
         "$symmetrised_z" \
-        "$launder" \
+        "$RESAMPLE" \
         "$SEED"
 
     sampling_hist="$symmetrised_z"
@@ -258,7 +258,7 @@ for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
             "$BATCH_SIZE" \
             "$sampling_hist" \
             "$launderbatch" \
-            "$launder" \
+            "$RESAMPLE" \
             "$SEED"
     else
         python -m "source.helpers" \
@@ -266,7 +266,7 @@ for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
             "$BATCH_SIZE" \
             "$sampling_hist" \
             "$launderbatch" \
-            "$launder" \
+            "$RESAMPLE" \
             "$SEED"
     fi
     #sleep 1
