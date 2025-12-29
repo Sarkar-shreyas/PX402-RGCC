@@ -4,7 +4,7 @@
 CONFIG=""
 SETS=()
 OUT=""
-
+TYPE="FP"
 set -euo pipefail
 
 # Read command line input
@@ -59,6 +59,7 @@ export PYTHONPATH="$codedir:$PYTHONPATH"
 UPDATED_CONFIG="$(
     python "$codedir/source/parse_config.py" \
     --config "$CONFIG" \
+    --type "$TYPE" \
     $(printf -- ' --set %q' "${SETS[@]}") \
     ${OUT:+--out "$OUT"}
 )"

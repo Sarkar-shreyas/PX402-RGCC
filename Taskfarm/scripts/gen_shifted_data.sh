@@ -11,19 +11,21 @@
 #SBATCH --output=../job_outputs/bootstrap/%x_%A_%a.out
 #SBATCH --error=../job_logs/bootstrap/%x_%A_%a.err
 set -euo pipefail
-
+UPDATED_CONFIG="$1"
+STREAM=4 # Additional var for deterministic seeding
 # Define the constants for this RG flow
-VERSION="$1" # Version for tracking changes and matrix used
-N="$2" # Total number of samples
-INPUT_FILE="$3" # The input histogram we launder and shift from
-STEP="$4" # The RG step we're currently at
-SEED="$5" # Starting seed
-SHIFT="$6" # Takes in the shift value to apply for this round.
+VERSION="$2" # Version for tracking changes and matrix used
+N="$3" # Total number of samples
+INPUT_FILE="$4" # The input histogram we launder and shift from
+STEP="$5" # The RG step we're currently at
+SEED="$6" # Starting seed
+RESAMPLE="$7" # Flag to determine which type of resample to use
+SHIFT="$8" # Takes in the shift value to apply for this round.
 TYPE="EXP" # Type flag to toggle symmetrisation/launder target
 NUM_BATCHES=$((SLURM_ARRAY_TASK_MAX + 1)) # Number of batches to generate/process data over, same as array size
 BATCH_SIZE=$(( N / NUM_BATCHES )) # How many samples should be calculated per batch
 TASK_ID=${SLURM_ARRAY_TASK_ID} # Array task ID for easy tracking
-
+export RG_CONFIG=$UPDATED_CONFIG
 # Libraries needed
 module purge
 module load GCC/13.3.0 SciPy-bundle/2024.05
@@ -40,6 +42,8 @@ mkdir -p "$joboutdir" "$jobdatadir" "$stepdir" # Make them in case they aren't a
 
 exec >"$joboutdir/${SLURM_JOB_NAME}_JOB${SLURM_ARRAY_JOB_ID}_TASK${TASK_ID}.out" # Redirect outputs to be within their own folders, together with the data they produce
 exec 2>"$logsdir/${SLURM_JOB_NAME}_JOB${SLURM_ARRAY_JOB_ID}_TASK${TASK_ID}.err" # Redirect error logs to be within their own folders for easy grouping
+
+JOB_SEED=$(( SEED + 10000000*RG_STEP + 1000*TASK_ID + STREAM ))
 
 # General job information
 echo "==================================================="
@@ -75,7 +79,8 @@ python -m "source.shift_z" \
     "$BATCH_SIZE" \
     "$INPUT_FILE" \
     "$OUTPUT_FILE" \
-    "$SEED" \
+    "$JOB_SEED" \
+    "$RESAMPLE" \
     "$SHIFT"
 
 echo "======================================================================================================="

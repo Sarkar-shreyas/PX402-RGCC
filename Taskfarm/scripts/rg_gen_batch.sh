@@ -11,22 +11,24 @@
 #SBATCH --output=../job_outputs/bootstrap/%x_%A_%a.out
 #SBATCH --error=../job_logs/bootstrap/%x_%A_%a.err
 
+set -euo pipefail
+STREAM=1 # Additional var for deterministic seeding
+UPDATED_CONFIG="$1"
 # Define the constants for this RG flow
-TYPE="$1" # Type flag to toggle symmetrisation/launder target
-VERSION="$2" # Version for tracking changes and matrix used
-N="$3" # Target number of samples
-RG_STEP="$4" # The RG step we're currently at
-SEED="$5" # Starting seed
-METHOD="$6" # Flag to determine what method to use
-EXPR="$7" # Flag to determine which expression to use
-INITIAL="$8" # Flag to generate starting distribution/histograms or not
-EXISTING_T_FILE="$9" # Placeholder var to point to data file for non-initial RG steps
-SHIFT="${10-}" # Takes in the shift value if running EXP, mostly for folder location
+TYPE="$2" # Type flag to toggle symmetrisation/launder target
+VERSION="$3" # Version for tracking changes and matrix used
+N="$4" # Target number of samples
+RG_STEP="$5" # The RG step we're currently at
+SEED="$6" # Starting seed
+METHOD="$7" # Flag to determine what method to use
+EXPR="$8" # Flag to determine which expression to use
+INITIAL="$9" # Flag to generate starting distribution/histograms or not
+EXISTING_T_FILE="$10" # Placeholder var to point to data file for non-initial RG steps
+SHIFT="${11-}" # Takes in the shift value if running EXP, mostly for folder location
 NUM_BATCHES=$((SLURM_ARRAY_TASK_MAX + 1)) # Number of batches to generate/process data over, same as array size
 BATCH_SIZE=$(( N / NUM_BATCHES )) # How many samples should be calculated per batch
 TASK_ID=${SLURM_ARRAY_TASK_ID} # Array task ID for easy tracking
-
-set -euo pipefail
+export RG_CONFIG=$UPDATED_CONFIG
 
 # Libraries needed
 module purge
@@ -52,7 +54,11 @@ jobdatadir="$outputdir/data" # Where the data will live
 batchdir="$jobdatadir/RG${RG_STEP}/batches" # Make a folder for the batches, combined can stay out later
 batchsubdir="$tempbatchdir"
 
-
+if [[ "$TYPE" == "FP" ]]; then
+    JOB_SEED=$(( SEED + 1000000*RG_STEP + 1000*TASK_ID + STREAM ))
+else
+    JOB_SEED=$(( SEED + 1000000*RG_STEP + 10000*TASK_ID + STREAM ))
+fi
 # Make these now so that it does it every time we run this job
 mkdir -p "$outputdir" "$logsdir"
 mkdir -p "$joboutdir" "$jobdatadir" "$batchdir"
@@ -125,7 +131,7 @@ if [[ -n "$T_INPUT" ]]; then
         "$batchsubdir" \
         "$INITIAL" \
         "$RG_STEP" \
-        "$SEED" \
+        "$JOB_SEED" \
         "$METHOD" \
         "$EXPR" \
         "$T_INPUT"
@@ -135,7 +141,7 @@ else
     "$batchsubdir" \
     "$INITIAL" \
     "$RG_STEP" \
-    "$SEED" \
+    "$JOB_SEED" \
     "$METHOD" \
     "$EXPR"
 fi

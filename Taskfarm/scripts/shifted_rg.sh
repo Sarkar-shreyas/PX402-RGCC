@@ -4,13 +4,14 @@
 #SBATCH --error=../job_logs/bootstrap/%x_%A.err
 
 set -euo pipefail
-
+basedir="$(cd "$SLURM_SUBMIT_DIR/.."&&pwd)" # Our root directory
+export PYTHONPATH="$basedir/code:$PYTHONPATH" # Set pythonpath so we can define the function below
 # Config parser
 get_yaml(){
     local config="$1"
     local key="$2"
     local default="${3:-}"
-    python3 - "$config" "$key" "$default" << PY
+    python - "$config" "$key" "$default" << PY
 
 import sys
 import json
@@ -57,7 +58,7 @@ SEED="$(get_yaml "$UPDATED_CONFIG" "rg_settings.seed")" # Starting seed
 FP_NUM=$(( NUM_RG_ITERS - 1 )) # Var to determine which FP distribution to use for generating the shifted dataset
 METHOD="$(get_yaml "$UPDATED_CONFIG" "engine.method")" # Flag to determine whether to use analytic or numerical methods
 EXPR="$(get_yaml "$UPDATED_CONFIG" "engine.expr")" # Flag to determine which expression to use
-RESAMPLE="$(get_yaml "$UPDATED_CONFIG" "engine.resample")" # Flag to determine which type of resample to use
+RESAMPLE="$(get_yaml "$UPDATED_CONFIG" "engine.resample")" # Flag to determine which type of resampler to use
 SYMMETRISE="$(get_yaml "$UPDATED_CONFIG" "engine.symmetrise")" # Flag to determine whether to symmetrise data or not
 VERSIONSTR="${VERSION}_${METHOD}_${EXPR}"
 INITIAL=1 # Flag to generate starting distribution/histograms or not
@@ -73,8 +74,8 @@ if (( NUM_SHIFTS == 0 )); then
 fi
 
 CURRENT_SHIFT="${SHIFTS[$SHIFT_INDEX]}" # Assigns the shift value to apply for this round.
+export RG_CONFIG=$UPDATED_CONFIG
 
-basedir="$(cd "$SLURM_SUBMIT_DIR/.."&&pwd)" # Our root directory
 joboutdir="$basedir/job_outputs/${VERSIONSTR}/$TYPE/shift_${CURRENT_SHIFT}" # Where the output files will go
 datadir="$joboutdir/data" # Where the data will live
 scriptsdir="$basedir/scripts" # Where all shell scripts live
@@ -124,7 +125,7 @@ shift_job=$(sbatch --parsable \
     --output=../job_outputs/bootstrap/gen_shift_${CURRENT_SHIFT}_%A_%a.out \
     --error=../job_logs/bootstrap/gen_shift_${CURRENT_SHIFT}_%A_%a.err \
     "$scriptsdir/gen_shifted_data.sh" \
-        "$VERSIONSTR" "$N" "$FP_dist" "Initial" "$SEED" "$CURRENT_SHIFT")
+        "$UPDATED_CONFIG" "$VERSIONSTR" "$N" "$FP_dist" "Initial" "$SEED" "$RESAMPLE" "$CURRENT_SHIFT")
 
 echo " [$(date '+%Y-%m-%d %H:%M:%S')]: Submitted shift job ${shift_job} for shift ${CURRENT_SHIFT}"
 # For each RG, we queue data generation and then histogram jobs, dependencies ensure they run in sequence
@@ -148,7 +149,7 @@ for step in $(seq 0 $(( NUM_RG_ITERS - 1 ))); do
     --output=../job_outputs/bootstrap/rg_gen_RG${step}_%A_%a.out \
     --error=../job_logs/bootstrap/rg_gen_RG${step}_%A_%a.err \
     "$scriptsdir/rg_gen_batch.sh" \
-        "$TYPE" "$VERSIONSTR" "$N" "$step" "$SEED" "$METHOD" "$EXPR" "$INITIAL" "$EXISTING_T" "$CURRENT_SHIFT")
+        "$UPDATED_CONFIG" "$TYPE" "$VERSIONSTR" "$N" "$step" "$SEED" "$METHOD" "$EXPR" "$INITIAL" "$EXISTING_T" "$CURRENT_SHIFT")
 
     echo " [$(date '+%Y-%m-%d %H:%M:%S')]: Submitted generation job for RG step $step : $gen_job (after ${gen_job_dep}) "
 
@@ -158,7 +159,7 @@ for step in $(seq 0 $(( NUM_RG_ITERS - 1 ))); do
         --output=../job_outputs/bootstrap/rg_hist_RG${step}_%A.out \
         --error=../job_logs/bootstrap/rg_hist_RG${step}_%A.err \
         "$scriptsdir/rg_hist_manager.sh" \
-        "$TYPE" "$VERSIONSTR" "$N" "$step" "$SEED" "$RESAMPLE" "$SYMMETRISE" "$CURRENT_SHIFT")
+        "$UPDATED_CONFIG" "$TYPE" "$VERSIONSTR" "$N" "$step" "$SEED" "$RESAMPLE" "$SYMMETRISE" "$CURRENT_SHIFT")
 
     echo "-----------------------------------------------------------------------------------------------------------------"
     echo " [$(date '+%Y-%m-%d %H:%M:%S')]: Submitted histogram job for RG step $step  : $hist_job (after ${gen_job}) "

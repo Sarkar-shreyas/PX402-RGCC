@@ -10,17 +10,19 @@
 #SBATCH --output=../job_outputs/bootstrap/%x_%A.out
 #SBATCH --error=../job_logs/bootstrap/%x_%A.err
 
-# Define the constants for this RG flow
-TYPE="$1" # Mode of RG workflow
-VERSION="$2" # Version for tracking changes and matrix used
-N="$3" # Target number of samples
-RG_STEP="$4" # The RG step we're currently at
-SEED="$5" # Starting seed
-RESAMPLE="$6" # Flag to determine which type of resample to use
-SYMMETRISE="$7" # Flag to determine whether to symmetrise data or not
-SHIFT="${8-}" # Takes in the shift value if running EXP, to change histogram domain
-
 set -euo pipefail
+UPDATED_CONFIG="$1"
+STREAM=2 # Additional var for deterministic seeding
+# Define the constants for this RG flow
+TYPE="$2" # Mode of RG workflow
+VERSION="$3" # Version for tracking changes and matrix used
+N="$4" # Target number of samples
+RG_STEP="$5" # The RG step we're currently at
+SEED="$6" # Starting seed
+RESAMPLE="$7" # Flag to determine which type of resample to use
+SYMMETRISE="$8" # Flag to determine whether to symmetrise data or not
+SHIFT="${9-}" # Takes in the shift value if running EXP, to change histogram domain
+export RG_CONFIG=$UPDATED_CONFIG
 
 # Directories we're using
 basedir="$(cd "$SLURM_SUBMIT_DIR/.."&&pwd)" # Our root directory
@@ -144,6 +146,12 @@ echo " input t  : $temp_input_t "
 for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
     BATCH_DIR="$batchdir/batch_${batch}"
 
+    if [[ "$TYPE" == "FP" ]]; then
+        JOB_SEED=$(( SEED + 1000000*RG_STEP + 1000*batch + STREAM ))
+    else
+        JOB_SEED=$(( SEED + 1000000*RG_STEP + 10000*batch + STREAM ))
+    fi
+
     # Make sure the batch folder exists
     if [[ ! -d "$BATCH_DIR" ]]; then
         echo "[ERROR]: The batch directory is empty: $BATCH_DIR" >&2
@@ -164,7 +172,7 @@ for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
         "$batch_t" \
         "$batch_z" \
         "$RESAMPLE" \
-        "$SEED"
+        "$JOB_SEED"
 
     echo " Converted t' data to z data "
     # Construct/Append t' histogram, t has no shift
@@ -231,7 +239,7 @@ if [[ "$SYMMETRISE" == "1" ]]; then
         "$OUTPUT_Z" \
         "$symmetrised_z" \
         "$RESAMPLE" \
-        "$SEED"
+        "$JOB_SEED"
 
     sampling_hist="$symmetrised_z"
     echo " Symmetrised z histogram saved to: $symmetrised_z "
@@ -251,6 +259,13 @@ INPUT_T="$INPUT_DIR/input_t_hist_RG${RG_STEP}.npz"
 
 for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
     launderbatch="$laundereddir/t_laundered_RG${RG_STEP}_batch_${batch}.npy"
+
+    if [[ "$TYPE" == "FP" ]]; then
+        JOB_SEED=$(( SEED + 1000000*RG_STEP + 1000*batch + STREAM ))
+    else
+        JOB_SEED=$(( SEED + 1000000*RG_STEP + 10000*batch + STREAM ))
+    fi
+
     # Produce batches of laundered data, from z if TYPE=FP and from t otherwise
     if [[ "$TYPE" == "FP" ]]; then
         python -m "source.helpers" \
@@ -259,7 +274,7 @@ for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
             "$sampling_hist" \
             "$launderbatch" \
             "$RESAMPLE" \
-            "$SEED"
+            "$JOB_SEED"
     else
         python -m "source.helpers" \
             2 \
@@ -267,7 +282,7 @@ for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
             "$sampling_hist" \
             "$launderbatch" \
             "$RESAMPLE" \
-            "$SEED"
+            "$JOB_SEED"
     fi
     #sleep 1
     echo " Batch $batch of t data laundered from $TYPE histogram saved to $launderbatch "

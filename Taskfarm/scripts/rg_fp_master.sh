@@ -5,12 +5,14 @@
 
 set -euo pipefail
 
+basedir="$(cd "$SLURM_SUBMIT_DIR/.."&&pwd)" # Our root directory
+export PYTHONPATH="$basedir/code:$PYTHONPATH" # Set pythonpath so we can define the function below
 # Config parser
 get_yaml(){
     local config="$1"
     local key="$2"
     local default="${3:-}"
-    python3 - "$config" "$key" "$default" << PY
+    python - "$config" "$key" "$default" << PY
 
 import sys
 import json
@@ -62,8 +64,8 @@ VERSIONSTR="${VERSION}_${METHOD}_${EXPR}"
 INITIAL=1 # Flag to generate starting distribution/histograms or not
 EXISTING_T="" # Placeholder var to point to data file for non-initial RG steps
 PREV_HIST_JOB="" # Placeholder var for holding previous job ID when setting up dependency
+export RG_CONFIG=$UPDATED_CONFIG
 
-basedir="$(cd "$SLURM_SUBMIT_DIR/.."&&pwd)" # Our root directory
 joboutdir="$basedir/job_outputs/${VERSIONSTR}/$TYPE" # Where the output files will go
 datadir="$joboutdir/data" # Where the data will live
 scriptsdir="$basedir/scripts" # Where all shell scripts live
@@ -119,7 +121,7 @@ for step in $(seq 0 $(( NUM_RG_ITERS - 1 ))); do
         --output=../job_outputs/bootstrap/rg_gen_RG${step}_%A_%a.out \
         --error=../job_logs/bootstrap/rg_gen_RG${step}_%A_%a.err \
         "$scriptsdir/rg_gen_batch.sh"\
-            "$TYPE" "$VERSIONSTR" "$N" "$step" "$SEED" "$METHOD" "$EXPR" "$INITIAL" "$EXISTING_T" )
+            "$UPDATED_CONFIG" "$TYPE" "$VERSIONSTR" "$N" "$step" "$SEED" "$METHOD" "$EXPR" "$INITIAL" "$EXISTING_T" )
 
         echo " [$(date '+%Y-%m-%d %H:%M:%S')]: Submitted generation job for RG step $step : $gen_job "
     else
@@ -128,7 +130,7 @@ for step in $(seq 0 $(( NUM_RG_ITERS - 1 ))); do
         --output=../job_outputs/bootstrap/rg_gen_RG${step}_%A_%a.out \
         --error=../job_logs/bootstrap/rg_gen_RG${step}_%A_%a.err \
         "$scriptsdir/rg_gen_batch.sh"\
-            "$TYPE" "$VERSIONSTR" "$N" "$step" "$SEED" "$METHOD" "$EXPR" "$INITIAL" "$EXISTING_T" )
+            "$UPDATED_CONFIG" "$TYPE" "$VERSIONSTR" "$N" "$step" "$SEED" "$METHOD" "$EXPR" "$INITIAL" "$EXISTING_T" )
 
         echo " [$(date '+%Y-%m-%d %H:%M:%S')]: Submitted generation job for RG step $step : $gen_job (after ${PREV_HIST_JOB}) "
     fi
@@ -139,7 +141,7 @@ for step in $(seq 0 $(( NUM_RG_ITERS - 1 ))); do
         --output=../job_outputs/bootstrap/rg_hist_RG${step}_%A.out \
         --error=../job_logs/bootstrap/rg_hist_RG${step}_%A.err \
         "$scriptsdir/rg_hist_manager.sh" \
-        "$TYPE" "$VERSIONSTR" "$N" "$step" "$SEED" "$RESAMPLE" "$SYMMETRISE")
+        "$UPDATED_CONFIG" "$TYPE" "$VERSIONSTR" "$N" "$step" "$SEED" "$RESAMPLE" "$SYMMETRISE")
     echo "----------------------------------------------------------------------------------------------------------------"
     echo " [$(date '+%Y-%m-%d %H:%M:%S')]: Submitted histogram job for RG step $step  : $hist_job (after ${gen_job}) "
     # Keep track of the job ID for setting up dependencies in order

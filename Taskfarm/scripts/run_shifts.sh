@@ -5,7 +5,7 @@ CONFIG=""
 SETS=()
 OUT=""
 SHIFT_INDEX=0
-
+TYPE="EXP"
 set -euo pipefail
 
 # Read command line input
@@ -65,9 +65,12 @@ export PYTHONPATH="$codedir:$PYTHONPATH"
 UPDATED_CONFIG="$(
     python "$codedir/source/parse_config.py" \
     --config "$CONFIG" \
+    --type "$TYPE" \
     $(printf -- ' --set %q' "${SETS[@]}") \
     ${OUT:+--out "$OUT"}
 )"
+
+
 
 shift_job=$(sbatch --parsable \
     "$scriptsdir/shifted_rg.sh" \
