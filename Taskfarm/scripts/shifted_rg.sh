@@ -125,7 +125,7 @@ shift_job=$(sbatch --parsable \
     --output=../job_outputs/bootstrap/gen_shift_${CURRENT_SHIFT}_%A_%a.out \
     --error=../job_logs/bootstrap/gen_shift_${CURRENT_SHIFT}_%A_%a.err \
     "$scriptsdir/gen_shifted_data.sh" \
-        "$UPDATED_CONFIG" "$VERSIONSTR" "$N" "$FP_dist" "Initial" "$SEED" "$RESAMPLE" "$CURRENT_SHIFT")
+        "$UPDATED_CONFIG" "$VERSIONSTR" "$N" "$FP_dist" "Initial" "$SEED" "$CURRENT_SHIFT")
 
 echo " [$(date '+%Y-%m-%d %H:%M:%S')]: Submitted shift job ${shift_job} for shift ${CURRENT_SHIFT}"
 # For each RG, we queue data generation and then histogram jobs, dependencies ensure they run in sequence
