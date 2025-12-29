@@ -170,6 +170,8 @@ if __name__ == "__main__":
             "Invalid process entered. Process must be either 0 (Build new hist) or 1 (Append to existing hist)"
         )
     print("-" * 100)
+    if shift is not None and len(shift) == 0:
+        shift = None
     current_date = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     print(
         f"[{current_date}] : Histogram job of [RG step {rg_step}] with mode [{mode}] started for var {var_name} and shift {shift}"

@@ -28,7 +28,7 @@ def build_parser() -> argparse.ArgumentParser:
         dest="override",
         nargs="+",
         action="extend",
-        default=[],
+        default=None,
         help="Override config settings. Eg; --set 'rg_settings.steps = 5' 'engine.method = numerical'",
     )
     parser.add_argument("--out", default=None, help="Output path for config")
@@ -43,7 +43,7 @@ def get_default_output_dir(config: dict, run_type: str) -> Path:
     """Parse the input config dict and build the default output path"""
     version = str(get_nested_data(config, "main.version"))
     method = str(get_nested_data(config, "engine.method"))
-    expr = str(get_nested_data(config, "engine.expr")).strip().lower()[0]
+    expr = str(get_nested_data(config, "engine.expr")).strip().lower()
     version_str = f"{version}_{method}_{expr}"
 
     root = get_project_root()

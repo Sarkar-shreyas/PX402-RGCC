@@ -50,8 +50,7 @@ def build_config(config: dict) -> RGConfig:
     model = str(check_required_info(config, "engine.model")).strip().lower()
     method = str(check_required_info(config, "engine.method")).strip().lower()
     resample = str(check_required_info(config, "engine.resample")).strip().lower()
-    expression = str(check_required_info(config, "engine.expr")).strip().lower()
-    expr = expression[0]
+    expr = str(check_required_info(config, "engine.expr")).strip().lower()
     symmetrise = int(get_nested_data(config, "engine.symmetrise", 1))
     seed = int(check_required_info(config, "rg_settings.seed"))
     steps = int(check_required_info(config, "rg_settings.steps"))
