@@ -1,0 +1,35 @@
+main:
+  version: "fp_iqhe"
+  id: "dev"
+  type: "fp"
+  output_folder: ""
+
+engine:
+  model: "iqhe"
+  method: "analytic"
+  resample: "i"
+  expr: "shaw"
+  symmetrise: 1
+
+rg_settings:
+  seed: 12345
+  steps: 9
+  samples: 1.0e7
+  matrix_batch_size: 1.0e5
+
+data_settings:
+  inputs: [1.0, 0.0]
+  outputs: [8]
+  shifts: [0.003, 0.005, 0.007, 0.009]
+
+parameter_settings:
+  z:
+    bins: 50000
+    range: [-25.0, 25.0]
+  tprime:
+      bins: 1000
+      range: [0.0, 1.0]
+
+convergence:
+  msd_tol: 1.0e-3
+  std_tol: 5.0e-4
