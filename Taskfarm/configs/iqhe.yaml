@@ -14,8 +14,8 @@ engine:
 rg_settings:
   seed: 12345
   steps: 9
-  samples: 1.0e7
-  matrix_batch_size: 1.0e5
+  samples: 32000000
+  matrix_batch_size: 100000
 
 data_settings:
   inputs: [1.0, 0.0]
