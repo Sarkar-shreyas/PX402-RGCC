@@ -6,6 +6,9 @@
 set -euo pipefail
 
 basedir="$(cd "$SLURM_SUBMIT_DIR/.."&&pwd)" # Our root directory
+module purge
+module load GCC/13.3.0
+source "$basedir/.venv/bin/activate"
 export PYTHONPATH="$basedir/code:$PYTHONPATH" # Set pythonpath so we can define the function below
 # Config parser
 get_yaml(){
@@ -141,7 +144,7 @@ for step in $(seq 0 $(( NUM_RG_ITERS - 1 ))); do
         --output=../job_outputs/bootstrap/rg_hist_RG${step}_%A.out \
         --error=../job_logs/bootstrap/rg_hist_RG${step}_%A.err \
         "$scriptsdir/rg_hist_manager.sh" \
-        "$UPDATED_CONFIG" "$TYPE" "$VERSIONSTR" "$N" "$step" "$SEED" "$RESAMPLE" "$SYMMETRISE")
+        "$UPDATED_CONFIG" "$TYPE" "$VERSIONSTR" "$N" "$step" "$SEED" "$SYMMETRISE")
     echo "----------------------------------------------------------------------------------------------------------------"
     echo " [$(date '+%Y-%m-%d %H:%M:%S')]: Submitted histogram job for RG step $step  : $hist_job (after ${gen_job}) "
     # Keep track of the job ID for setting up dependencies in order

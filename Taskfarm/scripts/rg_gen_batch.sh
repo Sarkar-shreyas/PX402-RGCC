@@ -23,13 +23,12 @@ SEED="$6" # Starting seed
 METHOD="$7" # Flag to determine what method to use
 EXPR="$8" # Flag to determine which expression to use
 INITIAL="$9" # Flag to generate starting distribution/histograms or not
-EXISTING_T_FILE="$10" # Placeholder var to point to data file for non-initial RG steps
+EXISTING_T_FILE="${10:-}" # Placeholder var to point to data file for non-initial RG steps
 SHIFT="${11-}" # Takes in the shift value if running EXP, mostly for folder location
-NUM_BATCHES=$((SLURM_ARRAY_TASK_MAX + 1)) # Number of batches to generate/process data over, same as array size
+NUM_BATCHES=$(( SLURM_ARRAY_TASK_MAX + 1 )) # Number of batches to generate/process data over, same as array size
 BATCH_SIZE=$(( N / NUM_BATCHES )) # How many samples should be calculated per batch
 TASK_ID=${SLURM_ARRAY_TASK_ID} # Array task ID for easy tracking
 export RG_CONFIG=$UPDATED_CONFIG
-
 # Libraries needed
 module purge
 module load GCC/13.3.0 SciPy-bundle/2024.05
@@ -65,7 +64,7 @@ mkdir -p "$joboutdir" "$jobdatadir" "$batchdir"
 mkdir -p "$tempbatchdir"
 exec >"$joboutdir/${SLURM_JOB_NAME}_JOB${SLURM_ARRAY_JOB_ID}_TASK${TASK_ID}.out" # Redirect outputs to be within their own folders, together with the data they produce
 exec 2>"$logsdir/${SLURM_JOB_NAME}_JOB${SLURM_ARRAY_JOB_ID}_TASK${TASK_ID}.err" # Redirect error logs to be within their own folders for easy grouping
-
+source "$basedir/.venv/bin/activate"
 # General job information
 echo "==================================================="
 echo "                  SLURM JOB INFO "
@@ -139,7 +138,7 @@ else
     "$batchsubdir" \
     "$INITIAL" \
     "$RG_STEP" \
-    "$JOB_SEED" \
+    "$JOB_SEED"
 fi
 
 # Move batch back to shared storage

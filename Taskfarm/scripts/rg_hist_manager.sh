@@ -19,9 +19,8 @@ VERSION="$3" # Version for tracking changes and matrix used
 N="$4" # Target number of samples
 RG_STEP="$5" # The RG step we're currently at
 SEED="$6" # Starting seed
-RESAMPLE="$7" # Flag to determine which type of resample to use
-SYMMETRISE="$8" # Flag to determine whether to symmetrise data or not
-SHIFT="${9-}" # Takes in the shift value if running EXP, to change histogram domain
+SYMMETRISE="$7" # Flag to determine whether to symmetrise data or not
+SHIFT="${8-}" # Takes in the shift value if running EXP, to change histogram domain
 export RG_CONFIG=$UPDATED_CONFIG
 
 # Directories we're using
@@ -58,6 +57,11 @@ mkdir -p "$joboutdir" "$jobdatadir" "$batchdir" "$histdir" "$statsdir" "$launder
 exec >"$joboutdir/${SLURM_JOB_NAME}_JOB${SLURM_JOB_ID}.out" # Redirect outputs to be within their own folders, together with the data they produce
 exec 2>"$logsdir/${SLURM_JOB_NAME}_JOB${SLURM_JOB_ID}.err" # Redirect error logs to be within their own folders for easy grouping
 
+# Libraries needed
+module purge
+module load GCC/13.3.0 SciPy-bundle/2024.05
+
+source "$basedir/.venv/bin/activate"
 NUM_BATCHES=$(find "$batchdir" -maxdepth 1 -type d -name "batch_*" | wc -l) # Number of batches of data to generate/process, same as array size
 
 # If no batch folders were detected, the gen job went wrong so just terminate early
@@ -111,10 +115,6 @@ echo " Laundered t directory : $laundereddir"
 echo " Previous z hist       : ${PREV_Z_HIST:-None}"
 echo "===================================================="
 echo ""
-
-# Libraries needed
-module purge
-module load GCC/13.3.0 SciPy-bundle/2024.05
 
 # Make sure the system recognises the python path to ensure relative imports proceed without issue
 export PYTHONPATH="$codedir:$PYTHONPATH"
@@ -237,7 +237,6 @@ if [[ "$SYMMETRISE" == "1" ]]; then
         "$N" \
         "$OUTPUT_Z" \
         "$symmetrised_z" \
-        "$RESAMPLE" \
         "$JOB_SEED"
 
     sampling_hist="$symmetrised_z"
