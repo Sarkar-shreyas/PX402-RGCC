@@ -11,7 +11,7 @@ from numpy.polynomial import polynomial
 # from scipy.optimize import curve_fit
 from scipy.interpolate import UnivariateSpline
 from scipy.stats import norm
-from .utilities import launder
+from source.utilities import launder
 
 
 def std_derivative(
@@ -52,6 +52,8 @@ def estimate_z_peak(
     z_hist: np.ndarray,
     z_bins: np.ndarray,
     z_bin_centers: np.ndarray,
+    rng: np.random.Generator,
+    sampler: str,
 ) -> tuple:
     """Estimate peak location from a binned z-histogram using bootstrapped fitting.
 
@@ -101,7 +103,7 @@ def estimate_z_peak(
     bin_edges = z_bins[top_indices]
     # print(f"Min bin = {bin_edges[0]}, Max bin = {bin_edges[-1]}")
     y_values = z_hist[top_indices]
-    sample = launder(10000000, y_values, bin_edges, bin_centers)
+    sample = launder(10000000, y_values, bin_edges, bin_centers, rng, sampler)
     if len(y_values) == 0:
         raise ValueError("The y values array is empty.")
     overall_peak, _ = norm.fit(sample)
@@ -125,154 +127,6 @@ def estimate_z_peak(
     # print(f"Min mean = {float(min(mus))}, Max mean = {float(max(mus))}, std = {std}")
     # print(f"Avg peak = {avg_mean}, Overall peak = {overall_peak}")
     return (min_mean, max_mean, overall_peak)
-
-    # Different approach, grows about center peak till 5% of probability mass is obtained. Used this in previous get_peak_from_subset code.
-
-    # Get densities
-    # z_sample = launder(int(1e7), z_hist, z_bins, z_bin_centers)
-    # plt.figure("test_fit")
-    # z_density = get_density(z_hist, z_bins)
-
-    # # Restrict calculations within [-25,25]
-    # z_min = -25.0
-    # z_max = 25.0
-    # mask = np.logical_and((z_bin_centers >= z_min), (z_bin_centers <= z_max))
-
-    # # Slice out the values within the window for analysis
-    # centers = z_bin_centers[mask]
-    # z_data = z_density[mask]
-
-    # # Get bin width, single since bins are uniform
-    # bin_width = np.diff(z_bins)[0]
-    # bin_masses = z_data * bin_width  # Get masses
-
-    # # Check total mass, then calculate what 5% of that is.
-    # total_mass = np.sum(bin_masses)
-    # # print(f"Total bin mass of Q_z is {total_mass:.3f}")
-    # top_5_percent = 0.05 * total_mass
-
-    # # Store the bin indexes we care about - center and the 2 sides for later growth
-    # peak_bin = np.argmax(z_data)
-    # left_bin = peak_bin
-    # right_bin = peak_bin
-    # final_bin = len(z_data) - 1
-    # # Hold the mass of our current bin, will grow until 5%
-    # current_bin_mass = bin_masses[peak_bin]
-
-    # # We keep going until we hit 5%, or we hit the tails for whatever reason [thats a different problem then].
-    # while current_bin_mass < top_5_percent and (left_bin > 0 or right_bin < final_bin):
-    #     # Now we decide whether to go left, or right. Check with some booleans
-    #     move_left = left_bin > 0
-    #     move_right = right_bin < final_bin
-
-    #     # If both directions are safe, we'll decide by values.
-    #     if move_left and move_right:
-    #         left_val = z_data[left_bin - 1]
-    #         right_val = z_data[right_bin + 1]
-    #         # If left has higher or equivalent value, we'll move left. Slight bias choosing to go left if equivalent, but shouldn't matter too much.
-    #         if left_val >= right_val:
-    #             left_bin -= 1
-    #             current_bin_mass += bin_masses[left_bin]
-    #         else:
-    #             right_bin += 1
-    #             current_bin_mass += bin_masses[right_bin]
-    #     elif move_left:
-    #         # If only left is safe, of course we go left
-    #         left_bin -= 1
-    #         current_bin_mass += bin_masses[left_bin]
-    #     else:
-    #         # If only right is safe, of course we go right
-    #         right_bin += 1
-    #         current_bin_mass += bin_masses[right_bin]
-
-    # # print(f"{current_bin_mass:.3f} percent of bin mass accumulated.")
-
-    # # Slice out the values corresponding to the top 5%
-    # z_tip_values = centers[left_bin : right_bin + 1]
-
-    # # density_tip_values = z_data[left_bin : right_bin + 1]
-    # # tip_weights = density_tip_values * bin_width
-    # tip_weights = bin_masses[left_bin : right_bin + 1]
-    # # Compute weighted mean
-    # mu = np.sum(z_tip_values * tip_weights) / np.sum(tip_weights)
-    # print(
-    #     f"The top 5 % has mean = {mu} with min = {z_tip_values[0]} and max = {z_tip_values[-1]}"
-    # )
-    # return float(mu)
-    # bin_widths = np.diff(z_bins)  # Get widths
-    # bin_masses = z_hist * bin_widths  # Get masses
-    # z_density = get_density(z_hist, z_bins)
-    # # z_min = -25.0
-    # # z_max = 25.0
-    # # mask = np.logical_and((z_bin_centers >= z_min), (z_bin_centers <= z_max))
-    # # Slice out the values within the window for analysis
-    # centers = z_bin_centers
-    # z_data = z_density
-    # bins = z_bins
-    # # Get bin width, single since bins are uniform
-    # bin_width = np.diff(bins)[0]
-    # bin_masses = z_data * bin_width  # Get masses
-    # # Check total mass, then calculate what 5% of that is.
-    # total_mass = np.sum(bin_masses)
-    # # print(f"Total bin mass of Q_z is {total_mass:.3f}")
-    # top_5_percent = 0.05 * total_mass
-
-    # # Store the bin indexes we care about - center and the 2 sides for later growth
-    # peak_bin = np.argmax(z_data)
-    # left_bin = peak_bin
-    # right_bin = peak_bin
-    # final_bin = len(z_data) - 1
-    # # Hold the mass of our current bin, will grow until 5%
-    # current_bin_mass = bin_masses[peak_bin]
-
-    # # We keep going until we hit 5%, or we hit the tails for whatever reason [thats a different problem then].
-    # while current_bin_mass < top_5_percent and (left_bin > 0 or right_bin < final_bin):
-    #     # Now we decide whether to go left, or right. Check with some booleans
-    #     move_left = left_bin > 0
-    #     move_right = right_bin < final_bin
-
-    #     # If both directions are safe, we'll decide by values.
-    #     if move_left and move_right:
-    #         left_val = z_data[left_bin - 1]
-    #         right_val = z_data[right_bin + 1]
-    #         # If left has higher or equivalent value, we'll move left. Slight bias choosing to go left if equivalent, but shouldn't matter too much.
-    #         if left_val >= right_val:
-    #             left_bin -= 1
-    #             current_bin_mass += bin_masses[left_bin]
-    #         else:
-    #             right_bin += 1
-    #             current_bin_mass += bin_masses[right_bin]
-    #     elif move_left:
-    #         # If only left is safe, of course we go left
-    #         left_bin -= 1
-    #         current_bin_mass += bin_masses[left_bin]
-    #     else:
-    #         # If only right is safe, of course we go right
-    #         right_bin += 1
-    #         current_bin_mass += bin_masses[right_bin]
-
-    # # print(f"{current_bin_mass:.3f} percent of bin mass accumulated.")
-
-    # # Now that we know which bins matter, we get their centers, and the z values at those edges.
-    # leftmost_bin = bins[left_bin]
-    # rightmost_bin = bins[right_bin + 1]
-    # # Use a sample from the distribution to prevent us from storing absurdly large amounts of raw data, maybe inaccurate but we'll see.
-    # samples = launder(1 * 10**7, z_data, bins, centers)
-    # # And now we slice out the z values we need
-    # hist_mask = np.logical_and((samples >= leftmost_bin), (samples < rightmost_bin))
-    # top_5_percent_values = samples[hist_mask]
-    # # print(len(top_5_percent_values))
-    # # Shuffle the data so its randomly ordered
-    # np.random.shuffle(top_5_percent_values)
-    # # Now we split it into 10 equal sized subsets, shuffling before hand lets array_splits order slicing be fine.
-    # subsets = np.array_split(top_5_percent_values, 10)
-    # fitted_mus = []
-    # for i in range(len(subsets)):
-    #     mu, sigma = norm.fit(subsets[i])
-    #     fitted_mus.append(float(mu))
-
-    # # print(fitted_mus)
-    # return float(np.mean(fitted_mus))
 
 
 # ---------- Fitting helper ---------- #
