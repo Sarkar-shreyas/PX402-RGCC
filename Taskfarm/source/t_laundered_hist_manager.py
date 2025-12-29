@@ -7,18 +7,19 @@ histogram archives and append new t samples to existing archives.
 
 import numpy as np
 
-from .utilities import (
-    T_BINS,
-    T_RANGE,
+from source.utilities import (
     save_data,
 )
 import sys
+from source.config import get_rg_config
 
 
 def construct_initial_histogram(
     data_file: str,
     output_filename: str,
     var: str,
+    bins: int,
+    range: tuple,
 ) -> None:
     """Construct the initial histogram for laundered t data.
 
@@ -35,8 +36,8 @@ def construct_initial_histogram(
     if data.size == 0:
         raise FileNotFoundError(f"Could not load data from {data_file}")
     if var.lower() == "t" or var.lower() == "g":
-        range = T_RANGE
-        bins = T_BINS
+        range = range
+        bins = bins
 
     hist_vals, bin_edges = np.histogram(data, bins, range)
     bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
@@ -79,7 +80,9 @@ def append_to_histogram(
     # t_bin_edges = t_data["binedges"]
     # t_bin_centers = t_data["bincenters"]
 
-    data_counts, _ = np.histogram(data, existing_bin_edges, range, density=False)
+    data_counts, _ = np.histogram(
+        data, bins=existing_bin_edges, range=range, density=False
+    )
     assert data_counts.size == existing_vals.size
     existing_vals += data_counts
     save_data(existing_vals, existing_bin_edges, existing_bin_centers, output_file)
@@ -103,29 +106,21 @@ if __name__ == "__main__":
         raise SystemExit(
             "Usage: t_laundered_histogram_manager.py PROCESS INPUT_T_FILE EXISTING_T_FILE OUTPUT_T_FILE RG_STEP"
         )
-
+    rg_config = get_rg_config()
+    bins = rg_config.t_bins
+    range = rg_config.t_range
     if process == 0:
         # This means we're going to be creating the first histograms of t and z
         print("-" * 100)
         print(f"Constructing initial input t histogram for RG step {rg_step}")
-        construct_initial_histogram(input_t_file, output_t_file, "t")
+        construct_initial_histogram(input_t_file, output_t_file, "t", bins, range)
         print(f"Input t histogram saved to {output_t_file}")
-        # os.remove(input_t_file)
-        # os.remove(input_g_file)
-        # os.remove(input_z_file)
         print("-" * 100)
     elif process == 1:
         # This means we're just going to be appending the t data to the existing histograms
         print("-" * 100)
         print(f"Appending data to existing histogram for RG step {rg_step}")
-        append_to_histogram(input_t_file, existing_t_file, output_t_file, T_RANGE)
+        append_to_histogram(input_t_file, existing_t_file, output_t_file, range)
         print(f"Input t histogram saved to {output_t_file}")
 
-        # Delete old files once done to prevent buildup
-        # os.remove(input_t_file)
-        # os.remove(input_g_file)
-        # os.remove(input_z_file)
-        # os.remove(existing_t_file)
-        # os.remove(existing_g_file)
-        # os.remove(existing_z_file)
         print("-" * 100)

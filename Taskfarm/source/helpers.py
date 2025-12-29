@@ -29,18 +29,19 @@ import numpy as np
 import sys
 from time import time
 from datetime import datetime, timezone
-from .utilities import (
+from source.utilities import (
     save_data,
     launder,
     center_z_distribution,
     convert_z_to_t,
     convert_t_to_z,
+    build_rng,
 )
 
 if __name__ == "__main__":
-    if len(sys.argv) != 6:
+    if len(sys.argv) != 7:
         raise SystemExit(
-            " Usage: helpers.py PROCESS ARRAY_SIZE INPUT_FILE OUTPUT_FILE SAMPLER \n"
+            " Usage: helpers.py PROCESS ARRAY_SIZE INPUT_FILE OUTPUT_FILE RESAMPLE SEED \n"
             " PROCESS 0 : Launder from z-histogram + Convert to t \n"
             " PROCESS 1 : Symmetrise z-histogram \n"
             " PROCESS 2 : Launder from t-histogram \n"
@@ -51,8 +52,10 @@ if __name__ == "__main__":
     input_file = sys.argv[3].strip()
     output_file = sys.argv[4].strip()
     sampler = sys.argv[5].strip().lower()
+    seed = int(sys.argv[6].strip())
     start = time()
     date = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    rng = build_rng(seed)
     if process == 0:
         # Launder from input z histogram and convert to t data
         print("-" * 100)
@@ -62,7 +65,7 @@ if __name__ == "__main__":
         input_bin_edges = input_data["binedges"]
         input_bin_centers = input_data["bincenters"]
         laundered_data = launder(
-            array_size, input_hist, input_bin_edges, input_bin_centers, sampler
+            array_size, input_hist, input_bin_edges, input_bin_centers, rng, sampler
         )
         laundered_t = convert_z_to_t(laundered_data)
 
@@ -92,7 +95,7 @@ if __name__ == "__main__":
         input_bin_edges = input_data["binedges"]
         input_bin_centers = input_data["bincenters"]
         laundered_t = launder(
-            array_size, input_hist, input_bin_edges, input_bin_centers, sampler
+            array_size, input_hist, input_bin_edges, input_bin_centers, rng, sampler
         )
         np.save(output_file, laundered_t)
         print(f"Laundering completed in {time() - start:.3f} seconds")

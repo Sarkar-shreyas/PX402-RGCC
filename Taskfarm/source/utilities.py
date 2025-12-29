@@ -14,17 +14,17 @@ from datetime import datetime, timezone
 
 # ---------- Constants ---------- #
 # N: int = 1 * (10**6)
-K: int = 10
-T_BINS: int = 1000
-Z_BINS: int = 100000
-Z_RANGE: tuple = (-50.0, 50.0)
-Z_PERTURBATION: float = 0.007
-DIST_TOLERANCE: float = 0.001
-STD_TOLERANCE: float = 0.0005
-T_RANGE: tuple = (0.0, 1.0)
-SAMPLER: dict = {"cdf": 0, "rej": 1}
-EXPRESSION: str = "Shaw"
-G_TOL: float = 1.39e-11
+# K: int = 10
+# T_BINS: int = 1000
+# Z_BINS: int = 100000
+# Z_RANGE: tuple = (-50.0, 50.0)
+# Z_PERTURBATION: float = 0.007
+# DIST_TOLERANCE: float = 0.001
+# STD_TOLERANCE: float = 0.0005
+# T_RANGE: tuple = (0.0, 1.0)
+# SAMPLER: dict = {"cdf": 0, "rej": 1}
+# EXPRESSION: str = "Shaw"
+# G_TOL: float = 1.39e-11
 # EXPRESSION = "Shreyas"
 # EXPRESSION = "Cain"
 # EXPRESSION = "Jack"
@@ -67,9 +67,15 @@ def get_current_date(format: str = "full") -> str:
 
 
 # ---------- Data generators ---------- #
+def build_rng(seed: int) -> np.random.Generator:
+    return np.random.default_rng(seed=seed)
 
 
-def generate_random_phases(N: int, i: int = 4) -> np.ndarray:
+def generate_random_phases(
+    N: int,
+    rng: np.random.Generator,
+    i: int = 4,
+) -> np.ndarray:
     """Generate random phase angles for RG transformation.
 
     Creates an array of uniformly distributed random phases in [0, 2π]
@@ -85,11 +91,11 @@ def generate_random_phases(N: int, i: int = 4) -> np.ndarray:
     numpy.ndarray
         Array of shape (N, i) containing random phases in [0, 2π].
     """
-    phi_sample = np.random.uniform(0, 2 * np.pi, (N, i))
+    phi_sample = rng.uniform(0, 2 * np.pi, (N, i))
     return phi_sample
 
 
-def generate_initial_t_distribution(N: int) -> np.ndarray:
+def generate_initial_t_distribution(N: int, rng: np.random.Generator) -> np.ndarray:
     """Generate initial amplitude distribution P(t).
 
     Creates an initial distribution of amplitudes t with the property that
@@ -107,13 +113,17 @@ def generate_initial_t_distribution(N: int) -> np.ndarray:
         Array of N amplitude values t = √g where g ~ U[0,1].
     """
     # g_sample = np.random.uniform(G_TOL, 1.0 - G_TOL, N)
-    g_sample = np.linspace(0.0, 1.0, N)
-    # g_sample = np.random.uniform(0.0, 1.0, N)
+    # g_sample = np.linspace(0.0, 1.0, N)
+    g_sample = rng.uniform(0.0, 1.0, N)
     t_dist = np.sqrt(g_sample)
     return t_dist
 
 
-def extract_t_samples(t: np.ndarray, N: int) -> np.ndarray:
+def extract_t_samples(
+    t: np.ndarray,
+    N: int,
+    rng: np.random.Generator,
+) -> np.ndarray:
     """Generate a matrix of amplitude samples for the RG transformation.
 
     Draws 5 independent sets of N samples from the given P(t) distribution
@@ -131,12 +141,13 @@ def extract_t_samples(t: np.ndarray, N: int) -> np.ndarray:
     numpy.ndarray
         Array of shape (N, 5) containing the sampled amplitude values.
     """
-    t_sample = t[np.random.randint(0, N, size=(N, 5))]
+    t_sample = t[rng.integers(0, N, size=(N, 5))]
     return t_sample
 
 
+# ---------- t prime computation ---------- #
 def solve_matrix_eq(
-    ts: np.ndarray, phis: np.ndarray, batch_size: int = 100000
+    ts: np.ndarray, phis: np.ndarray, batch_size: int = 100000, output_index: int = 8
 ) -> np.ndarray:
     """
     Generates the A matrix from the given t, r and phi matrices
@@ -223,12 +234,11 @@ def solve_matrix_eq(
 
     x = np.linalg.solve(A, b)
 
-    return x[:, 8]
+    return x[:, output_index]
 
 
-# ---------- t prime computation ---------- #
 def generate_t_prime(
-    t: np.ndarray, phi: np.ndarray, expression: str = EXPRESSION
+    t: np.ndarray, phi: np.ndarray, expression: str = "shaw"
 ) -> np.ndarray:
     """Generate next-step amplitudes using the RG transformation.
 
@@ -265,7 +275,7 @@ def generate_t_prime(
     r4 = np.sqrt(1 - t4 * t4)
     r5 = np.sqrt(1 - t5 * t5)
 
-    if expression.strip().lower() == "j":
+    if expression.strip().lower()[0] == "j":
         numerator = (
             -np.exp(1j * phi2) * r3 * t1 * t4
             - np.exp(1j * (phi3 + phi2)) * t2 * t4
@@ -294,7 +304,7 @@ def generate_t_prime(
     #     denominator = (r3 - np.exp(1j * phi3) * r1 * r5) * (
     #         r3 - np.exp(1j * phi2) * r2 * r4
     #     ) + (t3 + np.exp(1j * phi4) * t4 * t5) * (t3 + np.exp(1j * phi1) * t1 * t2)
-    elif expression.strip().lower() == "c":
+    elif expression.strip().lower()[0] == "c":
         numerator = (
             +t1 * t5 * (r2 * r3 * r4 * np.exp(1j * phi3) - 1)
             + t2
@@ -307,7 +317,7 @@ def generate_t_prime(
         denominator = +(r3 - r2 * r4 * np.exp(1j * phi3)) * (
             r3 - r1 * r5 * np.exp(1j * phi2)
         ) + (t3 - t4 * t5 * np.exp(1j * phi4)) * (t3 - t1 * t2 * np.exp(1j * phi1))
-    elif expression.strip().lower() == "s":
+    elif expression.strip().lower()[0] == "s":
         # Shaw's form (2023 thesis paper)
         numerator = (
             +(t1 * t5)
@@ -326,7 +336,7 @@ def generate_t_prime(
             - (t1 * t2 * t4 * t5 * np.exp(1j * (phi1 + phi4)))
             + (t3 * t4 * t5 * np.exp(1j * phi4))
         )
-    elif expression.strip().lower() == "t":
+    elif expression.strip().lower()[0] == "t":
         numerator = (
             -t1 * t5
             + (np.exp(1j * (phi1 + phi4 - phi2)) * (r1 * r3 * r5 * t2 * t4))
@@ -485,12 +495,22 @@ def convert_t_to_z(t: np.ndarray) -> np.ndarray:
 
 
 # ---------- Sampling helpers decoupled from P_D ---------- #
+def normalise_samplers(sampler: str) -> str:
+    if sampler.strip().lower() in ("i", "inv", "cdf", "inverse"):
+        return "i"
+    elif sampler.strip().lower() in ("r", "rej", "reject", "rejection"):
+        return "r"
+    else:
+        raise ValueError(f"Invalid sampling method entered: {sampler}")
+
+
 def launder(
     N: int,
     hist_vals: np.ndarray,
     bin_edges: np.ndarray,
     bin_centers: np.ndarray,
-    sampler: str = "i",
+    rng: np.random.Generator,
+    sampler_input: str = "i",
 ) -> np.ndarray:
     """Perform laundering sampling decoupled from the ProbabilityDistribution class.
 
@@ -498,21 +518,27 @@ def launder(
     histogram values to produce `N` continuous samples drawn from the
     histogram's implied distribution.
     """
+    sampler = normalise_samplers(sampler_input)
     if sampler.strip().lower() == "i":
-        return inverse_cdf_sampler(N, hist_vals, bin_edges)
+        return inverse_cdf_sampler(N, hist_vals, bin_edges, rng)
     elif sampler.strip().lower() == "r":
-        return rejection_sampler(N, hist_vals, bin_edges, bin_centers)
+        return rejection_sampler(N, hist_vals, bin_edges, bin_centers, rng)
     else:
         raise KeyError("Invalid sampling method entered")
 
 
 def inverse_cdf_sampler(
-    N: int, hist_vals: np.ndarray, bin_edges: np.ndarray
+    N: int,
+    hist_vals: np.ndarray,
+    bin_edges: np.ndarray,
+    rng: np.random.Generator,
 ) -> np.ndarray:
     # Inverse CDF method
-    u = np.random.random(size=N)  # random indices
-    cdf = hist_vals.cumsum()
-    cdf = cdf / cdf[-1]
+    u = rng.random(size=N)  # random values
+    densities = get_density(hist_vals, bin_edges)
+    widths = np.diff(bin_edges)
+    cdf = np.cumsum(densities * widths)
+    # cdf = cdf / cdf[-1]
     # Map it into our cdf histogram, will work fine because our cdf is normalised above
     index = np.searchsorted(cdf, u, side="right") - 1
     index = np.clip(index, 0, len(hist_vals) - 1)  # Ensure we're within bounds
@@ -526,7 +552,11 @@ def inverse_cdf_sampler(
 
 
 def rejection_sampler(
-    N: int, hist_vals: np.ndarray, bin_edges: np.ndarray, bin_centers: np.ndarray
+    N: int,
+    hist_vals: np.ndarray,
+    bin_edges: np.ndarray,
+    bin_centers: np.ndarray,
+    rng: np.random.Generator,
 ) -> np.ndarray:
     # Launder a.k.a rejection method
     # Get the bin widths, and total number of bins
@@ -556,8 +586,8 @@ def rejection_sampler(
         # Set the batch size to be between 10000 and 1000000, but use remaining if its in the bounds
         batch_size = max(min_batch_size, min(remaining, max_batch_size))
         # Random x and y draws within the domains of the existing dataset
-        x = np.random.uniform(domain_min, domain_max, batch_size)
-        y = np.random.uniform(0, max_height, batch_size)
+        x = rng.uniform(domain_min, domain_max, batch_size)
+        y = rng.uniform(0, max_height, batch_size)
 
         # Check which bin the x value falls into
         bin_number = np.ceil((x - domain_min) / bin_width).astype(int)
@@ -688,7 +718,9 @@ def hist_moments(hist_vals: np.ndarray, bins: np.ndarray) -> tuple:
 
 
 # ---------- Distribution manipulation helpers ---------- #
-def center_z_distribution(z_hist: np.ndarray, z_bins: np.ndarray) -> np.ndarray:
+def center_z_distribution(
+    z_hist: np.ndarray, z_bins: np.ndarray | None = None
+) -> np.ndarray:
     """Symmetrize and renormalize a binned Q(z) distribution in-place.
 
     The function enforces the physical symmetry Q(z) = Q(-z) by averaging the
@@ -720,7 +752,7 @@ def center_z_distribution(z_hist: np.ndarray, z_bins: np.ndarray) -> np.ndarray:
 
 
 # ---------- Nu calculator ---------- #
-def calculate_nu(slope: float, rg_steps: int = K) -> float:
+def calculate_nu(slope: float, rg_steps: int) -> float:
     """Calculate the critical exponent nu from a fitted slope.
 
     Parameters

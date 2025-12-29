@@ -8,18 +8,17 @@ histogram archive.
 
 import numpy as np
 
-from .utilities import (
-    T_BINS,
-    T_RANGE,
-    Z_BINS,
-    Z_RANGE,
+from source.utilities import (
     save_data,
 )
+from source.config import get_rg_config
 import sys
 from datetime import datetime, timezone
 
 
-def _bin_and_range_manager(var: str, shift: str | None) -> tuple:
+def _bin_and_range_manager(
+    var: str, hist_vars: dict, shift: str | None = None
+) -> tuple:
     """Select bin count and range for variable 't' or 'z'.
 
     Parameters
@@ -41,23 +40,25 @@ def _bin_and_range_manager(var: str, shift: str | None) -> tuple:
     ValueError
         If `var` is not one of 't' or 'z'.
     """
-    if var.strip().lower() == "t":
-        return (T_BINS, T_RANGE)
-    elif var.strip().lower() == "z":
-        if not shift:
-            return (Z_BINS, Z_RANGE)
-        else:
-            shift_val = float(shift.strip())
-            min_z, max_z = Z_RANGE
-            min_z += shift_val
-            max_z += shift_val
-            return (Z_BINS, (min_z, max_z))
-    else:
-        raise ValueError(f"Invalid variable {var} entered.")
+    if var != "t" and var != "z":
+        raise ValueError(f"Invalid variable entered: {var}. Expected 't' or 'z'")
+    bins = hist_vars[var]["bins"]
+    range = hist_vars[var]["range"]
+    if var == "z" and shift is not None:
+        shift_val = float(shift.strip())
+        min_z, max_z = range
+        min_z += shift_val
+        max_z += shift_val
+        range = (min_z, max_z)
+    return bins, range
 
 
 def construct_initial_histogram(
-    data: np.ndarray, output_filename: str, var: str, shift: str | None
+    data: np.ndarray,
+    output_filename: str,
+    var: str,
+    hist_vars: dict,
+    shift: str | None = None,
 ) -> None:
     """Construct the initial histogram for the given data.
 
@@ -75,7 +76,8 @@ def construct_initial_histogram(
     # Drop nan values
     data = data[np.isfinite(data)]
     # Get bins and range for this variable and shift
-    bins, range = _bin_and_range_manager(var, shift)
+    var = var.strip().lower()
+    bins, range = _bin_and_range_manager(var, hist_vars, shift)
 
     hist_vals, bin_edges = np.histogram(data, bins=bins, range=range)
     bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
@@ -91,6 +93,7 @@ def append_to_histogram(
     input_data: np.ndarray,
     existing_file: str,
     output_file: str,
+    range: tuple,
 ) -> None:
     """Append input data to an existing histogram.
 
@@ -114,7 +117,9 @@ def append_to_histogram(
     existing_bin_centers = existing_data["bincenters"]
 
     # Compute counts of input data. Bins should be the same so it doesn't need referencing.
-    data_counts, _ = np.histogram(input_data, bins=existing_bin_edges, density=False)
+    data_counts, _ = np.histogram(
+        input_data, bins=existing_bin_edges, range=range, density=False
+    )
     if data_counts.size != existing_vals.size:
         raise ValueError(
             f"Histogram sizes mismatched: Input: {data_counts.size}, Existing: {existing_vals.size}"
@@ -134,9 +139,13 @@ if __name__ == "__main__":
             " PROCESS 1 : Append input data to existing histogram "
         )
     process = int(sys.argv[1].strip())
-    var_name = sys.argv[2].strip()
+    var_name = sys.argv[2].strip().lower()
     input_file = sys.argv[3].strip()
-
+    rg_config = get_rg_config()
+    hist_vars = {
+        "z": {"bins": rg_config.z_bins, "range": rg_config.z_range},
+        "t": {"bins": rg_config.t_bins, "range": rg_config.t_range},
+    }
     if process == 0:
         # Then we're making the initial histogram, so there's no existing file input
         output_file = sys.argv[4].strip()
@@ -145,7 +154,7 @@ if __name__ == "__main__":
         if input_length == 7:
             shift = sys.argv[6].strip()
         else:
-            shift = ""
+            shift = None
     elif process == 1:
         # Then we're appending to an existing histogram
         existing_file = sys.argv[4].strip()
@@ -167,13 +176,14 @@ if __name__ == "__main__":
     )
     data = np.load(input_file)
     if process == 0:
-        construct_initial_histogram(data, output_file, var_name, shift)
+        construct_initial_histogram(data, output_file, var_name, hist_vars, shift)
         print(f"Histogram saved to {output_file}")
     else:
         if not existing_file:
             raise SystemExit(f"No existing histogram was found for mode {mode}")
         else:
-            append_to_histogram(data, existing_file, output_file)
+            range = hist_vars[var_name]["range"]
+            append_to_histogram(data, existing_file, output_file, range)
             print(f"Appended input data to existing data at {existing_file}")
 
     print("-" * 100)

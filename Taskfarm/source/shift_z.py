@@ -13,15 +13,17 @@ Where `SHIFT` is a floating-point perturbation added to all z samples.
 """
 
 import numpy as np
-from .utilities import launder, convert_z_to_t
+from source.utilities import launder, convert_z_to_t, build_rng
 import sys
 
 if __name__ == "__main__":
     num_samples = int(sys.argv[1].strip())
     input_file = sys.argv[2].strip()
     output_file = sys.argv[3].strip()
-    shift = float(sys.argv[4].strip())
-
+    seed = int(sys.argv[4].strip())
+    sampler = sys.argv[5].strip().lower()
+    shift = float(sys.argv[6].strip())
+    rng = build_rng(seed)
     perturbation = shift
 
     sym_z = np.load(input_file)
@@ -32,7 +34,9 @@ if __name__ == "__main__":
     print("-" * 100)
     print(f"Loaded z histogram from {input_file}")
 
-    sym_sample = launder(num_samples, sym_hist_vals, sym_bins, sym_centers)
+    sym_sample = launder(
+        num_samples, sym_hist_vals, sym_bins, sym_centers, rng, sampler
+    )
 
     print(f"Laundered {num_samples} samples from loaded z histogram")
 

@@ -22,56 +22,59 @@ See the `if __name__ == "__main__"` block for CLI usage details:
 import os
 import sys
 import numpy as np
-from .utilities import (
+from source.utilities import (
     generate_initial_t_distribution,
     generate_random_phases,
     extract_t_samples,
     rg_data_workflow,
+    build_rng,
 )
+
 
 if __name__ == "__main__":
     # Load input params, checking if we're starting RG steps or continuing from an input sample
-    if len(sys.argv) == 7:
+    if len(sys.argv) == 8:
         array_size = int(sys.argv[1].strip())
         output_dir = sys.argv[2].strip()
         initial = int(sys.argv[3].strip())
         rg_step = int(sys.argv[4].strip())
-        method = sys.argv[5].strip().lower()
-        expr = sys.argv[6].strip().lower()
+        seed = int(sys.argv[5].strip())
+        method = sys.argv[6].strip().lower()
+        expr = sys.argv[7].strip().lower()
         existing_t_file = "None"
-    elif len(sys.argv) == 8:
+    elif len(sys.argv) == 9:
         array_size = int(sys.argv[1].strip())
         output_dir = sys.argv[2].strip()
         initial = int(sys.argv[3].strip())
         rg_step = int(sys.argv[4].strip())
-        method = sys.argv[5].strip().lower()
-        expr = sys.argv[6].strip().lower()
-        existing_t_file = sys.argv[7].strip()
+        seed = int(sys.argv[5].strip())
+        method = sys.argv[6].strip().lower()
+        expr = sys.argv[7].strip().lower()
+        existing_t_file = sys.argv[8].strip()
     else:
         raise SystemExit(
-            "Usage: data_generation.py ARRAY_SIZE OUTPUT_DIR INITIAL RG_STEP METHOD EXPR [EXISTING_T_FILE]"
+            "Usage: data_generation.py ARRAY_SIZE OUTPUT_DIR INITIAL RG_STEP SEED METHOD EXPR [EXISTING_T_FILE]"
         )
 
     print("-" * 100)
     print(f"Beginning data generation for RG step {rg_step}")
-
+    rng = build_rng(seed)
     if initial == 1:
-        t = generate_initial_t_distribution(array_size)
-        t_initial_mean = np.mean(t)
-        print(f"Generated initial t distribution with mean: {t_initial_mean}")
+        t = generate_initial_t_distribution(array_size, rng)
+        print("Generated initial t distribution")
     else:
         print(f"Using t data from {existing_t_file}")
         t = np.load(existing_t_file)
-    if method == "a":
+    if method.lower()[0] == "a":
         i = 4
-    elif method == "n":
+    elif method.lower()[0] == "n":
         i = 8
     else:
         raise ValueError(
             "Unsupported method selected. method: a = Analytic, n = Numerical"
         )
-    phases = generate_random_phases(array_size, i)
-    t_array = extract_t_samples(t, array_size)
+    phases = generate_random_phases(array_size, rng, i)
+    t_array = extract_t_samples(t, array_size, rng)
     t_prime = rg_data_workflow(method, t_array, phases, array_size, expr)
     t_filename = os.path.join(
         output_dir, f"t_data_RG{rg_step}_{array_size}_samples.npy"
