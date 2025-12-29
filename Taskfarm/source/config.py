@@ -2,10 +2,12 @@
 Loads yaml and sets up configuration
 """
 
+import os
 import yaml
 from pathlib import Path
 from typing import Any, Optional
 from dataclasses import dataclass
+from functools import lru_cache
 
 
 # ---------- RG Config dataclass ---------- #
@@ -57,17 +59,19 @@ def build_config(config: dict) -> RGConfig:
     matrix_batch_size = int(
         check_required_info(config, "rg_settings.matrix_batch_size")
     )
-    inputs = check_required_info(config, "data_settings.IQHE.inputs")
-    outputs = check_required_info(config, "data_settings.IQHE.outputs")
+    inputs = check_required_info(config, "data_settings.inputs")
+    outputs = check_required_info(config, "data_settings.outputs")
     shifts = get_nested_data(
         config, "data_settings.shifts", [0.003, 0.005, 0.007, 0.009]
     )
     z_bins = get_nested_data(config, "parameter_settings.z.bins", 200)
-    z_range = get_nested_data(config, "parameter_settings.z.range", [0.0, 1.0])
+    z_range = tuple(get_nested_data(config, "parameter_settings.z.range", [0.0, 1.0]))
     z_min = z_range[0]
     z_max = z_range[1]
     t_bins = get_nested_data(config, "parameter_settings.tprime.bins", 200)
-    t_range = get_nested_data(config, "parameter_settings.tprime.range", [0.0, 1.0])
+    t_range = tuple(
+        get_nested_data(config, "parameter_settings.tprime.range", [0.0, 1.0])
+    )
     t_min = t_range[0]
     t_max = t_range[1]
     msd_tol = get_nested_data(config, "convergence.msd_tol", 1.0e-3)
@@ -101,6 +105,17 @@ def build_config(config: dict) -> RGConfig:
         msd_tol=msd_tol,
         std_tol=std_tol,
     )
+
+
+@lru_cache(maxsize=1)
+def get_rg_config() -> RGConfig:
+    """Load the config file from an env var, parse into an RGConfig object, and store in the lru cache"""
+    config_path = os.environ.get("RG_CONFIG")
+    if not config_path:
+        raise RuntimeError("RG_CONFIG could not be found")
+    config = load_yaml(config_path)
+    rg_config = build_config(config)
+    return rg_config
 
 
 # ---------- Core yaml interactions ---------- #
@@ -182,7 +197,7 @@ def parse_overrides(input_overrides: list[str]) -> dict:
 
 
 def update_config(config: dict, overrides: dict, deep: bool = True) -> dict:
-    """Creates a copy of the existing config, updates it with any overrides, and returns the new config"""
+    """Updates the input config in place with any overrides, and returns the new config. Optionally uses a copy instead if deep = False"""
     if deep:
         current_config = config
     else:
