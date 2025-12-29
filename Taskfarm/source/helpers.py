@@ -37,9 +37,10 @@ from source.utilities import (
     convert_t_to_z,
     build_rng,
 )
+from source.config import get_rg_config
 
 if __name__ == "__main__":
-    if len(sys.argv) != 7:
+    if len(sys.argv) != 6:
         raise SystemExit(
             " Usage: helpers.py PROCESS ARRAY_SIZE INPUT_FILE OUTPUT_FILE RESAMPLE SEED \n"
             " PROCESS 0 : Launder from z-histogram + Convert to t \n"
@@ -51,11 +52,12 @@ if __name__ == "__main__":
     array_size = int(sys.argv[2].strip())
     input_file = sys.argv[3].strip()
     output_file = sys.argv[4].strip()
-    sampler = sys.argv[5].strip().lower()
-    seed = int(sys.argv[6].strip())
+    seed = int(sys.argv[5].strip())
     start = time()
     date = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     rng = build_rng(seed)
+    rg_config = get_rg_config()
+    sampler = rg_config.resample
     if process == 0:
         # Launder from input z histogram and convert to t data
         print("-" * 100)

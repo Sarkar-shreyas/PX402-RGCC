@@ -43,7 +43,7 @@ def get_default_output_dir(config: dict, run_type: str) -> Path:
     """Parse the input config dict and build the default output path"""
     version = str(get_nested_data(config, "main.version"))
     method = str(get_nested_data(config, "engine.method"))
-    expr = str(get_nested_data(config, "engine.expr"))
+    expr = str(get_nested_data(config, "engine.expr")).strip().lower()[0]
     version_str = f"{version}_{method}_{expr}"
 
     root = get_project_root()

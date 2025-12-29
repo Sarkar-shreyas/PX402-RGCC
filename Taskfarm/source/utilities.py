@@ -392,12 +392,14 @@ def rg_data_workflow(
     method: str, ts: np.ndarray, phis: np.ndarray, N: int, expr: str
 ) -> np.ndarray:
     """Perform the RG workflow based on method flag"""
-    if method == "a":  # Then we use the analytic form of tprime
+    if method[0] == "a":  # Then we use the analytic form of tprime
         tprime = generate_t_prime(ts, phis, expr)
         return tprime
-    else:
+    elif method[0] == "n":
         tprime = numerical_t_prime(ts, phis, N)
         return tprime
+    else:
+        raise ValueError(f"Invalid method entered: {method}")
 
 
 # ---------- Variable conversion helpers ---------- #
@@ -548,7 +550,7 @@ def inverse_cdf_sampler(
     # Check how close to the right bin the value is
     diff = right_edge - left_edge
     # Return values uniformly from their bins
-    return left_edge + diff * np.random.random(size=N)
+    return left_edge + diff * rng.random(size=N)
 
 
 def rejection_sampler(

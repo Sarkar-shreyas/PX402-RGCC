@@ -29,36 +29,35 @@ from source.utilities import (
     rg_data_workflow,
     build_rng,
 )
-
+from source.config import get_rg_config
 
 if __name__ == "__main__":
     # Load input params, checking if we're starting RG steps or continuing from an input sample
-    if len(sys.argv) == 8:
+    if len(sys.argv) == 6:
         array_size = int(sys.argv[1].strip())
         output_dir = sys.argv[2].strip()
         initial = int(sys.argv[3].strip())
         rg_step = int(sys.argv[4].strip())
         seed = int(sys.argv[5].strip())
-        method = sys.argv[6].strip().lower()
-        expr = sys.argv[7].strip().lower()
         existing_t_file = "None"
-    elif len(sys.argv) == 9:
+    elif len(sys.argv) == 7:
         array_size = int(sys.argv[1].strip())
         output_dir = sys.argv[2].strip()
         initial = int(sys.argv[3].strip())
         rg_step = int(sys.argv[4].strip())
         seed = int(sys.argv[5].strip())
-        method = sys.argv[6].strip().lower()
-        expr = sys.argv[7].strip().lower()
         existing_t_file = sys.argv[8].strip()
     else:
         raise SystemExit(
-            "Usage: data_generation.py ARRAY_SIZE OUTPUT_DIR INITIAL RG_STEP SEED METHOD EXPR [EXISTING_T_FILE]"
+            "Usage: data_generation.py ARRAY_SIZE OUTPUT_DIR INITIAL RG_STEP SEED [EXISTING_T_FILE]"
         )
 
     print("-" * 100)
     print(f"Beginning data generation for RG step {rg_step}")
     rng = build_rng(seed)
+    rg_config = get_rg_config()
+    method = rg_config.method
+    expr = rg_config.expr
     if initial == 1:
         t = generate_initial_t_distribution(array_size, rng)
         print("Generated initial t distribution")

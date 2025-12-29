@@ -43,15 +43,15 @@ class RGConfig:
 
 def build_config(config: dict) -> RGConfig:
     """Parses a config dict and returns an RGConfig object"""
-    version = check_required_info(config, "main.version")
+    version = str(check_required_info(config, "main.version")).strip().lower()
     id = check_required_info(config, "main.id")
     type = check_required_info(config, "main.type")
     output_folder = check_required_info(config, "main.output_folder")
-    model = check_required_info(config, "engine.model")
-    method = check_required_info(config, "engine.method")
-    resample = check_required_info(config, "engine.resample")
-    expression = str(check_required_info(config, "engine.expr"))
-    expr = expression.strip().lower()[0]
+    model = str(check_required_info(config, "engine.model")).strip().lower()
+    method = str(check_required_info(config, "engine.method")).strip().lower()
+    resample = str(check_required_info(config, "engine.resample")).strip().lower()
+    expression = str(check_required_info(config, "engine.expr")).strip().lower()
+    expr = expression[0]
     symmetrise = int(get_nested_data(config, "engine.symmetrise", 1))
     seed = int(check_required_info(config, "rg_settings.seed"))
     steps = int(check_required_info(config, "rg_settings.steps"))
@@ -64,18 +64,18 @@ def build_config(config: dict) -> RGConfig:
     shifts = get_nested_data(
         config, "data_settings.shifts", [0.003, 0.005, 0.007, 0.009]
     )
-    z_bins = get_nested_data(config, "parameter_settings.z.bins", 200)
+    z_bins = int(get_nested_data(config, "parameter_settings.z.bins", 200))
     z_range = tuple(get_nested_data(config, "parameter_settings.z.range", [0.0, 1.0]))
-    z_min = z_range[0]
-    z_max = z_range[1]
-    t_bins = get_nested_data(config, "parameter_settings.tprime.bins", 200)
+    z_min = float(z_range[0])
+    z_max = float(z_range[1])
+    t_bins = int(get_nested_data(config, "parameter_settings.tprime.bins", 200))
     t_range = tuple(
         get_nested_data(config, "parameter_settings.tprime.range", [0.0, 1.0])
     )
-    t_min = t_range[0]
-    t_max = t_range[1]
-    msd_tol = get_nested_data(config, "convergence.msd_tol", 1.0e-3)
-    std_tol = get_nested_data(config, "convergence.std_tol", 5.0e-4)
+    t_min = float(t_range[0])
+    t_max = float(t_range[1])
+    msd_tol = float(get_nested_data(config, "convergence.msd_tol", 1.0e-3))
+    std_tol = float(get_nested_data(config, "convergence.std_tol", 5.0e-4))
 
     return RGConfig(
         version=version,

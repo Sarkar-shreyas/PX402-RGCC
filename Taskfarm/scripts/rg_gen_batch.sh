@@ -132,8 +132,6 @@ if [[ -n "$T_INPUT" ]]; then
         "$INITIAL" \
         "$RG_STEP" \
         "$JOB_SEED" \
-        "$METHOD" \
-        "$EXPR" \
         "$T_INPUT"
 else
     python -m "source.data_generation" \
@@ -142,8 +140,6 @@ else
     "$INITIAL" \
     "$RG_STEP" \
     "$JOB_SEED" \
-    "$METHOD" \
-    "$EXPR"
 fi
 
 # Move batch back to shared storage

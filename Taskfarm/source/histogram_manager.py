@@ -164,7 +164,7 @@ if __name__ == "__main__":
         if input_length == 8:
             shift = sys.argv[7].strip()
         else:
-            shift = ""
+            shift = None
     else:
         raise SystemExit(
             "Invalid process entered. Process must be either 0 (Build new hist) or 1 (Append to existing hist)"
@@ -182,7 +182,7 @@ if __name__ == "__main__":
         if not existing_file:
             raise SystemExit(f"No existing histogram was found for mode {mode}")
         else:
-            range = hist_vars[var_name]["range"]
+            bins, range = _bin_and_range_manager(var_name, hist_vars, shift)
             append_to_histogram(data, existing_file, output_file, range)
             print(f"Appended input data to existing data at {existing_file}")
 

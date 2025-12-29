@@ -39,7 +39,7 @@ def construct_initial_histogram(
         range = range
         bins = bins
 
-    hist_vals, bin_edges = np.histogram(data, bins, range)
+    hist_vals, bin_edges = np.histogram(data, bins=bins, range=range)
     bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
     save_data(
         hist_vals,

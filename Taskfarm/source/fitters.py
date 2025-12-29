@@ -98,16 +98,18 @@ def estimate_z_peak(
     z_length = len(z_hist)
     top_five_percent = int(0.05 * z_length)
     top_indices = np.argsort(z_hist)[-top_five_percent:]
+    top_bin_indices = np.argsort(z_hist)[-top_five_percent - 1 :]
     top_indices = np.sort(top_indices)
+    top_bin_indices = np.sort(top_bin_indices)
     bin_centers = z_bin_centers[top_indices]
-    bin_edges = z_bins[top_indices]
+    bin_edges = z_bins[top_bin_indices]
     # print(f"Min bin = {bin_edges[0]}, Max bin = {bin_edges[-1]}")
     y_values = z_hist[top_indices]
     sample = launder(10000000, y_values, bin_edges, bin_centers, rng, sampler)
     if len(y_values) == 0:
         raise ValueError("The y values array is empty.")
     overall_peak, _ = norm.fit(sample)
-    length = np.random.permutation(len(sample))
+    length = rng.permutation(len(sample))
     subsets = np.array_split(sample[length], 10)
     # subsets = [bin_values[needed[i]] for i in range(10)]
     # print("Fitting subsets")

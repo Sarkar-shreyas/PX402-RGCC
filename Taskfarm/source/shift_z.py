@@ -14,6 +14,7 @@ Where `SHIFT` is a floating-point perturbation added to all z samples.
 
 import numpy as np
 from source.utilities import launder, convert_z_to_t, build_rng
+from source.config import get_rg_config
 import sys
 
 if __name__ == "__main__":
@@ -21,11 +22,11 @@ if __name__ == "__main__":
     input_file = sys.argv[2].strip()
     output_file = sys.argv[3].strip()
     seed = int(sys.argv[4].strip())
-    sampler = sys.argv[5].strip().lower()
-    shift = float(sys.argv[6].strip())
+    shift = float(sys.argv[5].strip())
     rng = build_rng(seed)
     perturbation = shift
-
+    rg_config = get_rg_config()
+    sampler = rg_config.resample
     sym_z = np.load(input_file)
     sym_hist_vals = sym_z["histval"]
     sym_bins = sym_z["binedges"]
