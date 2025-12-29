@@ -3,10 +3,18 @@ This file will parse config.yaml files and CLI overrides to return an updated co
 """
 
 import argparse
+from pathlib import Path
 from source.config import (
     handle_config,
+    get_nested_data,
     save_updated_config,
 )
+
+
+def get_project_root() -> Path:
+    """Return the root directory for this project"""
+    # from fyp/code/source -> fyp
+    return Path(__file__).resolve().parents[2]
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -21,16 +29,38 @@ def build_parser() -> argparse.ArgumentParser:
         nargs="+",
         action="extend",
         default=[],
-        help="Override config settings. Eg; --set rg.total_steps = 5 rng.seed = 231",
+        help="Override config settings. Eg; --set 'rg_settings.steps = 5' 'engine.method = numerical'",
     )
-    parser.add_argument("--out", required=True, help="Output path for config")
-    parser.add_argument("--task", type=int, default=0, help="Task ID for array jobs")
+    parser.add_argument("--out", default=None, help="Output path for config")
+    parser.add_argument(
+        "--type", required=True, choices=["FP", "EXP"], help="Type of RG workflow"
+    )
 
     return parser
+
+
+def get_default_output_dir(config: dict, run_type: str) -> Path:
+    """Parse the input config dict and build the default output path"""
+    version = str(get_nested_data(config, "main.version"))
+    method = str(get_nested_data(config, "engine.method"))
+    expr = str(get_nested_data(config, "engine.expr"))
+    version_str = f"{version}_{method}_{expr}"
+
+    root = get_project_root()
+
+    return root / "job_outputs" / version_str / run_type / "config"
 
 
 if __name__ == "__main__":
     parser = build_parser()
     args = parser.parse_args()
     config = handle_config(args.config, args.override)
-    save_updated_config(args.out, config)
+
+    if args.out is None:
+        output_dir = get_default_output_dir(config, args.type)
+    else:
+        output_dir = Path(args.out)
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    save_updated_config(output_dir, config)
