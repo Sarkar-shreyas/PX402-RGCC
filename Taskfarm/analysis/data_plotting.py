@@ -5,9 +5,8 @@ from source.utilities import (
     mean_squared_distance,
     hist_moments,
     get_density,
-    STD_TOLERANCE,
-    DIST_TOLERANCE,
 )
+from source.config import load_yaml, build_config
 from source.fitters import std_derivative
 import os
 from collections import defaultdict
@@ -19,9 +18,12 @@ from constants import (
     LEGENDS,
     XLIMS,
     YLIMS,
+    config_file,
 )
 
 TYPE = "FP"
+DIST_TOLERANCE = 1e-3
+STD_TOLERANCE = 5e-4
 
 
 # ---------- Plotting helpers ---------- #
@@ -209,15 +211,17 @@ def construct_moments_dict(
 
 
 if __name__ == "__main__":
+    config = load_yaml(config_file)  # type: ignore
+    rg_config = build_config(config)
     # Load constants
-    version = CURRENT_VERSION
+    version = f"{rg_config.version}_{rg_config.method}_{rg_config.expr}"
 
     var_names = ["t", "z", "input_t", "sym_z"]
     z_vars = ["z", "sym_z"]
     other_vars = ["t", "input_t"]
-    hist_dir = f"{data_dir}/v{version}/{TYPE}/hist"
-    stats_dir = f"{data_dir}/v{version}/{TYPE}/stats"
-    plots_dir = f"{data_dir}/v{version}/{TYPE}/plots"
+    hist_dir = f"{data_dir}/{version}/{TYPE}/hist"
+    stats_dir = f"{data_dir}/{version}/{TYPE}/stats"
+    plots_dir = f"{data_dir}/{version}/{TYPE}/plots"
     t_folder = f"{hist_dir}/t"
     z_folder = f"{hist_dir}/z"
     input_folder = f"{hist_dir}/input_t"
@@ -252,7 +256,7 @@ if __name__ == "__main__":
     for var in var_names:
         filename = f"{plots_dir}/{var}_histogram.png"
         plot_data(var, filename, data_map[var], TYPE)
-    print("Plots for t, g and input t data have been made")
+    print("Plots for t, z and input t data have been made")
     print("-" * 100)
     construct_moments_dict(stats_dir, plots_dir, var_names, data_map)
     # print("-" * 100)
