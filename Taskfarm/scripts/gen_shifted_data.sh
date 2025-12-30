@@ -42,7 +42,7 @@ mkdir -p "$joboutdir" "$jobdatadir" "$stepdir" # Make them in case they aren't a
 exec >"$joboutdir/${SLURM_JOB_NAME}_JOB${SLURM_ARRAY_JOB_ID}_TASK${TASK_ID}.out" # Redirect outputs to be within their own folders, together with the data they produce
 exec 2>"$logsdir/${SLURM_JOB_NAME}_JOB${SLURM_ARRAY_JOB_ID}_TASK${TASK_ID}.err" # Redirect error logs to be within their own folders for easy grouping
 source "$basedir/.venv/bin/activate"
-JOB_SEED=$(( SEED + 10000000*RG_STEP + 1000*TASK_ID + STREAM ))
+JOB_SEED=$(( SEED + 123456 + 1000*TASK_ID + STREAM ))
 
 # General job information
 echo "==================================================="
