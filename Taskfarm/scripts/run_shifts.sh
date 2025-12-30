@@ -68,15 +68,22 @@ module load GCC/13.3.0 SciPy-bundle/2024.05
 source "$basedir/.venv/bin/activate"
 
 export PYTHONPATH="$codedir:$PYTHONPATH"
-
-UPDATED_CONFIG="$(
-    python "$codedir/source/parse_config.py" \
-    --config "$CONFIG" \
-    --type "$TYPE" \
-    $(printf -- ' --set %q' "${SETS[@]}") \
-    ${OUT:+--out "$OUT"}
-)"
-
+if (( ${#SETS[@]} )); then
+    UPDATED_CONFIG="$(
+        python "$codedir/source/parse_config.py" \
+        --config "$CONFIG" \
+        --type "$TYPE" \
+        --set "${SETS[@]}" \
+        ${OUT:+--out "$OUT"}
+    )"
+else
+    UPDATED_CONFIG="$(
+        python "$codedir/source/parse_config.py" \
+        --config "$CONFIG" \
+        --type "$TYPE" \
+        ${OUT:+--out "$OUT"}
+    )"
+fi
 
 
 shift_job=$(sbatch --parsable \
