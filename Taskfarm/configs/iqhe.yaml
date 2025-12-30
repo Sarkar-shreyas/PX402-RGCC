@@ -1,5 +1,5 @@
 main:
-  version: "fp_iqhe"
+  version: "rg_iqhe"
   id: "dev"
   type: "fp"
   output_folder: ""
