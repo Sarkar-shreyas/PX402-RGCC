@@ -13,7 +13,6 @@ from collections import defaultdict
 import json
 from constants import (
     data_dir,
-    CURRENT_VERSION,
     NUM_RG,
     LEGENDS,
     XLIMS,

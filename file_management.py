@@ -2,7 +2,7 @@ import os
 import subprocess
 import argparse
 
-from constants import data_dir, CURRENT_VERSION, host, remote_dir, taskfarm_dir
+from constants import data_dir, CURRENT_VERSION, host, remote_dir, root_dir
 
 
 # ---------- Utilities ---------- #
@@ -107,13 +107,13 @@ def transfer_files(args) -> None:
         else:
             if dir == "code":
                 remote = f"{host}:{remote_dir}/{dir}"
-                local = f"{taskfarm_dir}/source"
+                local = f"{root_dir}/source"
             elif dir == "config":
                 remote = f"{host}:{remote_dir}/scripts"
-                local = f"{taskfarm_dir}/configs"
+                local = f"{root_dir}/configs"
             elif dir == "scripts":
                 remote = f"{host}:{remote_dir}/{dir}"
-                local = f"{taskfarm_dir}/scripts"
+                local = f"{root_dir}/scripts"
             else:
                 raise ValueError(f"Invalid push dir entered: {dir}")
             current_commands.extend([local, remote])

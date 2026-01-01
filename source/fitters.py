@@ -39,7 +39,7 @@ def std_derivative(
     """
     spline = UnivariateSpline(rgs, stds, s=smoothing_factor)
     derivative_line = spline.derivative()
-    std_primes = derivative_line(stds)
+    std_primes = derivative_line(rgs)
     return std_primes
 
 

@@ -2,12 +2,8 @@
 from collections import defaultdict
 import matplotlib.pyplot as plt
 import numpy as np
-from source.utilities import (
-    calculate_nu,
-    get_density,
-    hist_moments,
-    launder,
-)
+from source.utilities import calculate_nu, get_density, hist_moments, launder, build_rng
+from source.config import load_yaml, build_config
 from scipy.stats import norm
 from source.fitters import estimate_z_peak, fit_z_peaks
 from data_plotting import (
@@ -45,19 +41,20 @@ def slice_middle(
 
 
 def main():
+    config = load_yaml(f"{data_dir}")
     version = CURRENT_VERSION
     rg = NUM_RG + 1
-    main_dir = f"{data_dir}/v{version}"
-    stats_dir = f"{data_dir}/v{version}/{TYPE}/stats"
-    plots_dir = f"{data_dir}/v{version}/{TYPE}/plots"
+    main_dir = f"{data_dir}/{version}"
+    stats_dir = f"{data_dir}/{version}/{TYPE}/stats"
+    plots_dir = f"{data_dir}/{version}/{TYPE}/plots"
     os.makedirs(stats_dir, exist_ok=True)
     os.makedirs(plots_dir, exist_ok=True)
     data_map = defaultdict(dict)
     vars = ["t", "input_t", "z"]
-    print(f"Performing peak estimation for v{CURRENT_VERSION}")
+    print(f"Performing peak estimation for {CURRENT_VERSION}")
     print("=" * 100)
     # Load the FP distribution
-    fp_file = f"{data_dir}/v{version}/FP/hist/sym_z/sym_z_hist_RG{NUM_RG - 1}.npz"
+    fp_file = f"{data_dir}/{version}/FP/hist/sym_z/sym_z_hist_RG{NUM_RG - 1}.npz"
     fp_counts, fp_bins, fp_centers = load_hist_data(fp_file)
     fp_density = get_density(fp_counts, fp_bins)
 
@@ -67,7 +64,7 @@ def main():
         # data_map[shift]["fp"] = [fp_counts, fp_bins, fp_centers, fp_density]
         for var in vars:
             data_map[shift][var] = []
-            shift_dir = f"{data_dir}/v{version}/{TYPE}/shift_{shift}/hist/{var}"
+            shift_dir = f"{data_dir}/{version}/{TYPE}/shift_{shift}/hist/{var}"
             shift_plot_dir = f"{plots_dir}/{shift}"
             shift_stats_dir = f"{stats_dir}/{shift}"
             os.makedirs(shift_plot_dir, exist_ok=True)

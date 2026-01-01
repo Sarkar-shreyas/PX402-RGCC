@@ -1,8 +1,8 @@
 main:
   version: "rg_iqhe"
-  id: "hpc"
+  id: "local"
   type: "fp"
-  output_folder: ""
+  output_folder: "Local data"
 
 engine:
   model: "iqhe"
@@ -12,9 +12,9 @@ engine:
   symmetrise: 1
 
 rg_settings:
-  seed: 12345
-  steps: 9
-  samples: 3200000000
+  seed: 1234
+  steps: 7
+  samples: 32000000
   matrix_batch_size: 100000
 
 data_settings:

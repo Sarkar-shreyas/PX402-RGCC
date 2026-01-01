@@ -9,7 +9,7 @@ N = 480000000
 SHIFTS = ["0.0", "0.003", "0.004", "0.005", "0.006"]
 # CURRENT_VERSION = "1.84J"
 # CURRENT_VERSION = "1.90S"
-CURRENT_VERSION = "fp_iqhe_analytic_shaw"
+CURRENT_VERSION = "fp_iqhe_numerical_shaw"
 NUM_RG = 9
 # NUM_RG = 10
 # NUM_RG = 12
@@ -60,7 +60,7 @@ XLIMS = {
 }
 
 data_dir = os.getenv("DATA_DIR")
-taskfarm_dir = os.getenv("TASKFARM_DIR")
+root_dir = os.getenv("ROOT_DIR")
 config_file = os.getenv("CONFIG_FILE")
 host = os.getenv("HOST", "vulcan2")
 remote_dir = os.getenv("REMOTE_DIR")

@@ -319,13 +319,13 @@ if __name__ == "__main__":
 
     # Generate initial arrays
     # starting_t = launder(n, fp_density, fp_bins, fp_centers, "i")
-    # starting_t = generate_initial_t_distribution(n)
-    starting_t = np.full(shape=n, fill_value=1 / np.sqrt(2), dtype=np.float64)
+    starting_t = generate_initial_t_distribution(n)
+    # starting_t = np.full(shape=n, fill_value=1 / np.sqrt(2), dtype=np.float64)
     # starting_tau = generate_initial_t_distribution(n)
     starting_tau = np.full(shape=n, fill_value=0.9, dtype=np.float64)
     # starting_tau = np.random.uniform(0, 1, n)
     phases = generate_random_phases(n, num_phases)
-    # phases = generate_phase_array(n, num_phases, 0.0)
+    # phases = generate_phase_array(n, num_phases, np.pi / 2)
     t_samples = extract_t_samples(starting_t, n)
     tau_samples = extract_t_samples(starting_tau, n)
     print(

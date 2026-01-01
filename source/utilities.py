@@ -71,6 +71,14 @@ def build_rng(seed: int) -> np.random.Generator:
     return np.random.default_rng(seed=seed)
 
 
+def generate_constant_array(N: int, value: float, M: int = 1) -> np.ndarray:
+    """Generates a constant array of shape (N, M)"""
+    if M == 1:
+        return np.full(N, value, dtype=np.float64)
+    else:
+        return np.full(shape=(N, M), fill_value=value, dtype=np.float64)
+
+
 def generate_random_phases(
     N: int,
     rng: np.random.Generator,
