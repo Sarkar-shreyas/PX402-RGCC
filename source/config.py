@@ -10,6 +10,15 @@ from dataclasses import dataclass
 from functools import lru_cache
 
 
+# ---------- Additional helpers ---------- #
+def _check_lowercase_keys(data: dict, parent: str = "") -> None:
+    for key, val in data.items():
+        if isinstance(key, str) and key != key.lower():
+            raise KeyError(f"Key {parent}{key} must be all lowercase")
+        if isinstance(val, dict):
+            _check_lowercase_keys(val, parent=f"{parent}{key}.")
+
+
 # ---------- RG Config dataclass ---------- #
 @dataclass
 class RGConfig:
@@ -131,7 +140,7 @@ def load_yaml(path: str | Path) -> dict:
         data = {}
     if not isinstance(data, dict):
         raise TypeError(f"Config at {path} must be a dictionary")
-
+    _check_lowercase_keys(data)
     return data
 
 
@@ -179,9 +188,7 @@ def parse_overrides(input_overrides: list[str]) -> dict:
         var, value = pair.split("=", 1)
         var = var.strip()
         value = value.strip()
-        if "[" in value:
-            parts = value[1:-1].split(",")
-            value = parts
+        value = yaml.safe_load(value)
         if not var:
             raise ValueError(f"Invalid override command, key is empty: {pair}")
         keys = var.split(".")
