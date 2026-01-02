@@ -3,7 +3,7 @@
 
 This script exposes a small set of command-line utilities used during the
 data-management step of the RG workflow. It is intentionally thin and wraps
-functionality from :mod:`Taskfarm.source.utilities` to provide a stable
+functionality from :mod:`source.utilities` to provide a stable
 command-line interface for batch scripts and job arrays.
 
 Supported PROCESS values (first CLI argument):
