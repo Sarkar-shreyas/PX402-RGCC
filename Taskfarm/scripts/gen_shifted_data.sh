@@ -97,6 +97,4 @@ echo " Data shift job ${SLURM_JOB_ID} for Shift ${SHIFT} completed on : [$(date 
 echo "======================================================================================================="
 echo ""
 
-wait
-sync
 exit 0

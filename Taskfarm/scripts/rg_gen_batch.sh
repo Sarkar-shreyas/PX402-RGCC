@@ -157,7 +157,7 @@ fi
 # Move batch back to shared storage
 target_dir="$batchdir/batch_${TASK_ID}"
 mkdir -p "$target_dir"
-if timeout 45 rsync -a --partial --inplace "$tempbatchdir/" "$target_dir/"; then
+if timeout 45 rsync -a --partial "$tempbatchdir/" "$target_dir/"; then
     rm -rf "$tempbatchdir"
     echo " Data from $tempbatchdir deleted and moved to $target_dir "
     echo "OK" > "$target_dir/READY"
@@ -172,5 +172,4 @@ echo " Data gen job ${SLURM_ARRAY_JOB_ID} for RG${RG_STEP} completed on : [$(dat
 echo "==================================================================================================="
 echo ""
 
-sync
 exit 0
