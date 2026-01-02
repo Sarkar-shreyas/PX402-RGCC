@@ -9,28 +9,12 @@ histogram I/O and common statistical measures used by the RG pipeline.
 # flake8: noqa: E501
 
 import numpy as np
-from time import time
+
+# from time import time
 from datetime import datetime, timezone
 
-# ---------- Constants ---------- #
-# N: int = 1 * (10**6)
-# K: int = 10
-# T_BINS: int = 1000
-# Z_BINS: int = 100000
-# Z_RANGE: tuple = (-50.0, 50.0)
-# Z_PERTURBATION: float = 0.007
-# DIST_TOLERANCE: float = 0.001
-# STD_TOLERANCE: float = 0.0005
-# T_RANGE: tuple = (0.0, 1.0)
-# SAMPLER: dict = {"cdf": 0, "rej": 1}
-# EXPRESSION: str = "Shaw"
-# G_TOL: float = 1.39e-11
-# EXPRESSION = "Shreyas"
-# EXPRESSION = "Cain"
-# EXPRESSION = "Jack"
 
-
-# ---------- Saving utility ---------- #
+# ---------- Misc. utility ---------- #
 def save_data(
     hist_vals: np.ndarray, bin_edges: np.ndarray, bin_centers: np.ndarray, filename: str
 ) -> None:
@@ -120,8 +104,6 @@ def generate_initial_t_distribution(N: int, rng: np.random.Generator) -> np.ndar
     numpy.ndarray
         Array of N amplitude values t = √g where g ~ U[0,1].
     """
-    # g_sample = np.random.uniform(G_TOL, 1.0 - G_TOL, N)
-    # g_sample = np.linspace(0.0, 1.0, N)
     g_sample = rng.uniform(0.0, 1.0, N)
     t_dist = np.sqrt(g_sample)
     return t_dist
@@ -168,23 +150,7 @@ def solve_matrix_eq(
     r4 = np.sqrt(1 - t4 * t4)
     r5 = np.sqrt(1 - t5 * t5)
     phi12, phi15, phi23, phi31, phi34, phi42, phi45, phi53 = phis.T
-    # fmt: off
-    # A = np.array(
-    #     [
-    #         [1, 0, 0, 0, 0, -r1 * np.exp(1j * phi31), 0, 0, 0, 0],
-    #         [0, 1, 0, 0, 0, t1 * np.exp(1j * phi31), 0, 0, 0, 0],
-    #         [0, -t2 * np.exp(1j * phi12), 1, 0, 0, 0, 0, -r2 * np.exp(1j * phi42), 0, 0],
-    #         [0, -r2 * np.exp(1j * phi12), 0, 1, 0, 0, 0, t2 * np.exp(1j * phi42), 0, 0],
-    #         [0, 0, -r3 * np.exp(1j * phi23), 0, 1, 0, 0, 0, 0, -t3 * np.exp(1j * phi53)],
-    #         [0, 0, t3 * np.exp(1j * phi23), 0, 0, 1, 0, 0, 0, -r3 * np.exp(1j * phi53)],
-    #         [0, 0, 0, 0, t4 * np.exp(1j * phi34), 0, 1, 0, 0, 0],
-    #         [0, 0, 0, 0, -r4 * np.exp(1j * phi34), 0, 0, 1, 0, 0],
-    #         [-t5 * np.exp(1j * phi15), 0, 0, 0, 0, 0, -r5 * np.exp(1j * phi45), 0, 1, 0],
-    #         [-r5 * np.exp(1j * phi15), 0, 0, 0, 0, 0, t5 * np.exp(1j * phi45), 0, 0, 1],
-    #     ], dtype=np.complex128
-    # )
-    # b = np.array([t1,r1,0,0,0,0,0,0,0,0], dtype=np.complex128)
-    # fmt: on
+
     # Initialise a batch-size array of A and b to do the solve in batches
     A = np.zeros((batch_size, 10, 10), dtype=np.complex128)
     b = np.zeros((batch_size, 10, 1), dtype=np.float64)
@@ -284,6 +250,7 @@ def generate_t_prime(
     r5 = np.sqrt(1 - t5 * t5)
 
     if expression.strip().lower()[0] == "j":
+        # Jack's form
         numerator = (
             -np.exp(1j * phi2) * r3 * t1 * t4
             - np.exp(1j * (phi3 + phi2)) * t2 * t4
@@ -301,18 +268,8 @@ def generate_t_prime(
             - np.exp(1j * phi2) * r3 * t4 * t5
             - np.exp(1j * (phi2 + phi3)) * t1 * t2 * t4 * t5
         )
-    # elif expression.strip().lower() == "sa":
-    #     # My matrix (Blue)
-    #     numerator = (r1 * t2 * (1 - np.exp(1j * phi4) * t3 * t4 * t5)) - (
-    #         np.exp(1j * phi3)
-    #         * r5
-    #         * (r3 * t2 + np.exp(1j * (phi2 - phi1)) * r2 * r4 * t1 * t3)
-    #     )
-
-    #     denominator = (r3 - np.exp(1j * phi3) * r1 * r5) * (
-    #         r3 - np.exp(1j * phi2) * r2 * r4
-    #     ) + (t3 + np.exp(1j * phi4) * t4 * t5) * (t3 + np.exp(1j * phi1) * t1 * t2)
     elif expression.strip().lower()[0] == "c":
+        # Cain's form (2005)
         numerator = (
             +t1 * t5 * (r2 * r3 * r4 * np.exp(1j * phi3) - 1)
             + t2
@@ -345,6 +302,7 @@ def generate_t_prime(
             + (t3 * t4 * t5 * np.exp(1j * phi4))
         )
     elif expression.strip().lower()[0] == "t":
+        # Shaw's second matrix (for Eq 2.13)
         numerator = (
             -t1 * t5
             + (np.exp(1j * (phi1 + phi4 - phi2)) * (r1 * r3 * r5 * t2 * t4))
@@ -365,26 +323,16 @@ def generate_t_prime(
     else:
         raise ValueError("Invalid expression choice")
 
-    # t_prime = np.abs(
-    #     numerator / np.where(np.abs(denominator) < 1e-12, np.nan + 0j, denominator)
-    # )
-    # t_prime = np.abs(numerator) / np.abs(denominator)
     t_prime = np.abs(numerator / denominator)
     return t_prime
-    # return t_prime[np.isfinite(t_prime)]
-    # return np.clip(t_prime, 1.39e-11, 1 - 1.39e-11)
 
 
 def numerical_t_prime(ts: np.ndarray, phis: np.ndarray, N: int) -> np.ndarray:
     """
     A function to compute tprime numerically using np.linalg.solve. Defaults to using Shaw's matrix
     """
-    start = time()
-    num_batches = 30
+    num_batches = 20
     batch_size = N // num_batches
-    print(
-        f"Beginning numerical computation with {num_batches} batches of size {batch_size}"
-    )
     tprime = np.empty(shape=(N, 1))
     for i in range(0, num_batches):
         index_slice = slice(i * batch_size, (i + 1) * batch_size)
@@ -392,7 +340,6 @@ def numerical_t_prime(ts: np.ndarray, phis: np.ndarray, N: int) -> np.ndarray:
             solve_matrix_eq(ts[index_slice], phis[index_slice], batch_size)
         )
 
-    print(f"Numerical computation done in {time() - start:.3f} seconds ")
     return tprime
 
 
@@ -478,7 +425,6 @@ def convert_z_to_t(z: np.ndarray) -> np.ndarray:
     subsequent RG analysis; callers may clip `z` beforehand for numerical
     stability if required.
     """
-    # z = np.clip(z, -25.0, 25.0)
     return np.sqrt(1.0 / (1.0 + np.exp(z)))
 
 
@@ -498,9 +444,6 @@ def convert_t_to_z(t: np.ndarray) -> np.ndarray:
     numpy.ndarray
         Array of z values, same shape as input.
     """
-    # t = np.clip(t, 1.39e-11, 1.0 - 1.39e-11)
-    # g = convert_t_to_g(t)
-    # return convert_g_to_z(g)
     return np.log((1.0 / (t**2.0)) - 1.0)
 
 
@@ -544,12 +487,13 @@ def inverse_cdf_sampler(
     rng: np.random.Generator,
 ) -> np.ndarray:
     # Inverse CDF method
-    u = rng.random(size=N)  # random values
+    u = rng.random(size=N)
     densities = get_density(hist_vals, bin_edges)
     widths = np.diff(bin_edges)
     cdf = np.cumsum(densities * widths)
     # cdf = cdf / cdf[-1]
-    # Map it into our cdf histogram, will work fine because our cdf is normalised above
+
+    # Map it into our cdf histogram
     index = np.searchsorted(cdf, u, side="right") - 1
     index = np.clip(index, 0, len(hist_vals) - 1)  # Ensure we're within bounds
     left_edge = bin_edges[index]
@@ -557,6 +501,7 @@ def inverse_cdf_sampler(
 
     # Check how close to the right bin the value is
     diff = right_edge - left_edge
+
     # Return values uniformly from their bins
     return left_edge + diff * rng.random(size=N)
 
@@ -569,45 +514,37 @@ def rejection_sampler(
     rng: np.random.Generator,
 ) -> np.ndarray:
     # Launder a.k.a rejection method
-    # Get the bin widths, and total number of bins
     bin_width = np.diff(bin_edges)[0]
     num_bins = len(bin_centers)
-    # Normalise the histogram manually
     normed = hist_vals / np.sum(hist_vals * bin_width)
 
-    # Store the max height of the bins
+    # Store the max height of the bins, and their edges
     max_height = np.max(normed)
-    # Store the domain edges
     domain_min = bin_edges[0]
     domain_max = bin_edges[-1]
-    # print(max_height)
-    # Vectorise with numpy, run using reasonable batch sizes
+
+    # Vectorise with numpy, run using reasonable batch sizes. Use placeholders to track accepted/remaining quantity
     min_batch_size = 10000
     max_batch_size = 1000000
-    # Track how many samples we've accepted and still need to be produced
     filled = 0
     remaining = N - filled
-    # Placeholder array initialised early so we can just update values
     accepted = np.empty(N, dtype=float)
     num_iters = 0
+
     # Runs until we've got N samples
     while filled < N:
         num_iters += 1
-        # Set the batch size to be between 10000 and 1000000, but use remaining if its in the bounds
         batch_size = max(min_batch_size, min(remaining, max_batch_size))
         # Random x and y draws within the domains of the existing dataset
         x = rng.uniform(domain_min, domain_max, batch_size)
         y = rng.uniform(0, max_height, batch_size)
 
-        # Check which bin the x value falls into
         bin_number = np.ceil((x - domain_min) / bin_width).astype(int)
-        # Guard if we hit the boundaries
         bin_number = np.clip(bin_number, 0, num_bins - 1)
 
         # Store the heights at that bin
         heights = normed[bin_number]
 
-        # Setup the y mask and slice the values to accept
         mask = y <= heights
         acceptable = x[mask]
 
@@ -619,10 +556,9 @@ def rejection_sampler(
             print(
                 f"Launder iteration {num_iters} - Accepted: {len(acceptable)}, Remaining: {remaining}, batch size: {batch_size}"
             )
+
         # Only add how many we need, since we want exactly N samples
         to_accept = min(len(acceptable), remaining)
-        # Fill the placeholder at those indices with the new accepted values
-        # print(filled, to_accept)
         accepted[filled : filled + to_accept] = acceptable[:to_accept]
         filled += to_accept
         remaining -= to_accept
@@ -755,9 +691,7 @@ def center_z_distribution(
     and will call `Q_z.update` to replace the stored histogram with the
     symmetrised version.
     """
-    # dz = np.diff(z_bins)
     symmetrised_z = 0.5 * (z_hist + z_hist[::-1])
-    # symmetrised_z /= np.sum(symmetrised_z * dz)
     return symmetrised_z
 
 
