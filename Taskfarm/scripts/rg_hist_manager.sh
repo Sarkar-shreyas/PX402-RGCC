@@ -79,7 +79,11 @@ if (( N % NUM_BATCHES != 0 )); then
     echo "[ERROR] N=$N not divisible by NUM_BATCHES=$NUM_BATCHES" >&2
     exit 2
 fi
-
+if [[ "$TYPE" == "FP" ]]; then
+    HELPER_SEED=$(( SEED + 1000000*RG_STEP + 888 + STREAM ))
+else
+    HELPER_SEED=$(( SEED + 1000000*RG_STEP + 1888 + STREAM ))
+fi
 BATCH_SIZE=$(( N / NUM_BATCHES )) # How many samples exist per batch
 
 # General job information
@@ -160,12 +164,6 @@ for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
         exit 1
     fi
 
-    if [[ "$TYPE" == "FP" ]]; then
-        JOB_SEED=$(( SEED + 1000000*RG_STEP + 1000*batch + STREAM ))
-    else
-        JOB_SEED=$(( SEED + 1000000*RG_STEP + 10000*batch + STREAM ))
-    fi
-
     # Make sure the batch folder exists
     if [[ ! -d "$BATCH_DIR" ]]; then
         echo "[ERROR]: The batch directory is empty: $BATCH_DIR" >&2
@@ -190,7 +188,7 @@ for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
         "$BATCH_SIZE" \
         "$batch_t" \
         "$batch_z" \
-        "$JOB_SEED"
+        "$HELPER_SEED"
 
     echo " Converted t' data to z data "
     # Construct/Append t' histogram, t has no shift
@@ -242,6 +240,17 @@ ls -lh "$tempdir_t" "$tempdir_z"
 mv "$temp_output_t" "$OUTPUT_T"
 mv "$temp_output_z" "$OUTPUT_Z"
 
+# Check histograms transferred over
+python - << PY
+import numpy as np
+t = r"$OUTPUT_T"
+z = r"$OUTPUT_Z"
+t_data = np.load(t)
+z_data = np.load(z)
+assert "histval" in t_data and "binedges" in t_data
+assert "histval" in z_data and "binedges" in z_data
+PY
+
 echo " Histograms moved from temp directory to shared FS "
 
 echo " Final histograms at: "
@@ -256,7 +265,7 @@ if [[ "$SYMMETRISE" == "1" ]]; then
         "$N" \
         "$OUTPUT_Z" \
         "$symmetrised_z" \
-        "$JOB_SEED"
+        "$HELPER_SEED"
 
     sampling_hist="$symmetrised_z"
     echo " Symmetrised z histogram saved to: $symmetrised_z "
@@ -272,16 +281,8 @@ fi
 
 # Point to the input t histogram so we can construct it
 INPUT_T="$INPUT_DIR/input_t_hist_RG${RG_STEP}.npz"
-
-
 for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
     launderbatch="$laundereddir/t_laundered_RG${RG_STEP}_batch_${batch}.npy"
-
-    if [[ "$TYPE" == "FP" ]]; then
-        JOB_SEED=$(( SEED + 1000000*RG_STEP + 1000*batch + STREAM ))
-    else
-        JOB_SEED=$(( SEED + 1000000*RG_STEP + 10000*batch + STREAM ))
-    fi
 
     # Produce batches of laundered data, from z if TYPE=FP and from t otherwise
     if [[ "$TYPE" == "FP" ]]; then
@@ -290,28 +291,30 @@ for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
             "$BATCH_SIZE" \
             "$sampling_hist" \
             "$launderbatch" \
-            "$JOB_SEED"
+            "$HELPER_SEED"
     else
         python -m "source.helpers" \
             2 \
             "$BATCH_SIZE" \
             "$sampling_hist" \
             "$launderbatch" \
-            "$JOB_SEED"
+            "$HELPER_SEED"
     fi
     #sleep 1
     echo " Batch $batch of t data laundered from $TYPE histogram saved to $launderbatch "
     # Build the input t histogram
     echo " Building histogram for input t data of RG${RG_STEP} "
     if [[ ! -f "$temp_input_t" ]]; then
-        python -m "source.t_laundered_hist_manager" \
+        python -m "source.histogram_manager" \
             0 \
+            "input_t" \
             "$launderbatch" \
             "$temp_input_t" \
             "$RG_STEP"
     else
-        python -m "source.t_laundered_hist_manager" \
+        python -m "source.histogram_manager" \
             1 \
+            "input_t" \
             "$launderbatch" \
             "$temp_input_t" \
             "$temp_input_t" \
@@ -324,6 +327,14 @@ ls -lh "$tempdir_input"
 
 # Move back to shared FS
 mv "$temp_input_t" "$INPUT_T"
+
+# Check histograms transferred over
+python - << PY
+import numpy as np
+input_t = r"$INPUT_T"
+input_t_data = np.load(input_t)
+assert "histval" in input_t_data and "binedges" in input_t_data
+PY
 
 echo " Input t histogram moved from temp storage to shared FS "
 echo " Input t histogram for RG${RG_STEP} saved to ${INPUT_T} "
@@ -373,5 +384,4 @@ echo "==========================================================================
 echo ""
 
 wait
-sync
 exit 0
