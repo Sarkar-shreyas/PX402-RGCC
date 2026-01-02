@@ -119,7 +119,7 @@ def transfer_files(args) -> None:
                 local = f"{taskfarm_dir}/configs"
             elif dir == "scripts":
                 remote = f"{host}:{remote_dir}/{dir}"
-                local = f"{taskfarm_dir}/scripts"
+                local = f"{taskfarm_dir}/scripts/*.sh"
             else:
                 raise ValueError(f"Invalid push dir entered: {dir}")
             current_commands.extend([local, remote])

@@ -229,4 +229,4 @@ def save_updated_config(run_dir: str | Path, conf: dict) -> None:
     """Save updated config yaml file to the run directory"""
     conf_path = Path(run_dir) / "updated_config.yaml"
     dump_yaml(conf, conf_path)
-    # print(conf_path)
+    print(conf_path)
