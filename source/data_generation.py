@@ -58,6 +58,7 @@ if __name__ == "__main__":
     rg_config = get_rg_config()
     method = rg_config.method
     expr = rg_config.expr
+    batch_size = rg_config.matrix_batch_size
     if initial == 1:
         t = generate_initial_t_distribution(array_size, rng)
         print("Generated initial t distribution")
@@ -65,20 +66,20 @@ if __name__ == "__main__":
         print(f"Using t data from {existing_t_file}")
         t = np.load(existing_t_file)
     if method.lower()[0] == "a":
-        i = 4
+        i = 4  # Analytic t' has 4 reduced loop phases
     elif method.lower()[0] == "n":
-        i = 8
+        i = 8  # A matrix has 8 unique phases
     else:
         raise ValueError(
             "Unsupported method selected. method: a = Analytic, n = Numerical"
         )
     phases = generate_random_phases(array_size, rng, i)
     t_array = extract_t_samples(t, array_size, rng)
-    t_prime = rg_data_workflow(method, t_array, phases, array_size, expr)
+    t_prime = rg_data_workflow(method, t_array, phases, array_size, expr, batch_size)
     t_filename = os.path.join(
         output_dir, f"t_data_RG{rg_step}_{array_size}_samples.npy"
     )
-
+    os.makedirs(output_dir, exist_ok=True)
     np.save(t_filename, t_prime)
     print(f"t data generated for RG step {rg_step} and saved to {t_filename}")
     # if existing_t_file is not None and os.path.exists(existing_t_file):

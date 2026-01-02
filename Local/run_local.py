@@ -83,6 +83,7 @@ def rg_fp(
 ) -> dict:
     """Conducts an RG flow to determine the fixed point distribution. Returns a dict containing histogram filepaths"""
     samples = rg_config.samples
+    batch_size = rg_config.matrix_batch_size
     steps = rg_config.steps
     method = rg_config.method
     expr = rg_config.expr
@@ -117,7 +118,7 @@ def rg_fp(
     # Main rg loop
     for step in range(steps):
         print(f" Proceeding with RG step {step}. ")
-        tprime = rg_data_workflow(method, ts, phases, samples, expr)
+        tprime = rg_data_workflow(method, ts, phases, samples, expr, batch_size)
         z = convert_t_to_z(tprime)
         t_data = build_hist(tprime, t_bins, t_range)
         z_data = build_hist(z, z_bins, z_range)
@@ -162,6 +163,7 @@ def rg_exp(
 ) -> dict:
     """Conducts an RG flow to determine the critical exponent. Returns a dict containing histogram filepaths"""
     samples = rg_config.samples
+    batch_size = rg_config.matrix_batch_size
     steps = rg_config.steps
     method = rg_config.method
     expr = rg_config.expr
@@ -196,7 +198,7 @@ def rg_exp(
         ts = extract_t_samples(shifted_t, samples, rng)
         for step in range(steps):
             print(f" Proceeding with RG step {step} of shift {shift}. ")
-            tprime = rg_data_workflow(method, ts, phases, samples, expr)
+            tprime = rg_data_workflow(method, ts, phases, samples, expr, batch_size)
             z = convert_t_to_z(tprime)
             t_data = build_hist(tprime, t_bins, t_range)
             z_data = build_hist(z, z_bins, z_range)
