@@ -25,8 +25,6 @@ EXPR="$8" # Flag to determine which expression to use
 INITIAL="$9" # Flag to generate starting distribution/histograms or not
 EXISTING_T_FILE="${10:-}" # Placeholder var to point to data file for non-initial RG steps
 SHIFT="${11-}" # Takes in the shift value if running EXP, mostly for folder location
-NUM_BATCHES=$(( SLURM_ARRAY_TASK_MAX + 1 )) # Number of batches to generate/process data over, same as array size
-BATCH_SIZE=$(( N / NUM_BATCHES )) # How many samples should be calculated per batch
 TASK_ID=${SLURM_ARRAY_TASK_ID} # Array task ID for easy tracking
 export RG_CONFIG=$UPDATED_CONFIG
 # Libraries needed
@@ -34,7 +32,7 @@ module purge
 module load GCC/13.3.0 SciPy-bundle/2024.05
 
 # Directories we're using
-basedir="$(cd "$SLURM_SUBMIT_DIR/.."&&pwd)" # Our root directory
+basedir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."&&pwd)" # Our root directory
 codedir="$basedir/code" # Where the code lives
 tempdir="${TMPDIR:-/tmp}/${SLURM_JOB_NAME}_${SLURM_ARRAY_JOB_ID}_${TASK_ID}" # The temp directory we'll use, unique to each job ID
 tempbatchdir="$tempdir/RG${RG_STEP}/batch_${TASK_ID}" # The temp directory to write batch data to
@@ -62,9 +60,24 @@ fi
 mkdir -p "$outputdir" "$logsdir"
 mkdir -p "$joboutdir" "$jobdatadir" "$batchdir"
 mkdir -p "$tempbatchdir"
-exec >"$joboutdir/${SLURM_JOB_NAME}_JOB${SLURM_ARRAY_JOB_ID}_TASK${TASK_ID}.out" # Redirect outputs to be within their own folders, together with the data they produce
-exec 2>"$logsdir/${SLURM_JOB_NAME}_JOB${SLURM_ARRAY_JOB_ID}_TASK${TASK_ID}.err" # Redirect error logs to be within their own folders for easy grouping
+
+out_file="$joboutdir/${SLURM_JOB_NAME}_JOB${SLURM_ARRAY_JOB_ID}_TASK${TASK_ID}.out"
+err_file="$logsdir/${SLURM_JOB_NAME}_JOB${SLURM_ARRAY_JOB_ID}_TASK${TASK_ID}.err"
+exec >"$out_file" # Redirect outputs to be within their own folders, together with the data they produce
+exec 2>"$err_file" # Redirect error logs to be within their own folders for easy grouping
+
+echo "Redirecting output logs to $out_file"
+echo "Redirecting error logs to $err_file"
+
 source "$basedir/.venv/bin/activate"
+
+NUM_BATCHES=$(( SLURM_ARRAY_TASK_MAX + 1 )) # Number of batches to generate/process data over, same as array size
+if (( N % NUM_BATCHES != 0 )); then
+    echo "[ERROR] N=$N not divisible by NUM_BATCHES=$NUM_BATCHES" >&2
+    exit 2
+fi
+BATCH_SIZE=$(( N / NUM_BATCHES )) # How many samples should be calculated per batch
+
 # General job information
 echo "==================================================="
 echo "                  SLURM JOB INFO "
@@ -147,6 +160,7 @@ mkdir -p "$target_dir"
 if timeout 45 rsync -a --partial --inplace "$tempbatchdir/" "$target_dir/"; then
     rm -rf "$tempbatchdir"
     echo " Data from $tempbatchdir deleted and moved to $target_dir "
+    echo "OK" > "$target_dir/READY"
 else
     echo " [Warning]: rsync failed for batch ${TASK_ID}, leaving tmp at $tempbatchdir" >&2
     exit 1

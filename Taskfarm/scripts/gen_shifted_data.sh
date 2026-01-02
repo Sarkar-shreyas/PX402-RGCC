@@ -21,15 +21,13 @@ STEP="$5" # The RG step we're currently at
 SEED="$6" # Starting seed
 SHIFT="$7" # Takes in the shift value to apply for this round.
 TYPE="EXP" # Type flag to toggle symmetrisation/launder target
-NUM_BATCHES=$((SLURM_ARRAY_TASK_MAX + 1)) # Number of batches to generate/process data over, same as array size
-BATCH_SIZE=$(( N / NUM_BATCHES )) # How many samples should be calculated per batch
 TASK_ID=${SLURM_ARRAY_TASK_ID} # Array task ID for easy tracking
 export RG_CONFIG=$UPDATED_CONFIG
 # Libraries needed
 module purge
 module load GCC/13.3.0 SciPy-bundle/2024.05
 
-basedir="$(cd "$SLURM_SUBMIT_DIR/.."&&pwd)" # Our root directory
+basedir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."&&pwd)" # Our root directory
 codedir="$basedir/code" # Where the code lives
 logsdir="$basedir/job_logs/${VERSION}/$TYPE/shift_${SHIFT}/${SLURM_JOB_NAME}" # Where log files will go
 outputdir="$basedir/job_outputs/${VERSION}/$TYPE/shift_${SHIFT}" # General output dir for this shift
@@ -39,10 +37,23 @@ stepdir="$jobdatadir/${STEP}" # The data directory for this RG step
 mkdir -p "$outputdir" "$logsdir" # Make them in case they aren't already there
 mkdir -p "$joboutdir" "$jobdatadir" "$stepdir" # Make them in case they aren't already there
 
-exec >"$joboutdir/${SLURM_JOB_NAME}_JOB${SLURM_ARRAY_JOB_ID}_TASK${TASK_ID}.out" # Redirect outputs to be within their own folders, together with the data they produce
-exec 2>"$logsdir/${SLURM_JOB_NAME}_JOB${SLURM_ARRAY_JOB_ID}_TASK${TASK_ID}.err" # Redirect error logs to be within their own folders for easy grouping
+out_file="$joboutdir/${SLURM_JOB_NAME}_JOB${SLURM_ARRAY_JOB_ID}_TASK${TASK_ID}.out"
+err_file="$logsdir/${SLURM_JOB_NAME}_JOB${SLURM_ARRAY_JOB_ID}_TASK${TASK_ID}.err"
+exec >"$out_file" # Redirect outputs to be within their own folders, together with the data they produce
+exec 2>"$err_file" # Redirect error logs to be within their own folders for easy grouping
+
+echo "Redirecting output logs to $out_file"
+echo "Redirecting error logs to $err_file"
+
 source "$basedir/.venv/bin/activate"
 JOB_SEED=$(( SEED + 123456 + 1000*TASK_ID + STREAM ))
+
+NUM_BATCHES=$(( SLURM_ARRAY_TASK_MAX + 1 )) # Number of batches to generate/process data over, same as array size
+if (( N % NUM_BATCHES != 0 )); then
+    echo "[ERROR] N=$N not divisible by NUM_BATCHES=$NUM_BATCHES" >&2
+    exit 2
+fi
+BATCH_SIZE=$(( N / NUM_BATCHES )) # How many samples should be calculated per batch
 
 # General job information
 echo "==================================================="

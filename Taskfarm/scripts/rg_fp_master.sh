@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-basedir="$(cd "$SLURM_SUBMIT_DIR/.."&&pwd)" # Our root directory
+basedir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."&&pwd)" # Our root directory
 module purge
 module load GCC/13.3.0
 source "$basedir/.venv/bin/activate"
@@ -75,9 +75,13 @@ scriptsdir="$basedir/scripts" # Where all shell scripts live
 logsdir="$basedir/job_logs/${VERSIONSTR}/$TYPE" # Where log files will go
 mkdir -p "$logsdir" "$joboutdir" # Make them in case they aren't already there
 
-exec >"$joboutdir/${SLURM_JOB_NAME}_JOB${SLURM_JOB_ID}.out" # Redirect outputs to be within their own folders, together with the data they produce
-exec 2>"$logsdir/${SLURM_JOB_NAME}_JOB${SLURM_JOB_ID}.err" # Redirect error logs to be within their own folders for easy grouping
+out_file="$joboutdir/${SLURM_JOB_NAME}_JOB${SLURM_JOB_ID}.out"
+err_file="$logsdir/${SLURM_JOB_NAME}_JOB${SLURM_JOB_ID}.err"
+exec >"$out_file" # Redirect outputs to be within their own folders, together with the data they produce
+exec 2>"$err_file" # Redirect error logs to be within their own folders for easy grouping
 
+echo "Redirecting output logs to $out_file"
+echo "Redirecting error logs to $err_file"
 
 echo "======================================================"
 echo "                    SLURM JOB INFO "

@@ -24,7 +24,7 @@ SHIFT="${8-}" # Takes in the shift value if running EXP, to change histogram dom
 export RG_CONFIG=$UPDATED_CONFIG
 
 # Directories we're using
-basedir="$(cd "$SLURM_SUBMIT_DIR/.."&&pwd)" # Our root directory
+basedir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."&&pwd)" # Our root directory
 codedir="$basedir/code" # Where the code lives
 
 # If we're doing an EXP run, set the directories accordingly
@@ -54,8 +54,13 @@ mkdir -p "$T_DIR" "$Z_DIR" "$INPUT_DIR" "$SYM_DIR"
 mkdir -p "$outputdir" "$logsdir" # Make these now so that it does it every time we run this job
 mkdir -p "$joboutdir" "$jobdatadir" "$batchdir" "$histdir" "$statsdir" "$laundereddir"
 
-exec >"$joboutdir/${SLURM_JOB_NAME}_JOB${SLURM_JOB_ID}.out" # Redirect outputs to be within their own folders, together with the data they produce
-exec 2>"$logsdir/${SLURM_JOB_NAME}_JOB${SLURM_JOB_ID}.err" # Redirect error logs to be within their own folders for easy grouping
+out_file="$joboutdir/${SLURM_JOB_NAME}_JOB${SLURM_JOB_ID}.out"
+err_file="$logsdir/${SLURM_JOB_NAME}_JOB${SLURM_JOB_ID}.err"
+exec >"$out_file" # Redirect outputs to be within their own folders, together with the data they produce
+exec 2>"$err_file" # Redirect error logs to be within their own folders for easy grouping
+
+echo "Redirecting output logs to $out_file"
+echo "Redirecting error logs to $err_file"
 
 # Libraries needed
 module purge
@@ -69,6 +74,10 @@ if [[ "$NUM_BATCHES" -le 0 ]]; then
     echo "[ERROR]: No batch_* directories found in $batchdir" >&2
     ls -lah "$jobdatadir/RG${RG_STEP}" || true
     exit 1
+fi
+if (( N % NUM_BATCHES != 0 )); then
+    echo "[ERROR] N=$N not divisible by NUM_BATCHES=$NUM_BATCHES" >&2
+    exit 2
 fi
 
 BATCH_SIZE=$(( N / NUM_BATCHES )) # How many samples exist per batch
@@ -146,6 +155,11 @@ echo " input t  : $temp_input_t "
 for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
     BATCH_DIR="$batchdir/batch_${batch}"
 
+    if [[ ! -f "$BATCH_DIR/READY" ]]; then
+        echo "[ERROR] Missing READY marker: $BATCH_DIR/READY" >&2
+        exit 1
+    fi
+
     if [[ "$TYPE" == "FP" ]]; then
         JOB_SEED=$(( SEED + 1000000*RG_STEP + 1000*batch + STREAM ))
     else
@@ -160,6 +174,11 @@ for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
 
     batch_t="$BATCH_DIR/t_data_RG${RG_STEP}_${BATCH_SIZE}_samples.npy"
     batch_z="$BATCH_DIR/z_data_RG${RG_STEP}_batch_${batch}.npy"
+
+    if [[ ! -s "$batch_t" ]]; then
+        echo "[ERROR] Missing or empty t file: $batch_t" >&2
+        exit 1
+    fi
 
     echo " Adding batch $batch"
     echo " t file : $batch_t"
@@ -309,6 +328,23 @@ mv "$temp_input_t" "$INPUT_T"
 echo " Input t histogram moved from temp storage to shared FS "
 echo " Input t histogram for RG${RG_STEP} saved to ${INPUT_T} "
 
+# Record config of a successful job before deleting previous step data
+donefile="$jobdatadir/RG${RG_STEP}/DONE.json"
+python - <<PY
+import json, time
+meta = {
+  "rg_step": int("$RG_STEP"),
+  "n_total": int("$N"),
+  "num_batches": int("$NUM_BATCHES"),
+  "batch_size": int("$BATCH_SIZE"),
+  "job_id": "$SLURM_JOB_ID",
+  "created": time.time(),
+  "config": "$UPDATED_CONFIG",
+}
+print(json.dumps(meta, indent=2))
+open("$donefile", "w").write(json.dumps(meta, indent=2))
+PY
+
 if (( $PREV_RG >= 0 )); then
     echo " [$(date '+%Y-%m-%d %H:%M:%S')] : Clearing data files for RG${PREV_RG} "
     prev_dir="$jobdatadir/RG${PREV_RG}"
@@ -329,6 +365,7 @@ fi
 
 # Clean up temp directory
 rm -rf "$tempdir"
+
 
 echo "=============================================================================================="
 echo " Histogram job ${SLURM_JOB_ID} for RG${RG_STEP} completed on : [$(date '+%Y-%m-%d %H:%M:%S')] "
