@@ -60,9 +60,10 @@ def build_config(config: dict) -> RGConfig:
     )
     inputs = check_required_info(config, "data_settings.inputs")
     outputs = check_required_info(config, "data_settings.outputs")
-    shifts = get_nested_data(
+    shift_config = get_nested_data(
         config, "data_settings.shifts", [0.003, 0.005, 0.007, 0.009]
     )
+    shifts = [float(str(shift).strip()) for shift in shift_config]
     z_bins = int(get_nested_data(config, "parameter_settings.z.bins", 200))
     z_range = tuple(get_nested_data(config, "parameter_settings.z.range", [0.0, 1.0]))
     z_min = float(z_range[0])
@@ -228,4 +229,4 @@ def save_updated_config(run_dir: str | Path, conf: dict) -> None:
     """Save updated config yaml file to the run directory"""
     conf_path = Path(run_dir) / "updated_config.yaml"
     dump_yaml(conf, conf_path)
-    print(conf_path)
+    # print(conf_path)
