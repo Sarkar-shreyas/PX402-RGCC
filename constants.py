@@ -1,3 +1,4 @@
+import numpy as np
 import os
 from dotenv import load_dotenv
 
@@ -59,8 +60,19 @@ XLIMS = {
     },
 }
 
+T_DICT = {"1": 0.0, "2": 0.5, "3": float(1 / np.sqrt(2)), "4": 1.0}
+PHI_DICT = {
+    "1": 0.0,
+    "2": float(np.pi / 4),
+    "3": float(np.pi / 2),
+    "4": float(np.pi),
+    "5": float(np.pi * 2),
+}
+
 data_dir = os.getenv("DATA_DIR")
+local_dir = os.getenv("LOCAL_DIR")
 root_dir = os.getenv("ROOT_DIR")
+taskfarm_dir = os.getenv("TASKFARM_DIR")
 config_file = os.getenv("CONFIG_FILE")
 host = os.getenv("HOST", "vulcan2")
 remote_dir = os.getenv("REMOTE_DIR")
