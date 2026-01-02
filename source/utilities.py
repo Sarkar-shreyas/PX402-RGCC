@@ -153,7 +153,7 @@ def solve_matrix_eq(
 
     # Initialise a batch-size array of A and b to do the solve in batches
     A = np.zeros((batch_size, 10, 10), dtype=np.complex128)
-    b = np.zeros((batch_size, 10, 1), dtype=np.float64)
+    b = np.zeros((batch_size, 10, 1), dtype=np.complex128)
 
     # Since it is initialised as a 3d array, we have to manually assign the values to indexes across every batch
     # Row 1
@@ -327,12 +327,13 @@ def generate_t_prime(
     return t_prime
 
 
-def numerical_t_prime(ts: np.ndarray, phis: np.ndarray, N: int) -> np.ndarray:
+def numerical_t_prime(
+    ts: np.ndarray, phis: np.ndarray, N: int, batch_size: int = 100000
+) -> np.ndarray:
     """
     A function to compute tprime numerically using np.linalg.solve. Defaults to using Shaw's matrix
     """
-    num_batches = 20
-    batch_size = N // num_batches
+    num_batches = N // batch_size
     tprime = np.empty(shape=(N, 1))
     for i in range(0, num_batches):
         index_slice = slice(i * batch_size, (i + 1) * batch_size)
@@ -344,14 +345,19 @@ def numerical_t_prime(ts: np.ndarray, phis: np.ndarray, N: int) -> np.ndarray:
 
 
 def rg_data_workflow(
-    method: str, ts: np.ndarray, phis: np.ndarray, N: int, expr: str
+    method: str,
+    ts: np.ndarray,
+    phis: np.ndarray,
+    N: int,
+    expr: str,
+    batch_size: int = 100000,
 ) -> np.ndarray:
     """Perform the RG workflow based on method flag"""
     if method[0] == "a":  # Then we use the analytic form of tprime
         tprime = generate_t_prime(ts, phis, expr)
         return tprime
     elif method[0] == "n":
-        tprime = numerical_t_prime(ts, phis, N)
+        tprime = numerical_t_prime(ts, phis, N, batch_size)
         return tprime
     else:
         raise ValueError(f"Invalid method entered: {method}")
@@ -491,7 +497,7 @@ def inverse_cdf_sampler(
     densities = get_density(hist_vals, bin_edges)
     widths = np.diff(bin_edges)
     cdf = np.cumsum(densities * widths)
-    # cdf = cdf / cdf[-1]
+    cdf = cdf / cdf[-1]
 
     # Map it into our cdf histogram
     index = np.searchsorted(cdf, u, side="right") - 1
@@ -515,7 +521,7 @@ def rejection_sampler(
 ) -> np.ndarray:
     # Launder a.k.a rejection method
     bin_width = np.diff(bin_edges)[0]
-    num_bins = len(bin_centers)
+    # num_bins = len(bin_centers)
     normed = hist_vals / np.sum(hist_vals * bin_width)
 
     # Store the max height of the bins, and their edges
@@ -539,9 +545,8 @@ def rejection_sampler(
         x = rng.uniform(domain_min, domain_max, batch_size)
         y = rng.uniform(0, max_height, batch_size)
 
-        bin_number = np.ceil((x - domain_min) / bin_width).astype(int)
-        bin_number = np.clip(bin_number, 0, num_bins - 1)
-
+        bin_number = np.searchsorted(bin_edges, x, side="right") - 1
+        bin_number = np.clip(bin_number, 0, len(hist_vals) - 1)
         # Store the heights at that bin
         heights = normed[bin_number]
 
