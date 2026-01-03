@@ -81,8 +81,10 @@ else
     )"
 fi
 
-
+mkdir -p "$basedir/job_outputs/bootstrap" "$basedir/job_logs/bootstrap"
 rg_job=$(sbatch --parsable \
+        --output="$basedir/job_outputs/bootstrap/rg_fp_master_%A.out" \
+        --error="$basedir/job_logs/bootstrap/rg_fp_master_%A.err" \
         "$scriptsdir/rg_fp_master.sh" \
         "$UPDATED_CONFIG" )
 

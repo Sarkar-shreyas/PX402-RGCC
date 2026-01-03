@@ -8,8 +8,6 @@
 #SBATCH --signal=B:TERM@30
 #SBATCH --kill-on-invalid-dep=yes
 #SBATCH --job-name=rg_gen
-#SBATCH --output=../job_outputs/bootstrap/%x_%A_%a.out
-#SBATCH --error=../job_logs/bootstrap/%x_%A_%a.err
 
 set -euo pipefail
 STREAM=1 # Additional var for deterministic seeding
@@ -32,7 +30,7 @@ module purge
 module load GCC/13.3.0 SciPy-bundle/2024.05
 
 # Directories we're using
-basedir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."&&pwd)" # Our root directory
+basedir="$(cd "$SLURM_SUBMIT_DIR/.."&&pwd)" # Our root directory
 codedir="$basedir/code" # Where the code lives
 tempdir="${TMPDIR:-/tmp}/${SLURM_JOB_NAME}_${SLURM_ARRAY_JOB_ID}_${TASK_ID}" # The temp directory we'll use, unique to each job ID
 tempbatchdir="$tempdir/RG${RG_STEP}/batch_${TASK_ID}" # The temp directory to write batch data to

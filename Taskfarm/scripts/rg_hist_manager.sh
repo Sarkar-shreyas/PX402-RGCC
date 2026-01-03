@@ -7,8 +7,6 @@
 #SBATCH --signal=B:TERM@60
 #SBATCH --kill-on-invalid-dep=yes
 #SBATCH --job-name=rg_hist
-#SBATCH --output=../job_outputs/bootstrap/%x_%A.out
-#SBATCH --error=../job_logs/bootstrap/%x_%A.err
 
 set -euo pipefail
 UPDATED_CONFIG="$1"
@@ -24,7 +22,7 @@ SHIFT="${8-}" # Takes in the shift value if running EXP, to change histogram dom
 export RG_CONFIG=$UPDATED_CONFIG
 
 # Directories we're using
-basedir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."&&pwd)" # Our root directory
+basedir="$(cd "$SLURM_SUBMIT_DIR/.."&&pwd)" # Our root directory
 codedir="$basedir/code" # Where the code lives
 
 # If we're doing an EXP run, set the directories accordingly

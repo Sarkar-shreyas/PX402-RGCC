@@ -84,9 +84,11 @@ else
         ${OUT:+--out "$OUT"}
     )"
 fi
-
+mkdir -p "$basedir/job_outputs/bootstrap" "$basedir/job_logs/bootstrap"
 
 shift_job=$(sbatch --parsable \
-    "$scriptsdir/shifted_rg.sh" \
+        --output="$basedir/job_outputs/bootstrap/shifted_rg_%A.out" \
+        --error="$basedir/job_logs/bootstrap/shifted_rg_%A.err" \
+        "$scriptsdir/shifted_rg.sh" \
         "$UPDATED_CONFIG" "$SHIFT_INDEX")
 echo " [$(date '+%Y-%m-%d %H:%M:%S')]: Submitted RG Exp job with id $shift_job "

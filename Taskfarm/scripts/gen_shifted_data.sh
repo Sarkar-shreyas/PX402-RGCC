@@ -8,8 +8,6 @@
 #SBATCH --signal=B:TERM@30
 #SBATCH --kill-on-invalid-dep=yes
 #SBATCH --job-name=gen_shift
-#SBATCH --output=../job_outputs/bootstrap/%x_%A_%a.out
-#SBATCH --error=../job_logs/bootstrap/%x_%A_%a.err
 set -euo pipefail
 UPDATED_CONFIG="$1"
 STREAM=4 # Additional var for deterministic seeding
@@ -27,7 +25,7 @@ export RG_CONFIG=$UPDATED_CONFIG
 module purge
 module load GCC/13.3.0 SciPy-bundle/2024.05
 
-basedir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."&&pwd)" # Our root directory
+basedir="$(cd "$SLURM_SUBMIT_DIR/.."&&pwd)" # Our root directory
 codedir="$basedir/code" # Where the code lives
 logsdir="$basedir/job_logs/${VERSION}/$TYPE/shift_${SHIFT}/${SLURM_JOB_NAME}" # Where log files will go
 outputdir="$basedir/job_outputs/${VERSION}/$TYPE/shift_${SHIFT}" # General output dir for this shift

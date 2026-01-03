@@ -1,11 +1,9 @@
 #!/bin/bash
 #SBATCH --job-name=rg_fp_master
-#SBATCH --output=../job_outputs/bootstrap/%x_%A.out
-#SBATCH --error=../job_logs/bootstrap/%x_%A.err
 
 set -euo pipefail
 
-basedir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."&&pwd)" # Our root directory
+basedir="$(cd "$SLURM_SUBMIT_DIR/.."&&pwd)" # Our root directory
 module purge
 module load GCC/13.3.0
 source "$basedir/.venv/bin/activate"
@@ -125,8 +123,8 @@ for step in $(seq 0 $(( NUM_RG_ITERS - 1 ))); do
     # Run the first step without any dependency, then set the last histogram job as its dependency
     if [ "$step" -eq 0 ]; then
         gen_job=$(sbatch --parsable \
-        --output=../job_outputs/bootstrap/rg_gen_RG${step}_%A_%a.out \
-        --error=../job_logs/bootstrap/rg_gen_RG${step}_%A_%a.err \
+        --output="$basedir/job_outputs/bootstrap/rg_gen_RG${step}_%A_%a.out" \
+        --error="$basedir/job_logs/bootstrap/rg_gen_RG${step}_%A_%a.err" \
         "$scriptsdir/rg_gen_batch.sh"\
             "$UPDATED_CONFIG" "$TYPE" "$VERSIONSTR" "$N" "$step" "$SEED" "$METHOD" "$EXPR" "$INITIAL" "$EXISTING_T" )
 
@@ -134,8 +132,8 @@ for step in $(seq 0 $(( NUM_RG_ITERS - 1 ))); do
     else
         gen_job=$(sbatch --parsable \
         --dependency=afterok:${PREV_HIST_JOB} \
-        --output=../job_outputs/bootstrap/rg_gen_RG${step}_%A_%a.out \
-        --error=../job_logs/bootstrap/rg_gen_RG${step}_%A_%a.err \
+        --output="$basedir/job_outputs/bootstrap/rg_gen_RG${step}_%A_%a.out" \
+        --error="$basedir/job_logs/bootstrap/rg_gen_RG${step}_%A_%a.err" \
         "$scriptsdir/rg_gen_batch.sh"\
             "$UPDATED_CONFIG" "$TYPE" "$VERSIONSTR" "$N" "$step" "$SEED" "$METHOD" "$EXPR" "$INITIAL" "$EXISTING_T" )
 
@@ -145,8 +143,8 @@ for step in $(seq 0 $(( NUM_RG_ITERS - 1 ))); do
     echo "----------------------------------------------------------------------------------------------------------------"
     hist_job=$(sbatch --parsable \
         --dependency=afterok:${gen_job} \
-        --output=../job_outputs/bootstrap/rg_hist_RG${step}_%A.out \
-        --error=../job_logs/bootstrap/rg_hist_RG${step}_%A.err \
+        --output="$basedir/job_outputs/bootstrap/rg_hist_RG${step}_%A.out" \
+        --error="$basedir/job_logs/bootstrap/rg_hist_RG${step}_%A.err" \
         "$scriptsdir/rg_hist_manager.sh" \
         "$UPDATED_CONFIG" "$TYPE" "$VERSIONSTR" "$N" "$step" "$SEED" "$SYMMETRISE")
     echo "----------------------------------------------------------------------------------------------------------------"
