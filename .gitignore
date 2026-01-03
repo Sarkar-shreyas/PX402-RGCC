@@ -1,11 +1,8 @@
 /venv
-simplify.py
 /plots
-/params
 /test_plots
 .env
 *.pyc
-/data
 .png
 __pycache__/
 archived/
@@ -14,3 +11,4 @@ archived/
 *.json
 *.png
 *.txt
+
