@@ -12,7 +12,7 @@ All remote references below assume the staged layout above. `file_management.py`
 
 ---
 
-Pipeline overview
+**Pipeline overview**
 
 This document describes the runtime lifecycle for a single RG step when running on the cluster (staged scripts under `<REMOTE_ROOT>/scripts/`).
 
@@ -48,19 +48,29 @@ Notes & references
 - The cluster script locations are `<REMOTE_ROOT>/scripts/` (push implemented in `file_management.py`).
 - For exact transfer behaviour and examples, see `file_management.py` in the repo root.
 
-# Pipeline overview
+---
+# Expanded details
 This pipeline is designed to enable large-scale Monte-Carlo RG steps across Slurm. Data is split into manageable batches and aggregated per step to use histogram-only handoffs to allow samples on the order of 10^8 and greater.
 
-Big-picture diagram (text):
+Big-picture diagram:
 
-<REMOTE_ROOT> (HPC) submission scripts ==> per-task generator jobs ==> histogram aggregation ==> RG steps (FP / EXP) ==> output artifacts
+```text
+<REMOTE_ROOT>/scripts
+ └─ rg_fp_master.sh
+    ├─ submits rg_gen_batch.sh (array)
+    │     └─ runs: python -m source.data_generation
+    ├─ afterok -> submits rg_hist_manager.sh
+    │     ├─ runs: python -m source.helpers
+    │     └─ runs: python -m source.histogram_manager
+    └─ repeats for RG steps 0..(steps-1)
+```
 
 - <REMOTE_ROOT> scripts: [<REMOTE_ROOT>/scripts/run_rg.sh](<REMOTE_ROOT>/scripts/run_rg.sh), [<REMOTE_ROOT>/scripts/run_shifts.sh](<REMOTE_ROOT>/scripts/run_shifts.sh), [<REMOTE_ROOT>/scripts/rg_fp_master.sh](<REMOTE_ROOT>/scripts/rg_fp_master.sh)
 - Local helper: [Local/run_local.py](Local/run_local.py) — a local driver that mirrors the per-task flow for development and small runs
 
 1) High-level flow for an FP (fixed-point) run
 
--- Submission: the Taskfarm helper scripts submit Slurm jobs using `sbatch`. For example, [<REMOTE_ROOT>/scripts/run_rg.sh](<REMOTE_ROOT>/scripts/run_rg.sh) calls `sbatch` to submit `rg_fp_master.sh`, and [<REMOTE_ROOT>/scripts/run_shifts.sh](<REMOTE_ROOT>/scripts/run_shifts.sh) submits `shifted_rg.sh`.
+- Submission: the Taskfarm helper scripts submit Slurm jobs using `sbatch`. For example, [<REMOTE_ROOT>/scripts/run_rg.sh] calls `sbatch` to submit `rg_fp_master.sh`, and [<REMOTE_ROOT>/scripts/run_shifts.sh] submits `shifted_rg.sh`.
 - Per-task work: code that generates matrix / t' samples and writes per-task histogram outputs (see [source/data_generation.py](source/data_generation.py) and [source/histogram_manager.py](source/histogram_manager.py)).
 - Aggregation / launder: histograms are collected and either laundered (resampled) or symmetrised before being passed to the next RG step. The resample/launder behavior is implemented by `launder` in [source/utilities.py](source/utilities.py) and the histogram build/save is performed in [Local/run_local.py](Local/run_local.py) via `build_hist` + `save_data`.
 - Iteration: the RG driver loops for `rg_settings.steps` iterations. The FP driver in the local helper is `rg_fp()` in [Local/run_local.py](Local/run_local.py). On the cluster this is driven by Taskfarm orchestration scripts (<REMOTE_ROOT>/scripts).

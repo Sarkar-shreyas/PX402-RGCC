@@ -4,7 +4,22 @@ This repository contains a Slurm-focused research pipeline for large-scale renor
 
 Important: this project is staged onto the cluster — the full git checkout is not expected to exist on the remote host. See the **Deployment / staging model** in `docs/Repo-Structure.md` and `docs/Pipeline.md` for authoritative remote paths.
 
+---
+
+**Workflow overview**
+```text
+LOCAL (<LOCAL_REPO_ROOT>)            file_management.py                   CLUSTER (<REMOTE_ROOT>)
+-------------------------           --------------------                 -------------------------
+source/                    ───────▶  --push code        ───────────────▶  code/source/
+Taskfarm/scripts/          ───────▶  --push scripts     ───────────────▶  scripts/
+Taskfarm/configs/          ───────▶  --push config      ───────────────▶  scripts/
+
+job_outputs/               ◀───────  --action pull ...  ◀───────────────  job_outputs/<version>/<FP|EXP>/
+```
+
 See the `docs/` folder for developer and operator guidance: `docs/Pipeline.md`, `docs/Runbook.md`, `docs/Artifacts.md`, `docs/Config.md`, `docs/Local-Testing.md`, `docs/Repo-Structure.md`, `docs/Troubleshooting.md`.
+
+---
 
 **Key facts extracted from `file_management.py` (authoritative mapping)**
 
