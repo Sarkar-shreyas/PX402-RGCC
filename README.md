@@ -5,6 +5,67 @@ This repository contains a Slurm-focused research pipeline for large-scale renor
 Important: this project is staged onto the cluster — the full git checkout is not expected to exist on the remote host. See the **Deployment / staging model** in `docs/Repo-Structure.md` and `docs/Pipeline.md` for authoritative remote paths.
 
 ---
+```mermaid
+flowchart TB
+    subgraph Repo["Repository Structure"]
+        TF["Taskfarm/\n(HPC / Slurm pipeline)"]
+        SRC["source/\n(Authoritative RG engine code)"]
+        LOC["Local/\n(Local testing helpers)"]
+        ANA["analysis/\n(Post-processing & plots)"]
+        QSHE["QSHE/\n(Experimental / in-development)"]
+        DATA["Data from taskfarm/\n(HPC outputs copied locally)"]
+        DOCS["docs/\n(Design & run documentation)"]
+        TEST["testing/\n(Unit / regression tests)"]
+        ROOT["Repo root\n(constants.py, file_management.py)"]
+    end
+
+    TF --> SRC
+    TF --> DATA
+    LOC --> SRC
+    ANA --> DATA
+    TEST --> SRC
+
+    style TF fill:#fdf6e3,stroke:#657b83
+    style SRC fill:#e3f2fd,stroke:#1565c0
+    style LOC fill:#ede7f6,stroke:#4527a0
+    style ANA fill:#e8f5e9,stroke:#2e7d32
+    style QSHE fill:#fff3e0,stroke:#ef6c00
+    style DOCS fill:#f5f5f5,stroke:#616161
+```
+### Folder responsibilities (high-level)
+
+- **Taskfarm/**
+  Slurm-facing orchestration layer. Contains job scripts and glue code used on the HPC cluster.
+  This is the *authoritative execution environment* for large-scale RG runs, sent to <REMOTE_ROOT> via `file_management.py`
+
+- **source/**
+  Authoritative Python implementation of the RG engine.
+  All execution modes (HPC or local) ultimately call into this code.
+
+- **Local/**
+  Non-authoritative helpers for small-N local testing and debugging.
+  Carries out a self-contained RG flow without batching or aggregation ops.
+
+- **analysis/**
+  Post-processing only: plotting, statistics, ν extraction, etc.
+  Does **not** participate in RG execution.
+
+- **Data from taskfarm/**
+  Read-only outputs copied back from the HPC cluster (histograms, configs, logs).
+
+- **QSHE/**
+  Experimental / exploratory code for the QSHE matrix (not part of the production pipeline).
+
+- **docs/**
+  Design documentation, runbooks, and troubleshooting notes.
+
+- **testing/**
+  Test files investigating solver behaviour.
+
+- **Repo root files**
+  Shared utilities and configuration helpers used across execution modes.
+
+---
 
 **Workflow overview**
 ```text
