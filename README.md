@@ -115,8 +115,10 @@ Placeholders used throughout these docs:
 
 Quick local sanity check (same as in `docs/Local-Testing.md`)
 
+- `--set` overrides maybe be written consecutively as shown in the 2nd example. Where multiple entries without a new command are found, they will be appended to `--set` input.
+
 ```bash
-python -m Local.run_local --config Local/configs/local_iqhe --set "rg_settings.steps=2" --set "rg_settings.samples=10000" --type FP
+python -m Local.run_local --config Local/configs/local_iqhe --set "rg_settings.steps=2" "rg_settings.samples=10000" --type FP
 ```
 
 ---
