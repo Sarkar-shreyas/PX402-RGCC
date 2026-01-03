@@ -88,6 +88,7 @@ Notes:
 - Local usage relies on vars defined in `constants.py`
 - `constants.py` uses `load_dotenv()` to load vars from a `.env` file
 - To enable local testing, create your own .env file with the required env vars ( see docs/Local-Testing.md for an in-depth walkthrough )
+- source is not meant to be installed as a package; it will be imported directly on the cluster.
 
 ---
 
