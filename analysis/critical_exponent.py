@@ -1,3 +1,17 @@
+"""
+Critical exponent (ν) extraction and peak analysis for RG simulation outputs.
+
+This script post-processes simulation data to estimate the critical exponent ν.
+It supports both new-format (config-based) and legacy (no config) data, detecting
+and adapting to the available metadata. Outputs include ν estimates and diagnostic
+plots, written to the appropriate stats/ and plots/ subfolders.
+
+- New-format: Reads config YAML for run parameters.
+- Old-format: Falls back to heuristics and folder/filename parsing.
+
+Assumption: Data layout and file naming follow conventions described in the repo docs.
+"""
+
 from collections import defaultdict
 import matplotlib.pyplot as plt
 import numpy as np
@@ -5,16 +19,18 @@ from source.utilities import calculate_nu, get_density, hist_moments, launder, b
 from source.config import load_yaml, build_config
 from scipy.stats import norm
 from source.fitters import estimate_z_peak, fit_z_peaks
-from data_plotting import (
+from analysis.data_plotting import (
     load_hist_data,
     construct_moments_dict,
     plot_data,
     calculate_average_nu,
+    build_plot_parser,
+    build_config_path,
 )
 import os
 import json
 from time import time
-from constants import data_dir, CURRENT_VERSION, NUM_RG, SHIFTS
+from constants import data_dir, SHIFTS, config_file
 
 TYPE = "EXP"
 
@@ -26,7 +42,19 @@ def slice_middle(
     densities: np.ndarray,
     shift: float,
 ) -> tuple:
-    """Slice out the middle of a gaussian histogram"""
+    """
+    Extract the central region of a Gaussian-like histogram, bounded by [-25+shift, 25+shift].
+
+    Args:
+        counts (np.ndarray): Histogram bin counts.
+        bins (np.ndarray): Histogram bin edges.
+        centers (np.ndarray): Bin centers.
+        densities (np.ndarray): Histogram densities.
+        shift (float): Value to shift the window.
+
+    Returns:
+        tuple: (counts, bins, centers, densities) arrays for the sliced region.
+    """
     mask = np.logical_and((centers >= -25.0 + shift), (centers <= 25.0 + shift))
     indexes = np.where(mask)[0]
     starting_index = indexes[0]
@@ -40,13 +68,42 @@ def slice_middle(
 
 
 def main():
-    config = load_yaml(f"{data_dir}")
+    """
+    Main entry point for critical exponent (ν) extraction and plotting.
+
+    This script detects whether a config file is present (new-format run) or not (legacy run).
+    - If config is present, it parses run parameters from the config YAML.
+    - If config is absent, it falls back to legacy heuristics (parsing version/steps from folder names or filenames).
+    - Loads RG run parameters and data, performs peak estimation, and produces ν estimates and diagnostic plots.
+
+    Args:
+        None. Uses CLI arguments (see build_plot_parser for options).
+
+    Returns:
+        None. Side effects: writes plots and stats to output folders.
+
+    Raises:
+        SystemExit: On usage error or missing data.
+
+    Notes:
+        - If config is missing, uses folder/filename parsing for legacy runs.
+        - Output files are written to stats/ and plots/ subfolders.
+        - Assumption: old-format data uses legacy naming conventions.
+    """
+    parser = build_plot_parser()
+    args = parser.parse_args()
+    if os.path.exists(args.loc):
+        config_path = build_config_path(args.loc, args.version, args.mode)
+    else:
+        config_path = str(config_file)
+    config = load_yaml(config_path)
     rg_config = build_config(config)
     seed = rg_config.seed
     rng = build_rng(seed)
     sampler = rg_config.resample
-    version = CURRENT_VERSION
-    rg = NUM_RG + 1
+    version = str(args.version)
+    num_rg = int(args.steps)
+    rg = num_rg + 1
     main_dir = f"{data_dir}/{version}"
     stats_dir = f"{data_dir}/{version}/{TYPE}/stats"
     plots_dir = f"{data_dir}/{version}/{TYPE}/plots"
@@ -54,17 +111,16 @@ def main():
     os.makedirs(plots_dir, exist_ok=True)
     data_map = defaultdict(dict)
     vars = ["t", "input_t", "z"]
-    print(f"Performing peak estimation for {CURRENT_VERSION}")
+    print(f"Performing peak estimation for {version}")
     print("=" * 100)
     # Load the FP distribution
-    fp_file = f"{data_dir}/{version}/FP/hist/sym_z/sym_z_hist_RG{NUM_RG - 1}.npz"
+    fp_file = f"{data_dir}/{version}/FP/hist/sym_z/sym_z_hist_RG{num_rg - 1}.npz"
     fp_counts, fp_bins, fp_centers = load_hist_data(fp_file)
     fp_density = get_density(fp_counts, fp_bins)
 
     # Get all the initial plots made for inspection
     start = time()
     for shift in SHIFTS:
-        # data_map[shift]["fp"] = [fp_counts, fp_bins, fp_centers, fp_density]
         for var in vars:
             data_map[shift][var] = []
             shift_dir = f"{data_dir}/{version}/{TYPE}/shift_{shift}/hist/{var}"
@@ -82,26 +138,13 @@ def main():
                 else:
                     filename = f"{shift_dir}/{var}_hist_RG{i - 1}.npz"
                 counts, bins, centers = load_hist_data(filename)
-                # if var == "z":
-                #     print(
-                #         f"For RG{i}, first bin = {bins[0]}, first center = {centers[0]}, last bin = {bins[-1]}, last center = {bins[-1]}"
-                #     )
-                #     print(f"Min: {min(counts)}, Max: {max(counts)}")
                 densities = get_density(counts, bins)
                 data_map[shift][var].append([counts, bins, centers, densities])
-            # print(f"All histograms for shift {shift} have been plotted")
             filename = f"{shift_plot_dir}/{var}_hist_shift_{shift}.png"
-            plot_data(var, filename, data_map[shift][var], TYPE)
-        # plot_data(
-        #     "z",
-        #     f"{shift_plot_dir}/fp_hist_shift_{shift}.png",
-        #     data_map[shift]["fp"],
-        #     TYPE,
-        # )
-        # print("Data for fp plotted")
-        # construct_moments_dict(shift_stats_dir, shift_plot_dir, ["fp"], data_map[shift])
-        # print("Stats for fp saved")
-        construct_moments_dict(shift_stats_dir, shift_plot_dir, vars, data_map[shift])
+            plot_data(var, filename, data_map[shift][var], TYPE, num_rg)
+        construct_moments_dict(
+            shift_stats_dir, shift_plot_dir, vars, data_map[shift], num_rg
+        )
 
         print(f"Plots for shift {shift} have been made.")
         print(f"Stats for shift {shift} have been made.")

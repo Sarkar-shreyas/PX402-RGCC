@@ -1,4 +1,5 @@
 import numpy as np
+import argparse
 import matplotlib.pyplot as plt
 from source.utilities import (
     l2_distance,
@@ -13,7 +14,7 @@ from collections import defaultdict
 import json
 from constants import (
     data_dir,
-    NUM_RG,
+    local_dir,
     LEGENDS,
     XLIMS,
     YLIMS,
@@ -25,8 +26,81 @@ DIST_TOLERANCE = 1e-3
 STD_TOLERANCE = 5e-4
 
 
+# ---------- CLI helpers ---------- #
+def build_plot_parser() -> argparse.ArgumentParser:
+    """
+    Build and return the argument parser for analysis scripts.
+
+    Returns:
+        argparse.ArgumentParser: Configured parser for CLI options.
+    """
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--loc", default="remote", help="Location of the data, remote or local"
+    )
+    parser.add_argument("--version", required=True, help="Version name")
+    parser.add_argument(
+        "--mode",
+        default="FP",
+        choices=["FP", "EXP"],
+        help="Mode of RG to plot, FP or EXP",
+    )
+    parser.add_argument(
+        "--steps", default=9, help="Number of RG steps to use for analysis/plotting"
+    )
+
+    return parser
+
+
+def build_config_path(data_location: str, version_name: str, rg_mode: str) -> str:
+    """
+    Construct the path to the config file for a given data location and version.
+
+    Args:
+        data_location (str): 'remote' or 'local'.
+        version_name (str): Version string (folder name).
+        rg_mode (str): 'FP' or 'EXP'.
+
+    Returns:
+        str: Path to the config YAML file.
+
+    Notes:
+        If the config file does not exist, scripts will fall back to legacy heuristics.
+    """
+    if data_location.strip().lower() == "remote":
+        data_folder = data_dir
+    elif data_location.strip().lower() == "local":
+        data_folder = local_dir
+    else:
+        raise ValueError(
+            f"Invalid data location {data_location} entered. Expected 'remote' or 'local'."
+        )
+    version = version_name.strip().lower()
+    version = f"{version[:-1]}{version[-1].upper()}"
+    rg_mode = rg_mode.strip().upper()
+    config_location = f"{data_folder}/{version}/{rg_mode}/updated_config.yaml"
+
+    return config_location
+
+
 # ---------- Plotting helpers ---------- #
-def plot_data(var: str, filename: str, data: list, mode: str):
+def plot_data(var: str, filename: str, data: list, mode: str, num_rg: int):
+    """
+    Plot histogram or scatter data for a given variable and save to file.
+
+    Args:
+        var (str): Variable name ('t', 'z', etc.).
+        filename (str): Output filename for the plot.
+        data (list): Data to plot (see code for structure).
+        mode (str): RG mode ('FP' or 'EXP').
+        num_rg (int): Number of RG steps.
+
+    Returns:
+        None. Side effect: writes plot to file.
+
+    Notes:
+        Output file is written as PNG. Uses axis limits and legends from constants.py.
+    """
     # plt.ylim((0.0, 1.01 * max(y_data)))
 
     xlim = XLIMS[mode][var]
@@ -46,7 +120,7 @@ def plot_data(var: str, filename: str, data: list, mode: str):
         ax2.set_ylim((0.15, 0.25))
         # inset = inset_locator.inset_axes(ax, width="25%", height=1.0)
         # inset.set_xlim([-25.0, 25.0])
-        for i in range(0, NUM_RG, 1):
+        for i in range(0, num_rg, 1):
             x_data = data[i][2]
             y_data = data[i][3]
             ax1.plot(x_data, y_data, label=f"RG{i}")
@@ -59,7 +133,7 @@ def plot_data(var: str, filename: str, data: list, mode: str):
         ax.set_title(f"Histogram of {var}")
         ax.set_xlabel(f"{var}")
         ax.set_ylabel(f"P({var})")
-        for i in range(NUM_RG):
+        for i in range(num_rg):
             x_data = data[i][2]
             y_data = data[i][3]
             ax.plot(x_data, y_data, label=f"RG{i}")
@@ -77,7 +151,22 @@ def plot_data(var: str, filename: str, data: list, mode: str):
     # print(f"Figure plotted for {var} to {filename}")
 
 
-def plot_moments(l2: list, moment_list: list[tuple], filename: str):
+def plot_moments(l2: list, moment_list: list[tuple], filename: str, num_rg: int):
+    """
+    Plot moments (mean, std, derivative, MSD) over RG steps and save to file.
+
+    Args:
+        l2 (list): Mean squared distances per RG step.
+        moment_list (list of tuple): List of (mean, std, std_derivative) per RG step.
+        filename (str): Output filename for the plot.
+        num_rg (int): Number of RG steps.
+
+    Returns:
+        None. Side effect: writes plot to file.
+
+    Notes:
+        Output file is written as PNG. Plots four subplots for moments.
+    """
     moment_fig, ((moment_ax0, moment_ax1), (moment_ax2, moment_ax3)) = plt.subplots(
         2, 2, figsize=(10, 10)
     )
@@ -96,14 +185,14 @@ def plot_moments(l2: list, moment_list: list[tuple], filename: str):
     # moment_ax1.set_ylim([2.0, 2.2])
     # moment_ax2.set_ylim([0.0, 0.04])
     # moment_ax3.set_ylim([0.0, 0.0015])
-    rgs = [i + 1 for i in range(NUM_RG)]
+    rgs = [i + 1 for i in range(num_rg)]
     mean, std = map(np.array, zip(*moment_list))
 
     # mean_errors = std / np.sqrt(N)
     # std_errors = std / np.sqrt(2 * (N - 1))
 
     std_primes = std_derivative(rgs, std, 1)
-    for i in range(NUM_RG):
+    for i in range(num_rg):
         moment_ax0.scatter(i, mean[i])
         moment_ax1.scatter(i, std[i])
         moment_ax2.scatter(i, std_primes[i])
@@ -121,8 +210,22 @@ def calculate_average_nu(
     starting_step: int,
     rg_steps: int,
 ):
-    loaded_data = defaultdict(list)
+    """
+    Calculate and print the average critical exponent Nu and its error over a range of RG steps.
 
+    Args:
+        data (dict): Dictionary of stats loaded from JSON (keys: RG step, values: dicts with 'Peak Nu', 'Peak Slope', 'Peak R2').
+        starting_step (int): First RG step to include.
+        rg_steps (int): Last RG step (exclusive).
+
+    Returns:
+        None. Prints average Nu and error to stdout.
+
+    Notes:
+        - Assumes data is structured as in new-format output JSON.
+        - For legacy data, may be missing keys or have different structure (assumption: code will error if so).
+    """
+    loaded_data = defaultdict(list)
     for i in range(starting_step, rg_steps):
         loaded_data["Nu"].append(data[f"RG{i}"]["Peak Nu"])
         # loaded_data["Nu error"].append(errors[i - 1])
@@ -130,11 +233,8 @@ def calculate_average_nu(
         print(
             f"At step {i}, Nu = {data[f'RG{i}']['Peak Nu']:.5f}, with slope = {data[f'RG{i}']['Peak Slope']:.5f} and R2 = {data[f'RG{i}']['Peak R2']:.5f}"
         )
-
-    # avg_error = np.mean(loaded_data["Nu error"][:])
     avg_error = np.max(loaded_data["Nu"][:]) - np.min(loaded_data["Nu"][:])
     avg_nu = np.mean(loaded_data["Nu"][:])
-
     print(
         f"Average Nu value from RG steps {starting_step}-{rg_steps - 1} = {avg_nu:.5f} \u00b1 {avg_error:.5f}"
     )
@@ -142,6 +242,19 @@ def calculate_average_nu(
 
 # ---------- Stats helpers ---------- #
 def load_hist_data(filename: str) -> tuple:
+    """
+    Load histogram data from a .npz file.
+
+    Args:
+        filename (str): Path to the .npz file containing 'histval', 'binedges', 'bincenters'.
+
+    Returns:
+        tuple: (counts, bins, centers) arrays from the file.
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        KeyError: If required arrays are missing.
+    """
     data = np.load(filename)
     counts = data["histval"]
     bins = data["binedges"]
@@ -150,6 +263,19 @@ def load_hist_data(filename: str) -> tuple:
 
 
 def load_moments(filename: str) -> tuple:
+    """
+    Load moment statistics from a .npz file.
+
+    Args:
+        filename (str): Path to the .npz file containing 'l2_dist', 'mean', 'std', 'converged'.
+
+    Returns:
+        tuple: (l2, mean, std, conv) arrays from the file.
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        KeyError: If required arrays are missing.
+    """
     data = np.load(filename)
     l2 = data["l2_dist"]
     mean = data["mean"]
@@ -163,13 +289,31 @@ def construct_moments_dict(
     plots_directory: str,
     vars: list,
     data_map: dict | defaultdict,
+    num_rg: int,
 ):
+    """
+    Construct and save moment statistics and plots for each variable over RG steps.
+
+    Args:
+        stats_directory (str): Directory to save JSON stats files.
+        plots_directory (str): Directory to save PNG plots.
+        vars (list): List of variable names to process.
+        data_map (dict or defaultdict): Mapping from variable name to list of histogram data per RG step.
+        num_rg (int): Number of RG steps.
+
+    Returns:
+        None. Side effects: writes JSON stats and PNG plots to disk.
+
+    Notes:
+        - Output files are named <var>_moments.json and <var>_moments.png.
+        - Assumes data_map is populated for all vars and steps.
+    """
     data = defaultdict(dict)
     for var in vars:
         l2_dist = []
         moments = []
         msd = []
-        for i in range(NUM_RG):
+        for i in range(num_rg):
             counts = data_map[var][i][0]
             bins = data_map[var][i][1]
             if i > 0:
@@ -202,7 +346,7 @@ def construct_moments_dict(
                 else:
                     data[f"RG_{i}"]["std_converged"] = False
         plot_file = f"{plots_directory}/{var}_moments.png"
-        plot_moments(l2_dist, moments, plot_file)
+        plot_moments(l2_dist, moments, plot_file, num_rg)
         stats_file = f"{stats_directory}/{var}_moments.json"
         with open(stats_file, "w") as f:
             json.dump(data, f, indent=2)
@@ -210,11 +354,18 @@ def construct_moments_dict(
 
 
 if __name__ == "__main__":
-    config = load_yaml(config_file)  # type: ignore
+    parser = build_plot_parser()
+    args = parser.parse_args()
+    if os.path.exists(args.loc):
+        config_path = build_config_path(args.loc, args.version, args.mode)
+    else:
+        config_path = str(config_file)
+    config = load_yaml(config_path)
+    print(f"Config loaded from {config_path}")
     rg_config = build_config(config)
     # Load constants
-    version = f"{rg_config.version}_{rg_config.method}_{rg_config.expr}"
-
+    version = str(args.version)
+    num_rg = int(args.steps)
     var_names = ["t", "z", "input_t", "sym_z"]
     z_vars = ["z", "sym_z"]
     other_vars = ["t", "input_t"]
@@ -241,7 +392,7 @@ if __name__ == "__main__":
     # Load histogram data
     data_map = defaultdict(list)
     for var in var_names:
-        for i in range(NUM_RG):
+        for i in range(num_rg):
             if var == "z":
                 file = f"{folder_names[var]}/{var}_hist_unsym_RG{i}.npz"
             else:
@@ -254,10 +405,10 @@ if __name__ == "__main__":
     # Plot the other 3 variables without clipping bounds
     for var in var_names:
         filename = f"{plots_dir}/{var}_histogram.png"
-        plot_data(var, filename, data_map[var], TYPE)
+        plot_data(var, filename, data_map[var], TYPE, num_rg)
     print("Plots for t, z and input t data have been made")
     print("-" * 100)
-    construct_moments_dict(stats_dir, plots_dir, var_names, data_map)
+    construct_moments_dict(stats_dir, plots_dir, var_names, data_map, num_rg)
     # print("-" * 100)
     # print(data_map["sym_z"][0][1])
     print("Analysis done.")
