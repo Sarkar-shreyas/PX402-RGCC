@@ -305,14 +305,14 @@ for batch in $(seq 0 $(( NUM_BATCHES - 1 ))); do
     if [[ ! -f "$temp_input_t" ]]; then
         python -m "source.histogram_manager" \
             0 \
-            "input_t" \
+            "t" \
             "$launderbatch" \
             "$temp_input_t" \
             "$RG_STEP"
     else
         python -m "source.histogram_manager" \
             1 \
-            "input_t" \
+            "t" \
             "$launderbatch" \
             "$temp_input_t" \
             "$temp_input_t" \
