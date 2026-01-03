@@ -12,7 +12,7 @@ flowchart LR
 TF["Taskfarm/<br/>(HPC / Slurm pipeline)"]
 SRC["source/<br/>(Authoritative RG engine code)"]
 LOC["Local/<br/>(Local testing helpers)"]
-TEST["testing/<br/>(Unit / regression tests)"]
+TEST["testing/<br/>(Solver / Misc. tests)"]
 ANA["analysis/<br/>(Post-processing & plots)"]
 DATA["Data from taskfarm/<br/>(HPC outputs copied locally)"]
 QSHE["QSHE/<br/>(Experimental / in-development)"]
