@@ -1,4 +1,21 @@
-"""Run an RG workflow locally"""
+"""Run an RG workflow locally.
+
+This script provides a single-process driver used for local testing of the RG
+Monte Carlo pipeline. It re-uses the library code in ``source/`` to run small
+FP (fixed-point) or EXP (shifted/exponent) workflows and writes NPZ histograms
+and a JSON manifest into a local output directory.
+
+Usage
+-----
+Run from the repository root::
+
+        python -m Local.run_local --config Local/configs/local_iqhe --set "rg_settings.steps=2" --set "rg_settings.samples=10000" --type FP
+
+Notes
+-----
+- This module redirects stdout/stderr to ``output.txt``/``error.txt`` inside
+    the chosen output directory when executed as a script.
+"""
 
 from time import time
 import numpy as np
@@ -34,7 +51,22 @@ from constants import T_DICT, PHI_DICT
 
 
 def build_default_output_dir(config: dict) -> Path:
-    """Parse the input config dict and build the default output path"""
+    """Build the default local output directory for a config.
+
+    Parameters
+    ----------
+    config : dict
+        Parsed configuration dictionary (result of :func:`source.parse_config.validate_input`
+        / :func:`source.config.handle_config`). Must include ``main.version`` and
+        ``engine.method`` keys. ``engine.expr`` is also used to form the directory
+        name.
+
+    Returns
+    -------
+    Path
+        A path under the repository root of the form
+        ``<repo_root>/Local data/{version}_{method}_{expr}``.
+    """
     version = str(get_nested_data(config, "main.version"))
     method = str(get_nested_data(config, "engine.method"))
     expr = str(get_nested_data(config, "engine.expr")).strip().lower()
@@ -46,7 +78,24 @@ def build_default_output_dir(config: dict) -> Path:
 
 
 def build_hist(data: np.ndarray, bins: int, range: tuple) -> dict:
-    """Constructs a dictionary of histogram values, bin edges, bin centers and densities, then returns it"""
+    """Compute a histogram and return related arrays and densities.
+
+    Parameters
+    ----------
+    data : np.ndarray
+        1-D array of samples to histogram.
+    bins : int
+        Number of histogram bins.
+    range : tuple
+        (min, max) binning range.
+
+    Returns
+    -------
+    dict
+        Dictionary with keys: ``hist`` (counts), ``edges`` (bin edges),
+        ``centers`` (bin centers) and ``densities`` (density per bin computed
+        using :func:`source.utilities.get_density`).
+    """
     hist, edges = np.histogram(data, bins=bins, range=range)
     centers = 0.5 * (edges[1:] + edges[:-1])
     densities = get_density(hist, edges)
@@ -54,7 +103,18 @@ def build_hist(data: np.ndarray, bins: int, range: tuple) -> dict:
 
 
 def print_config(config: RGConfig) -> None:
-    """Prints main vars of config to stdout"""
+    """Print a compact, human-readable summary of the main run settings.
+
+    Parameters
+    ----------
+    config : RGConfig
+        Configuration dataclass returned by :func:`source.config.build_config`.
+
+    Notes
+    -----
+    - If the configuration indicates an ``EXP`` run, this function expects
+      ``config.shifts`` to be iterable.
+    """
     header = f" RG Configuration for {config.version}_{config.method}_{config.expr} "
     print(header)
     print("-" * len(header))
@@ -81,7 +141,43 @@ def print_config(config: RGConfig) -> None:
 def rg_fp(
     rg_config: RGConfig, output_folders: dict, starting_t: int, starting_phi: int
 ) -> dict:
-    """Conducts an RG flow to determine the fixed point distribution. Returns a dict containing histogram filepaths"""
+    """Run an FP (fixed-point) RG workflow locally and write histograms.
+
+    The function performs ``rg_config.steps`` iterations. For each step it
+    computes the transformed samples using :func:`source.utilities.rg_data_workflow`,
+    converts between t and z representations, computes histograms and writes
+    NPZ files via :func:`source.utilities.save_data` into the folders provided
+    by ``output_folders``.
+
+    Parameters
+    ----------
+    rg_config : RGConfig
+        Configuration dataclass containing numeric settings (samples, bins,
+        ranges, resampling behaviour, seed, etc.).
+    output_folders : dict
+        Mapping with keys ``'t'`` and ``'z'`` giving output directories for
+        t- and z-histograms respectively. Values should be string paths.
+    starting_t : int
+        If non-zero, indicates a fixed starting t value will be used.
+    starting_phi : int
+        If non-zero, indicates a fixed starting phi value will be used.
+
+    Returns
+    -------
+    dict
+        Mapping of step identifiers to the generated NPZ file paths, for
+        example ``{"RG0": {"t": "...", "z": "..."}, ...}``.
+
+    Notes
+    -----
+    - The implementation currently references an external ``args`` variable
+      when constructing constant initial arrays if ``starting_t`` or
+      ``starting_phi`` is non-zero. This variable is provided when the module
+      is executed as a script; if you call :func:`rg_fp` programmatically you
+      must supply ``starting_t``/``starting_phi`` values accordingly.
+      (See module-level ``if __name__ == '__main__'`` block.)
+    - Side effects: writes NPZ files to disk and prints progress to stdout.
+    """
     samples = rg_config.samples
     batch_size = rg_config.matrix_batch_size
     steps = rg_config.steps
@@ -161,7 +257,34 @@ def rg_fp(
 def rg_exp(
     rg_config: RGConfig, output_folders: dict, fp_dist: str, starting_phi: int
 ) -> dict:
-    """Conducts an RG flow to determine the critical exponent. Returns a dict containing histogram filepaths"""
+    """Run an EXP (shifted / exponent) RG workflow locally and write histograms.
+
+    Parameters
+    ----------
+    rg_config : RGConfig
+        Configuration dataclass with samples, bins, ranges, shifts and other
+        resampling parameters.
+    output_folders : dict
+        Mapping that, for each shift value, provides folders for ``t`` and
+        ``z`` histograms (strings).
+    fp_dist : str
+        Path to a fixed-point NPZ file (containing keys ``'histval'``,
+        ``'binedges'`` and ``'bincenters'``). The file is loaded to construct
+        a laundered initial distribution.
+    starting_phi : int
+        If non-zero, a constant phase array is used; otherwise phases are
+        generated randomly from RNG.
+
+    Returns
+    -------
+    dict
+        Nested mapping containing NPZ output paths per shift and RG step.
+
+    Side effects
+    ------------
+    Writes NPZ files to disk (via :func:`source.utilities.save_data`) and prints
+    progress to stdout.
+    """
     samples = rg_config.samples
     batch_size = rg_config.matrix_batch_size
     steps = rg_config.steps

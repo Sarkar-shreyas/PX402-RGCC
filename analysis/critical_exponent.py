@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 from collections import defaultdict
 import matplotlib.pyplot as plt
 import numpy as np
@@ -42,6 +41,10 @@ def slice_middle(
 
 def main():
     config = load_yaml(f"{data_dir}")
+    rg_config = build_config(config)
+    seed = rg_config.seed
+    rng = build_rng(seed)
+    sampler = rg_config.resample
     version = CURRENT_VERSION
     rg = NUM_RG + 1
     main_dir = f"{data_dir}/{version}"
@@ -143,11 +146,11 @@ def main():
                 counts, bins, centers, densities, shift_val
             )
             mean, std = hist_moments(sliced_counts, sliced_bins)
-            test = launder(1000000, sliced_counts, sliced_bins, sliced_centers)
+            test = launder(1000000, sliced_counts, sliced_bins, sliced_centers, rng)
             test_mu, test_std = norm.fit(test)
             # print(f"Fitted mu = {test_mu}, Calculated mean = {mean}")
             min_peaks[i, j], max_peaks[i, j], peaks[i, j] = estimate_z_peak(
-                sliced_counts, sliced_bins, sliced_centers
+                sliced_counts, sliced_bins, sliced_centers, rng, sampler
             )
             peak_errs[i, j] = max_peaks[i, j] - min_peaks[i, j]
             means[i, j] = mean

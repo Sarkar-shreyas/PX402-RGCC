@@ -1,3 +1,24 @@
+"""Utilities to transfer code, scripts and job outputs between local repo and remote cluster.
+
+This module implements the canonical staging workflow used by the project. It is
+intentionally thin: it constructs and runs either `scp` (Windows) or `rsync`
+(Linux/Mac) commands to push local folders (code, scripts, configs) to the
+remote host and to pull job outputs back into local storage. The exact remote
+paths and the repo->remote mapping are implemented here and relied upon by the
+documentation (README/docs).
+
+Important behaviour (implemented in this module):
+- Local `source/` is pushed to `<REMOTE_ROOT>/code/` (so remote runtime lives at
+    `<REMOTE_ROOT>/code/source/`).
+- Local `Taskfarm/scripts/*.sh` and `Taskfarm/configs/*` are pushed to
+    `<REMOTE_ROOT>/scripts/`.
+- Pulling artifacts retrieves data from `<REMOTE_ROOT>/job_outputs/{version}/{FP|EXP}/...`.
+
+The module reads configuration values from `constants.py` (env-based). Do not
+change runtime behaviour in this file without updating the docs which treat it
+as the source of truth.
+"""
+
 import os
 import subprocess
 import argparse
@@ -13,6 +34,15 @@ from constants import (
 
 # ---------- Utilities ---------- #
 def build_parser() -> argparse.ArgumentParser:
+    """Build an argument parser for the transfer CLI.
+
+    Returns
+    -------
+    argparse.ArgumentParser
+        Parser configured with the CLI options used by the project's transfer
+        helper. Options include `--push`, `--pull`, `--version`, `--type`, and
+        `--sys` (controls whether `scp` or `rsync` is used).
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--version", default=CURRENT_VERSION, help="The version to pull"
@@ -41,7 +71,21 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def create_local_folders(version: str) -> list:
-    """Creates folders for the input version if they don't already exist"""
+    """Ensure local destination folders exist for a given version.
+
+    Parameters
+    ----------
+    version : str
+        Version identifier (e.g. `fp_iqhe_numerical_shaw`). The function will
+        create `<DATA_DIR>/<version>/`, `<DATA_DIR>/<version>/FP/` and
+        `<DATA_DIR>/<version>/EXP/` where `DATA_DIR` is taken from
+        `constants.data_dir`.
+
+    Returns
+    -------
+    list
+        A list with three paths: `[version_folder, fp_folder, exp_folder]`.
+    """
     version_folder = f"{data_dir}/{version}"
     fp_folder = f"{version_folder}/FP"
     exp_folder = f"{version_folder}/EXP"
@@ -53,13 +97,44 @@ def create_local_folders(version: str) -> list:
 
 # ---------- SSH connection and command execution ---------- #
 def run_commands(commands: list) -> None:
+    """Execute a shell command list and raise on non-zero exit.
+
+    Parameters
+    ----------
+    commands : list
+        The command and arguments to execute (same shape as passed to
+        `subprocess.run`). This function prints the command before executing
+        it. It will raise `subprocess.CalledProcessError` if the command
+        returns a non-zero exit code.
+    """
     print("Running: ", " ".join(commands))
     subprocess.run(commands, check=True)
 
 
 # ---------- Main driver ---------- #
 def transfer_files(args) -> None:
-    """Process input args and run a sequence of commands"""
+    """Perform push or pull actions according to CLI args.
+
+    The function supports two high-level actions controlled by `--action`:
+
+    - `push`: upload local artifacts to the remote host. Supported push
+        targets: `code`, `scripts`, `config`.
+    - `pull`: retrieve remote job outputs. Supported pull targets include
+        `hist` and `config` (the latter pulls `job_outputs/{version}/{type}/config`).
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+            Parsed arguments returned by :func:`build_parser`. Expected attributes
+            include `version`, `action`, `push`, `pull`, `type`, `sys`, and
+            optionally `step`.
+
+    Raises
+    ------
+    ValueError
+            If an unknown `--sys`, `--type`, `--action`, or push/pull target is
+            provided.
+    """
 
     if args.version is not None:
         version = str(args.version).strip().lower()

@@ -12,6 +12,21 @@ from functools import lru_cache
 
 # ---------- Additional helpers ---------- #
 def _check_lowercase_keys(data: dict, parent: str = "") -> None:
+    """
+    Recursively check that all dictionary keys are lowercase.
+
+    Parameters
+    ----------
+    data : dict
+        Dictionary to check.
+    parent : str, optional
+        Parent key path for error reporting (default: '').
+
+    Raises
+    ------
+    ValueError
+        If a key is not lowercase.
+    """
     for key, val in data.items():
         if isinstance(key, str) and key != key.lower():
             raise KeyError(f"Key {parent}{key} must be all lowercase")
@@ -51,7 +66,26 @@ class RGConfig:
 
 
 def build_config(config: dict) -> RGConfig:
-    """Parses a config dict and returns an RGConfig object"""
+    """
+    Parse a config dictionary and return an RGConfig object.
+
+    Parameters
+    ----------
+    config : dict
+        Nested configuration dictionary (typically loaded from YAML).
+
+    Returns
+    -------
+    RGConfig
+        Populated RGConfig dataclass instance.
+
+    Raises
+    ------
+    KeyError
+        If required fields are missing.
+    ValueError
+        If type conversion fails for any field.
+    """
     version = str(check_required_info(config, "main.version")).strip().lower()
     id = check_required_info(config, "main.id")
     type = check_required_info(config, "main.type")
@@ -118,7 +152,14 @@ def build_config(config: dict) -> RGConfig:
 
 @lru_cache(maxsize=1)
 def get_rg_config() -> RGConfig:
-    """Load the config file from an env var, parse into an RGConfig object, and store in the lru cache"""
+    """
+    Return a cached RGConfig object for the current run.
+
+    Returns
+    -------
+    RGConfig
+        Cached RGConfig instance (singleton per process).
+    """
     config_path = os.environ.get("RG_CONFIG")
     if not config_path:
         raise RuntimeError("RG_CONFIG could not be found")
@@ -130,7 +171,24 @@ def get_rg_config() -> RGConfig:
 # ---------- Core yaml interactions ---------- #
 def load_yaml(path: str | Path) -> dict:
     """
-    Loads the yaml file from the given path into a dictionary
+    Load a YAML file from the given path into a dictionary.
+
+    Parameters
+    ----------
+    path : str or Path
+        Path to the YAML file.
+
+    Returns
+    -------
+    dict
+        Parsed YAML data as a dictionary.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the file does not exist.
+    ValueError
+        If the file is empty or not a dictionary.
     """
     path = Path(path)
     with path.open("r", encoding="utf-8") as file:
@@ -146,7 +204,14 @@ def load_yaml(path: str | Path) -> dict:
 
 def dump_yaml(data: dict, path: str | Path) -> None:
     """
-    Dumps existing data into a yaml file
+    Dump a dictionary to a YAML file at the given path.
+
+    Parameters
+    ----------
+    data : dict
+        Data to serialize and write.
+    path : str or Path
+        Output file path.
     """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -156,7 +221,23 @@ def dump_yaml(data: dict, path: str | Path) -> None:
 
 # ---------- Access config data from dict ---------- #
 def get_nested_data(config: dict, path: str, default: Any = None) -> Any:
-    """Returns the nested dictionary from a given path, if present"""
+    """
+    Retrieve a nested value from a config dictionary using dot-separated path.
+
+    Parameters
+    ----------
+    config : dict
+        Configuration dictionary.
+    path : str
+        Dot-separated path (e.g., 'main.version').
+    default : Any, optional
+        Value to return if path is not found (default: None).
+
+    Returns
+    -------
+    Any
+        Value at the specified path, or `default` if not found.
+    """
     path = path.strip().lower()
     keys = path.split(".")
     data = config
@@ -170,7 +251,26 @@ def get_nested_data(config: dict, path: str, default: Any = None) -> Any:
 
 
 def check_required_info(config: dict, path: str) -> Any:
-    """Checks for required fields in the input config"""
+    """
+    Check for a required field in the config and return its value.
+
+    Parameters
+    ----------
+    config : dict
+        Configuration dictionary.
+    path : str
+        Dot-separated path to the required field.
+
+    Returns
+    -------
+    Any
+        Value at the specified path.
+
+    Raises
+    ------
+    KeyError
+        If the required field is missing.
+    """
     info = get_nested_data(config, path, None)
     if info is None:
         raise KeyError(f"Missing required config field: {path}")
@@ -179,7 +279,19 @@ def check_required_info(config: dict, path: str) -> Any:
 
 # ---------- Handle overrides from the CLI ---------- #
 def parse_overrides(input_overrides: list[str]) -> dict:
-    """Parses a dictionary of override commands and assigns the correct values to the corresponding setting"""
+    """
+    Parse CLI override commands and assign values to config settings.
+
+    Parameters
+    ----------
+    input_overrides : list of str
+        List of override strings, e.g., ['rg_settings.steps=5'].
+
+    Returns
+    -------
+    dict
+        Dictionary of override key-value pairs.
+    """
 
     overrides = {}
     for pair in input_overrides:
@@ -204,7 +316,23 @@ def parse_overrides(input_overrides: list[str]) -> dict:
 
 
 def update_config(config: dict, overrides: dict, deep: bool = True) -> dict:
-    """Updates the input config in place with any overrides, and returns the new config. Optionally uses a copy instead if deep = False"""
+    """
+    Update a config dictionary in place with overrides.
+
+    Parameters
+    ----------
+    config : dict
+        Original configuration dictionary.
+    overrides : dict
+        Dictionary of override key-value pairs.
+    deep : bool, optional
+        If True, use a deep copy; otherwise, update in place (default: True).
+
+    Returns
+    -------
+    dict
+        Updated configuration dictionary.
+    """
     if deep:
         current_config = config
     else:
@@ -223,7 +351,23 @@ def handle_config(
     input_overrides: Optional[list[str]] = None,
     deep: bool = True,
 ) -> dict:
-    """Loads the existing config and checks for manual overrides"""
+    """
+    Load a config file and apply manual overrides if provided.
+
+    Parameters
+    ----------
+    config_file : str or Path
+        Path to the YAML config file.
+    input_overrides : list of str, optional
+        List of override strings (default: None).
+    deep : bool, optional
+        If True, use a deep copy for updates (default: True).
+
+    Returns
+    -------
+    dict
+        Updated configuration dictionary.
+    """
     config = load_yaml(config_file)
     if input_overrides is not None:
         overrides = parse_overrides(input_overrides)
@@ -233,7 +377,16 @@ def handle_config(
 
 # ---------- File I/O ---------- #
 def save_updated_config(run_dir: str | Path, conf: dict) -> None:
-    """Save updated config yaml file to the run directory"""
+    """
+    Save an updated config YAML file to the run directory.
+
+    Parameters
+    ----------
+    run_dir : str or Path
+        Directory to save the updated config file.
+    conf : dict
+        Configuration dictionary to save.
+    """
     conf_path = Path(run_dir) / "updated_config.yaml"
     dump_yaml(conf, conf_path)
     print(conf_path)

@@ -1,5 +1,5 @@
-from data_plotting import calculate_average_nu
 from constants import NUM_RG, CURRENT_VERSION, data_dir, N
+from analysis.data_plotting import calculate_average_nu
 import json
 import matplotlib.pyplot as plt
 import pandas as pd

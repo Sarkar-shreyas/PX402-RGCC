@@ -40,6 +40,18 @@ def save_data(
 
 
 def get_current_date(format: str = "full") -> str:
+    """Return current UTC date/time formatted as a string.
+
+    Parameters
+    ----------
+    format : str, optional
+        One of ``"day"``, ``"hour"``, ``"min"`` or ``"full"`` (default).
+
+    Returns
+    -------
+    str
+        Formatted UTC date/time string.
+    """
     if format == "day":
         return datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
     elif format == "hour":
@@ -52,11 +64,39 @@ def get_current_date(format: str = "full") -> str:
 
 # ---------- Data generators ---------- #
 def build_rng(seed: int) -> np.random.Generator:
+    """Create and return a NumPy random Generator seeded with `seed`.
+
+    Parameters
+    ----------
+    seed : int
+        Integer seed for the RNG.
+
+    Returns
+    -------
+    numpy.random.Generator
+        A PCG64-based generator instance.
+    """
     return np.random.default_rng(seed=seed)
 
 
 def generate_constant_array(N: int, value: float, M: int = 1) -> np.ndarray:
-    """Generates a constant array of shape (N, M)"""
+    """Generate a constant-valued array.
+
+    Parameters
+    ----------
+    N : int
+        Number of rows/samples.
+    value : float
+        Value to fill the array with.
+    M : int, optional
+        Number of columns. If ``M==1`` a 1-D array of length ``N`` is
+        returned; otherwise a 2-D array of shape ``(N, M)`` is returned.
+
+    Returns
+    -------
+    numpy.ndarray
+        Array filled with `value`.
+    """
     if M == 1:
         return np.full(N, value, dtype=np.float64)
     else:
@@ -114,22 +154,27 @@ def extract_t_samples(
     N: int,
     rng: np.random.Generator,
 ) -> np.ndarray:
-    """Generate a matrix of amplitude samples for the RG transformation.
+    """Sample amplitude values for RG transformation.
 
-    Draws 5 independent sets of N samples from the given P(t) distribution
-    and arranges them into a matrix suitable for the RG transformation step.
+    Given an array `t` representing the current sampled distribution, this
+    function draws integer indices with the provided RNG and constructs a
+    matrix of shape ``(N, 5)`` where each row contains five samples used by the
+    RG transform.
 
     Parameters
     ----------
-    P_t : Probability_Distribution
-        Distribution object representing the current P(t) distribution.
+    t : numpy.ndarray
+        1-D array containing samples from the P(t) distribution. Must have
+        length at least ``N``.
     N : int
-        Number of sample sets to generate.
+        Number of rows/samples to produce.
+    rng : numpy.random.Generator
+        Random number generator used to draw indices.
 
     Returns
     -------
     numpy.ndarray
-        Array of shape (N, 5) containing the sampled amplitude values.
+        Array of shape ``(N, 5)`` of amplitude samples.
     """
     t_sample = t[rng.integers(0, N, size=(N, 5))]
     return t_sample
@@ -139,8 +184,26 @@ def extract_t_samples(
 def solve_matrix_eq(
     ts: np.ndarray, phis: np.ndarray, batch_size: int = 100000, output_index: int = 8
 ) -> np.ndarray:
-    """
-    Generates the A matrix from the given t, r and phi matrices
+    """Solve per-batch linear systems to compute matrix-based t' numerically.
+
+    Parameters
+    ----------
+    ts : numpy.ndarray
+        Array of shape (batch_size, 5) containing five amplitudes per row.
+    phis : numpy.ndarray
+        Array of shape (batch_size, 8) containing phase combinations used to
+        construct the linear system.
+    batch_size : int, optional
+        Number of rows in the batch (default 100000).
+    output_index : int, optional
+        Index of the solution vector to return for each batch row.
+
+    Returns
+    -------
+    numpy.ndarray
+        Array of shape (batch_size,) containing the selected solution entry
+        (typically corresponding to the complex amplitude whose magnitude is
+        used to compute t').
     """
 
     t1, t2, t3, t4, t5 = ts.T
@@ -330,8 +393,24 @@ def generate_t_prime(
 def numerical_t_prime(
     ts: np.ndarray, phis: np.ndarray, N: int, batch_size: int = 100000
 ) -> np.ndarray:
-    """
-    A function to compute tprime numerically using np.linalg.solve. Defaults to using Shaw's matrix
+    """Compute t' numerically by solving matrix equations in batches.
+
+    Parameters
+    ----------
+    ts : numpy.ndarray
+        Array of shape (N, 5) of amplitude samples.
+    phis : numpy.ndarray
+        Array of shape (N, 8) of phase values used to build the matrices.
+    N : int
+        Total number of samples.
+    batch_size : int, optional
+        Batch size used for vectorised solves.
+
+    Returns
+    -------
+    numpy.ndarray
+        Array of shape (N, 1) containing the absolute values of the solved
+        complex amplitudes (t').
     """
     num_batches = N // batch_size
     tprime = np.empty(shape=(N, 1))
@@ -352,7 +431,30 @@ def rg_data_workflow(
     expr: str,
     batch_size: int = 100000,
 ) -> np.ndarray:
-    """Perform the RG workflow based on method flag"""
+    """Compute t' according to the selected method.
+
+    Parameters
+    ----------
+    method : str
+        Either starts with 'a' for analytic (closed-form expression) or
+        'n' for numerical (matrix solve) computation.
+    ts : numpy.ndarray
+        Input amplitudes, shape (N, 5).
+    phis : numpy.ndarray
+        Input phases, shape (N, 4) or shape required by numerical routine.
+    N : int
+        Number of samples.
+    expr : str
+        Expression identifier passed to the analytic generator (e.g. 'shaw',
+        'jack', 'cain').
+    batch_size : int, optional
+        Batch size for numerical evaluation.
+
+    Returns
+    -------
+    numpy.ndarray
+        Array of t' values, shape (N,) (analytic) or (N, 1) (numerical).
+    """
     if method[0] == "a":  # Then we use the analytic form of tprime
         tprime = generate_t_prime(ts, phis, expr)
         return tprime
@@ -455,6 +557,11 @@ def convert_t_to_z(t: np.ndarray) -> np.ndarray:
 
 # ---------- Sampling helpers decoupled from P_D ---------- #
 def normalise_samplers(sampler: str) -> str:
+    """Normalise a sampler name to the internal short key.
+
+    Recognised inverse-CDF aliases map to ``'i'`` and rejection-sampler
+    aliases map to ``'r'``. A ``ValueError`` is raised for unknown values.
+    """
     if sampler.strip().lower() in ("i", "inv", "cdf", "inverse"):
         return "i"
     elif sampler.strip().lower() in ("r", "rej", "reject", "rejection"):
@@ -492,6 +599,24 @@ def inverse_cdf_sampler(
     bin_edges: np.ndarray,
     rng: np.random.Generator,
 ) -> np.ndarray:
+    """Inverse-CDF sampling from a binned histogram.
+
+    Parameters
+    ----------
+    N : int
+        Number of samples to draw.
+    hist_vals : numpy.ndarray
+        Histogram counts per bin.
+    bin_edges : numpy.ndarray
+        Bin edge array of length ``len(hist_vals) + 1``.
+    rng : numpy.random.Generator
+        RNG instance used to draw uniform variates.
+
+    Returns
+    -------
+    numpy.ndarray
+        Array of `N` continuous samples drawn from the histogram's implied PDF.
+    """
     # Inverse CDF method
     u = rng.random(size=N)
     densities = get_density(hist_vals, bin_edges)
@@ -519,6 +644,27 @@ def rejection_sampler(
     bin_centers: np.ndarray,
     rng: np.random.Generator,
 ) -> np.ndarray:
+    """Rejection-sampling-based launderer from binned histogram.
+
+    Parameters
+    ----------
+    N : int
+        Number of samples to produce.
+    hist_vals : numpy.ndarray
+        Histogram counts per bin.
+    bin_edges : numpy.ndarray
+        Bin edge array.
+    bin_centers : numpy.ndarray
+        Bin centers (unused directly but provided for completeness).
+    rng : numpy.random.Generator
+        RNG instance used to draw uniform variates.
+
+    Returns
+    -------
+    numpy.ndarray
+        Array of `N` continuous samples drawn from the histogram's implied PDF
+        via rejection sampling.
+    """
     # Launder a.k.a rejection method
     bin_width = np.diff(bin_edges)[0]
     # num_bins = len(bin_centers)
@@ -672,29 +818,21 @@ def hist_moments(hist_vals: np.ndarray, bins: np.ndarray) -> tuple:
 def center_z_distribution(
     z_hist: np.ndarray, z_bins: np.ndarray | None = None
 ) -> np.ndarray:
-    """Symmetrize and renormalize a binned Q(z) distribution in-place.
-
-    The function enforces the physical symmetry Q(z) = Q(-z) by averaging the
-    histogram values with their reversed order and renormalising the result so
-    the histogram integrates to unity over the bin widths. The underlying
-    `Probability_Distribution` object is updated and returned.
+    """Symmetrise a binned z-histogram array about zero.
 
     Parameters
     ----------
-    Q_z : Probability_Distribution
-        Distribution object whose histogram will be symmetrised and updated.
+    z_hist : numpy.ndarray
+        1-D array of histogram counts (or densities) over z bins.
+    z_bins : numpy.ndarray, optional
+        Corresponding bin edges. If provided the caller is expected to
+        renormalise using bin widths; this function only averages symmetric
+        bin pairs and returns the symmetrised values.
 
     Returns
     -------
-    Probability_Distribution
-        The same `Q_z` instance after its histogram and CDF have been
-        symmetrised and renormalised.
-
-    Notes
-    -----
-    The function assumes `Q_z.histogram_values` and `Q_z.bin_edges` are valid
-    and will call `Q_z.update` to replace the stored histogram with the
-    symmetrised version.
+    numpy.ndarray
+        Symmetrised histogram values (same shape as ``z_hist``).
     """
     symmetrised_z = 0.5 * (z_hist + z_hist[::-1])
     return symmetrised_z
@@ -702,20 +840,19 @@ def center_z_distribution(
 
 # ---------- Nu calculator ---------- #
 def calculate_nu(slope: float, rg_steps: int) -> float:
-    """Calculate the critical exponent nu from a fitted slope.
+    """Compute critical exponent ``nu`` from slope and number of RG steps.
 
     Parameters
     ----------
     slope : float
         Absolute slope obtained from a fit of z_peak vs perturbation.
-    rg_steps : int, optional
-        Number of RG steps (k) used in the scaling relation. Defaults to
-        module-level `K`.
+    rg_steps : int
+        Number of RG steps used in the scaling relation.
 
     Returns
     -------
     float
-        Computed critical exponent nu using nu = ln(2^k)/ln(|slope|).
+        Computed critical exponent ``nu`` using ``nu = ln(2**rg_steps) / ln(|slope|)``.
     """
     nu = np.log(2**rg_steps) / np.log(np.abs(slope))
 

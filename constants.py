@@ -1,3 +1,25 @@
+"""Project-wide constants and environment-derived paths.
+
+This module centralises constants used across the repo and reads required
+environment variables from a `.env` file via `python-dotenv`. It is imported
+by runtime helpers (for example, :mod:`file_management`) that rely on the
+environment for remote host and path configuration.
+
+Environment variables (required)
+-------------------------------
+- ``DATA_DIR``: Local destination root for pulled job outputs.
+- ``LOCAL_DIR``: Local folder for locally produced data.
+- ``ROOT_DIR``: Local repository root.
+- ``TASKFARM_DIR``: Local path to the Taskfarm folder used for staging.
+- ``HOST``: Remote SSH host used for transfers.
+- ``REMOTE_DIR``: Remote project base directory on the cluster (referred to
+  throughout the docs as ``<REMOTE_ROOT>``).
+
+The module will raise ``RuntimeError`` at import time when any required env
+vars are missing. This behaviour is intentional to fail fast when running
+transfer utilities or local tests that expect these values to be available.
+"""
+
 import numpy as np
 import os
 from dotenv import load_dotenv
