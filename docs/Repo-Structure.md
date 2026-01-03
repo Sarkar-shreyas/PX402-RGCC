@@ -18,7 +18,7 @@ Important: `Local/` is not part of the remote staged layout; `Local/run_local.py
 Top-level folders (observed):
 
 - `Taskfarm/` — HPC orchestration scripts and Taskfarm configs (authoritative pipeline entrypoints). See `Taskfarm/scripts/*.sh` and `Taskfarm/configs/`.
-- `Local/` — local drivers and config templates for quick testing. Key file: [Local/run_local.py](Local/run_local.py) and `Local/configs/local_iqhe.yaml`.
+- `Local/` — local drivers and config templates for quick testing. Key file: [Local/run_local.py](../Local/run_local.py) and `Local/configs/local_iqhe.yaml`.
 - `source/` — core Python modules used by both cluster and local code. Key modules: `source/config.py`, `source/parse_config.py`, `source/utilities.py`, `source/data_generation.py`, `source/histogram_manager.py`.
 - `analysis/` — plotting and postprocessing utilities for analysis and reporting (not part of core pipeline orchestration).
 - `Data from taskfarm/` — archived / produced datasets (per-version subfolders).

@@ -30,8 +30,8 @@ This runbook explains how to start, monitor and safely restart the pipeline. It 
 
 Entrypoints (observed in repo):
 
-- Taskfarm scripts: [Taskfarm/scripts/run_rg.sh](Taskfarm/scripts/run_rg.sh), [Taskfarm/scripts/run_shifts.sh](Taskfarm/scripts/run_shifts.sh), [Taskfarm/scripts/rg_fp_master.sh](Taskfarm/scripts/rg_fp_master.sh)
-- Local helper: [Local/run_local.py](Local/run_local.py) — for quick local FP/EXP runs and debugging
+- Taskfarm scripts: [Taskfarm/scripts/run_rg.sh](../Taskfarm/scripts/run_rg.sh), [Taskfarm/scripts/run_shifts.sh](../Taskfarm/scripts/run_shifts.sh), [Taskfarm/scripts/rg_fp_master.sh](../Taskfarm/scripts/rg_fp_master.sh)
+- Local helper: [Local/run_local.py](../Local/run_local.py) — for quick local FP/EXP runs and debugging
 
 Example execution (HPC):
 
@@ -45,7 +45,7 @@ python -m Local.run_local --config Local/configs/local_iqhe --set "rg_settings.s
 
 Where to find logs and outputs
 
-- Local runs: `output.txt` and `error.txt` are created inside the run `output_dir` by [Local/run_local.py](Local/run_local.py). The run also writes `output_locs.json` listing produced NPZ files.
+- Local runs: `output.txt` and `error.txt` are created inside the run `output_dir` by [Local/run_local.py](../Local/run_local.py). The run also writes `output_locs.json` listing produced NPZ files.
 Cluster runs: the master Slurm script `Taskfarm/scripts/rg_fp_master.sh` sets SBATCH directives and runtime log locations. Example directives in that script:
 
 - `#SBATCH --output=../job_outputs/bootstrap/%x_%A.out`
@@ -60,14 +60,14 @@ Safe restart procedures
   - Re-submit the Taskfarm entry script (see Taskfarm/scripts).
 
 - Restart from RG step k (partial restart):
-  - Identify the last successfully written histograms: look for `t_hist_RG{k}.npz` / `z_sym_hist_RG{k}.npz` (naming from [Local/run_local.py](Local/run_local.py)).
+  - Identify the last successfully written histograms: look for `t_hist_RG{k}.npz` / `z_sym_hist_RG{k}.npz` (naming from [Local/run_local.py](../Local/run_local.py)).
   - If all tiles for RG{k} exist and downstream RG{k+1} has not run, re-run the aggregation/driver for RG{k+1} only. The master script `Taskfarm/scripts/rg_fp_master.sh` enqueues `rg_gen_batch.sh` (generation) and `rg_hist_manager.sh` (aggregation) with Slurm dependencies; re-submitting the appropriate aggregation job or running `rg_hist_manager.sh` with the same config and step index will reproduce the aggregation stage for that RG step.
   - If RG{k} is partially complete (missing some tile NPZs), re-run the generator jobs for the missing tiles and then re-run aggregation.
 
 Handling partial failures
 
 - Generator jobs crashed (missing per-task NPZs): re-run the generator tasks for the missing task IDs. The per-task code is likely in `source/data_generation.py`; check Taskfarm submission arguments for task IDs (see Taskfarm/scripts).
-- Aggregation/hist jobs crashed: confirm the presence of per-task hist files and re-run the aggregation step. The local aggregation logic is visible in [Local/run_local.py](Local/run_local.py) and [source/histogram_manager.py](source/histogram_manager.py).
+- Aggregation/hist jobs crashed: confirm the presence of per-task hist files and re-run the aggregation step. The local aggregation logic is visible in [Local/run_local.py](../Local/run_local.py) and [source/histogram_manager.py](../source/histogram_manager.py).
 
 Safety notes / assumptions
 

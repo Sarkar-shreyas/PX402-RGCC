@@ -58,7 +58,7 @@ Common failure modes, symptoms, likely causes, and where to inspect.
 
 - Symptoms: `KeyError` when loading FP NPZ inside `rg_exp()` (`fp_data['histval']` missing).
 - Likely cause: `save_data()` produced different key names than expected, or NPZ was corrupted.
-- Where to inspect: `source/utilities.py::save_data()` and the NPZ consumer in [Local/run_local.py](Local/run_local.py) (`rg_exp()` loads `histval`, `binedges`, `bincenters`).
+- Where to inspect: `source/utilities.py::save_data()` and the NPZ consumer in [Local/run_local.py](../Local/run_local.py) (`rg_exp()` loads `histval`, `binedges`, `bincenters`).
 - Fix: open the NPZ with `numpy.load` and confirm keys, or re-create the NPZ with the expected keys.
 
 5) Config parsing / override not applied
@@ -76,7 +76,7 @@ Common failure modes, symptoms, likely causes, and where to inspect.
 
 - Symptoms: resulting distributions appear shifted or non-centred after `symmetrise` is enabled.
 - Likely cause: code path under `if symmetrise == 1:` in `Local/run_local.py` applies `center_z_distribution()` then `launder()`; differences may arise between analytic vs numerical `method` leading to differing sample sizes or phase handling.
-- Where to inspect: the `symmetrise` branch in [Local/run_local.py](Local/run_local.py) and the implementations of `center_z_distribution()` and `launder()` in [source/utilities.py](source/utilities.py).
+- Where to inspect: the `symmetrise` branch in [Local/run_local.py](../Local/run_local.py) and the implementations of `center_z_distribution()` and `launder()` in [source/utilities.py](../source/utilities.py).
 
 If you reach a blocker
 

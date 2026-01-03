@@ -19,16 +19,16 @@ This document lists the primary artifacts produced by the pipeline, who writes t
 
 | Artifact path / pattern | Producer (script/module) | When created | Contents | Size considerations | Safe to delete / regen |
 |---|---:|---|---|---|---|
-| <output_dir>/hist/t/t_hist_RG{step}.npz | `rg_fp()` / `rg_exp()` in [Local/run_local.py](Local/run_local.py) (cluster drivers produce equivalent files) | Each RG step | NPZ containing t-histogram arrays (saved via `save_data()`) | Can be large when `t_bins` is large; contains dense arrays | Regenerable by re-running step; safe to delete but will require re-run |
-| <output_dir>/hist/z/z_{sym}hist_RG{step}.npz | `rg_fp()` / `rg_exp()` in [Local/run_local.py](Local/run_local.py) | Each RG step | NPZ containing z-histogram arrays (`histval` / `binedges` / `bincenters` observed in code) | z hist bins often large (`parameter_settings.z.bins`) — watch disk | Regenerable by re-running step (need upstream inputs) |
+| <output_dir>/hist/t/t_hist_RG{step}.npz | `rg_fp()` / `rg_exp()` in [Local/run_local.py](../Local/run_local.py) (cluster drivers produce equivalent files) | Each RG step | NPZ containing t-histogram arrays (saved via `save_data()`) | Can be large when `t_bins` is large; contains dense arrays | Regenerable by re-running step; safe to delete but will require re-run |
+| <output_dir>/hist/z/z_{sym}hist_RG{step}.npz | `rg_fp()` / `rg_exp()` in [Local/run_local.py](../Local/run_local.py) | Each RG step | NPZ containing z-histogram arrays (`histval` / `binedges` / `bincenters` observed in code) | z hist bins often large (`parameter_settings.z.bins`) — watch disk | Regenerable by re-running step (need upstream inputs) |
 | <output_dir>/output.txt, <output_dir>/error.txt | `Local/run_local.py` (stdout/stderr redirected) | Per run (local) | Console log and stderr for the run | Small text files but can grow if job is verbose | Safe to delete; useful for debugging |
 | <output_dir>/output_locs.json | `Local/run_local.py` | At the end of a local run | JSON manifest mapping RG steps to NPZ file paths | Small | Regenerable by re-running the run |
-| <output_dir>/config_snapshot.yaml or similar | `save_updated_config()` via [source/config.py](source/config.py) | At run start | Config used for the run (full resolved config) | Small | Safe to keep; recommended to archive |
+| <output_dir>/config_snapshot.yaml or similar | `save_updated_config()` via [source/config.py](../source/config.py) | At run start | Config used for the run (full resolved config) | Small | Safe to keep; recommended to archive |
 
 Notes:
 - Output files for taskfarm jobs can be found in the job_outputs folder. Logs produced by run_local.py will print to the 'Local data' folder
-- NPZ layout: the code that consumes FP runs (`rg_exp()` in [Local/run_local.py](Local/run_local.py)) expects keys `histval`, `binedges`, and `bincenters` when loading saved FP distributions. These keys are written by `source/utilities.py::save_data()` using `np.savez_compressed(..., histval=..., binedges=..., bincenters=...)`.
-- Shared filesystem vs tmpdirs: the code constructs output paths from the project root and writes directly into configured output folders (see `build_default_output_dir()` and `output_dir` creation in [Local/run_local.py](Local/run_local.py)). If jobs are run on a cluster with local scratch, ensure a subsequent copy to the shared data directory before aggregation.
+- NPZ layout: the code that consumes FP runs (`rg_exp()` in [Local/run_local.py](../Local/run_local.py)) expects keys `histval`, `binedges`, and `bincenters` when loading saved FP distributions. These keys are written by `source/utilities.py::save_data()` using `np.savez_compressed(..., histval=..., binedges=..., bincenters=...)`.
+- Shared filesystem vs tmpdirs: the code constructs output paths from the project root and writes directly into configured output folders (see `build_default_output_dir()` and `output_dir` creation in [Local/run_local.py](../Local/run_local.py)). If jobs are run on a cluster with local scratch, ensure a subsequent copy to the shared data directory before aggregation.
 
 Regeneration notes:
 

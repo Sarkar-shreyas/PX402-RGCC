@@ -35,7 +35,7 @@ python -m Local.run_local --config Local/configs/local_iqhe --set "rg_settings.s
 
 What is supported locally
 
-- Full RG loop for FP and EXP modes via `rg_fp()` and `rg_exp()` in [Local/run_local.py](Local/run_local.py).
+- Full RG loop for FP and EXP modes via `rg_fp()` and `rg_exp()` in [Local/run_local.py](../Local/run_local.py).
 - Local building/saving of NPZ histogram artifacts using the same `save_data()` utility used by cluster code.
 
 What is NOT supported (local vs cluster)
@@ -51,8 +51,8 @@ Suggested tiny settings for quick checks
 Ensuring local results match pipeline assumptions
 
 - File layout and naming: local runs use the same NPZ naming scheme (`t_hist_RG{n}.npz`, `z_sym_hist_RG{n}.npz`) so downstream EXP drivers can load local FP outputs.
-- RNG semantics: `Local/run_local.py` constructs an RNG from `rg_settings.seed` via `build_rng()` in [source/utilities.py](source/utilities.py). Use the same seed for reproducibility.
+- RNG semantics: `Local/run_local.py` constructs an RNG from `rg_settings.seed` via `build_rng()` in [source/utilities.py](../source/utilities.py). Use the same seed for reproducibility.
 
 Logging and artifacts
 
-- Local runs redirect stdout/stderr into `<output_dir>/output.txt` and `<output_dir>/error.txt` (see [Local/run_local.py](Local/run_local.py)). The final manifest `output_locs.json` is written to the run `output_dir`.
+- Local runs redirect stdout/stderr into `<output_dir>/output.txt` and `<output_dir>/error.txt` (see [Local/run_local.py](../Local/run_local.py)). The final manifest `output_locs.json` is written to the run `output_dir`.

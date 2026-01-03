@@ -62,8 +62,8 @@ Config invariants
 
 How configs are used at runtime
 
-- CLI building and validation: [source/parse_config.py](source/parse_config.py) exposes `build_parser()` and `validate_input()` and is used by `Local/run_local.py`.
-- The runtime config object is constructed via `handle_config()` and `build_config()` in [source/config.py](source/config.py), which produce an `RGConfig` (as used in [Local/run_local.py](Local/run_local.py)).
+- CLI building and validation: [source/parse_config.py](../source/parse_config.py) exposes `build_parser()` and `validate_input()` and is used by `Local/run_local.py`.
+- The runtime config object is constructed via `handle_config()` and `build_config()` in [source/config.py](../source/config.py), which produce an `RGConfig` (as used in [Local/run_local.py](../Local/run_local.py)).
 - `Local/run_local.py` writes a copy of the resolved config with `save_updated_config(output_dir, config)`.
 
 Overrides and CLI usage (observed pattern)
