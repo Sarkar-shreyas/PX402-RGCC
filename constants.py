@@ -3,6 +3,23 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv()
+
+REQUIRED = ["DATA_DIR", "LOCAL_DIR", "ROOT_DIR", "TASKFARM_DIR", "HOST", "REMOTE_DIR"]
+missing_vars = [var for var in REQUIRED if var not in os.environ]
+if missing_vars:
+    raise RuntimeError(
+        f" Missing required env vars: {missing_vars}.\n See README.md for setup instructions."
+    )
+
+data_dir = os.getenv("DATA_DIR")
+local_dir = os.getenv("LOCAL_DIR")
+root_dir = os.getenv("ROOT_DIR")
+taskfarm_dir = os.getenv("TASKFARM_DIR")
+config_file = os.getenv("CONFIG_FILE")
+host = os.getenv("HOST", "vulcan2")
+remote_dir = os.getenv("REMOTE_DIR")
+
+
 # SHIFTS = [0.0, 0.003, 0.005, 0.007, 0.009]
 # SHIFTS = ["0.0", "0.003", "0.005", "0.0075", "0.010"]
 # SHIFTS = ["0.0", "0.003", "0.004", "0.005", "0.006", "0.0075", "0.010"]
@@ -68,11 +85,3 @@ PHI_DICT = {
     "4": float(np.pi),
     "5": float(np.pi * 2),
 }
-
-data_dir = os.getenv("DATA_DIR")
-local_dir = os.getenv("LOCAL_DIR")
-root_dir = os.getenv("ROOT_DIR")
-taskfarm_dir = os.getenv("TASKFARM_DIR")
-config_file = os.getenv("CONFIG_FILE")
-host = os.getenv("HOST", "vulcan2")
-remote_dir = os.getenv("REMOTE_DIR")
