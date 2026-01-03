@@ -124,9 +124,11 @@ Example Slurm invocation (short)
 
 From the repository root the helper wrappers prepare an updated config then submit the Slurm master job. Recommended entrypoints:
 
+- `--set` overrides maybe be written consecutively as shown in the 2nd example. Where multiple entries without a new command are found, they will be appended to `--set` input.
+
 ```bash
 # Submit an FP pipeline using the Taskfarm helper to a slurm system (recommended)
-bash <REMOTE_ROOT>/scripts/run_rg.sh --config <REMOTE_ROOT>/scripts/configs/iqhe.yaml --set "rg_settings.steps=9" --set "engine.method=numerical" --out /path/to/updated_config_output
+bash <REMOTE_ROOT>/scripts/run_rg.sh --config <REMOTE_ROOT>/scripts/configs/iqhe.yaml --set "rg_settings.steps=9" "engine.method=numerical" --out /path/to/updated_config_output
 ```
 
 ```bash

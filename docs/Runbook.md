@@ -37,10 +37,13 @@ Example execution (HPC):
 
 The Taskfarm entry scripts submit Slurm jobs using `sbatch`. `Taskfarm/scripts/run_rg.sh` calls `sbatch` to submit `rg_fp_master.sh`, and `Taskfarm/scripts/run_shifts.sh` calls `sbatch` to submit `shifted_rg.sh` (see those scripts for the exact arguments passed).
 
+- `--set` overrides maybe be written consecutively as shown in the 2nd example. Where multiple entries without a new command are found, they will be appended to `--set` input.
+
 Example local invocation (proven in repo):
 
 ```bash
 python -m Local.run_local --config Local/configs/local_iqhe --set "rg_settings.steps=2" --set "rg_settings.samples=10000" --type FP
+python -m Local.run_local --config Local/configs/local_iqhe --set "rg_settings.steps=2" "rg_settings.samples=10000" --type FP --set "engine.method=numerical"
 ```
 
 Where to find logs and outputs
