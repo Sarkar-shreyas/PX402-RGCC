@@ -6,31 +6,49 @@ Important: this project is staged onto the cluster — the full git checkout is 
 
 ---
 ```mermaid
-flowchart TB
-    subgraph Repo["Repository Structure"]
-        TF["Taskfarm/\n(HPC / Slurm pipeline)"]
-        SRC["source/\n(Authoritative RG engine code)"]
-        LOC["Local/\n(Local testing helpers)"]
-        ANA["analysis/\n(Post-processing & plots)"]
-        QSHE["QSHE/\n(Experimental / in-development)"]
-        DATA["Data from taskfarm/\n(HPC outputs copied locally)"]
-        DOCS["docs/\n(Design & run documentation)"]
-        TEST["testing/\n(Unit / regression tests)"]
-        ROOT["Repo root\n(constants.py, file_management.py)"]
-    end
+flowchart LR
 
-    TF --> SRC
-    TF --> DATA
-    LOC --> SRC
-    ANA --> DATA
-    TEST --> SRC
+%% ---------- Nodes ----------
+TF["Taskfarm/<br/>(HPC / Slurm pipeline)"]
+SRC["source/<br/>(Authoritative RG engine code)"]
+LOC["Local/<br/>(Local testing helpers)"]
+TEST["testing/<br/>(Unit / regression tests)"]
+ANA["analysis/<br/>(Post-processing & plots)"]
+DATA["Data from taskfarm/<br/>(HPC outputs copied locally)"]
+QSHE["QSHE/<br/>(Experimental / in-development)"]
+DOCS["docs/<br/>(Design & run documentation)"]
+ROOT["Repo root<br/>(constants.py, file_management.py)"]
 
-    style TF fill:#fdf6e3,stroke:#657b83
-    style SRC fill:#e3f2fd,stroke:#1565c0
-    style LOC fill:#ede7f6,stroke:#4527a0
-    style ANA fill:#e8f5e9,stroke:#2e7d32
-    style QSHE fill:#fff3e0,stroke:#ef6c00
-    style DOCS fill:#f5f5f5,stroke:#616161
+%% ---------- Flow ----------
+TF --> SRC
+TF --> DATA
+LOC --> SRC
+TEST --> SRC
+ANA --> DATA
+
+%% Optional: show QSHE as separate (no misleading dependency arrows)
+QSHE -.-> SRC
+
+%% ---------- Styling ----------
+classDef engine fill:#e3f2fd,stroke:#1565c0,color:#111;
+classDef hpc fill:#fdf6e3,stroke:#657b83,color:#111;
+classDef local fill:#ede7f6,stroke:#4527a0,color:#111;
+classDef analysis fill:#e8f5e9,stroke:#2e7d32,color:#111;
+classDef data fill:#212121,stroke:#9e9e9e,color:#fff;
+classDef docs fill:#f5f5f5,stroke:#616161,color:#111;
+classDef exp fill:#fff3e0,stroke:#ef6c00,color:#111;
+classDef root fill:#212121,stroke:#9e9e9e,color:#fff;
+
+class SRC engine
+class TF hpc
+class LOC local
+class TEST local
+class ANA analysis
+class DATA data
+class DOCS docs
+class QSHE exp
+class ROOT root
+
 ```
 ### Folder responsibilities (high-level)
 
