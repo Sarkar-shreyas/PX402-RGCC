@@ -26,7 +26,15 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-REQUIRED = ["DATA_DIR", "LOCAL_DIR", "ROOT_DIR", "TASKFARM_DIR", "HOST", "REMOTE_DIR"]
+REQUIRED = [
+    "DATA_DIR",
+    "LOCAL_DIR",
+    "ROOT_DIR",
+    "TASKFARM_DIR",
+    "HOST",
+    "REMOTE_DIR",
+    "CONFIG_FILE",
+]
 missing_vars = [var for var in REQUIRED if var not in os.environ]
 if missing_vars:
     raise RuntimeError(
