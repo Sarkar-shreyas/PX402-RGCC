@@ -14,13 +14,141 @@ Assumption: Data layout and file naming follow conventions described in the repo
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import inset_locator
-from source.utilities import get_density
+from source.fitters import fit_z_peaks
+from source.utilities import calculate_nu, get_density, hist_moments
 from source.config import build_config, load_yaml
 from analysis.data_plotting import build_plot_parser, build_config_path
 from constants import data_dir, SHIFTS, config_file
 import os
+import json
+from scipy.stats import norm
 
 markers = ["*", "+", "d", "v", "s", "p"]
+
+
+def plot_z_fp():
+    # Load FP z data from v1.90S
+    z_fp = np.load(f"{data_dir}/v1.90S/FP/hist/sym_z/sym_z_hist_RG8.npz")
+    z_bins = z_fp["bincenters"]
+    z_vals = z_fp["histval"]
+    z_densities = get_density(z_vals, z_fp["binedges"])
+
+    # Load FP moments from v1.90S
+    z_moments = json.load(open(f"{data_dir}/v1.90S/FP/stats/sym_z_moments.json", "r"))
+
+    mean = z_moments["RG_8"]["mean"]
+    std = z_moments["RG_8"]["std"]
+    plt.figure("fp")
+    plt.plot(
+        z_bins,
+        norm.pdf(z_bins, loc=mean, scale=std),
+        linestyle="--",
+        color="b",
+        alpha=0.6,
+        label="Gaussian",
+    )
+    plt.plot(z_bins, z_densities, color="g", alpha=0.8)
+    plt.scatter(
+        z_bins[::200],
+        z_densities[::200],
+        color="g",
+        label="n = 9",
+        marker="o",
+        facecolor="none",
+    )
+    plt.xlim((-5.0, 5.0))
+    plt.xlabel(r"$z$")
+    plt.ylabel(r"$P(z)$")
+    # plt.ylim((0, 0.22))
+    plt.legend()
+    plt.savefig("./report/z_FP.pdf")
+    plt.close("fp")
+
+
+def plot_z_peaks():
+    # Load z peaks from v1.90S
+    peaks_data = json.load(open(f"{data_dir}/v1.90S/peaks.json", "r"))
+    num_rg = 12
+    peaks = {}
+    errors = {}
+    for i in range(1, num_rg + 1):
+        rg_peaks = peaks_data[f"RG{i}"]["Peaks"]
+        rg_peaks_errs = peaks_data[f"RG{i}"]["Peak Errors"]
+        for j in range(len(SHIFTS)):
+            if SHIFTS[j] not in peaks:
+                peaks.update({SHIFTS[j]: [rg_peaks[j]]})
+            else:
+                peaks[SHIFTS[j]].append(rg_peaks[j])
+            if SHIFTS[j] not in errors:
+                errors.update({SHIFTS[j]: [rg_peaks_errs[j]]})
+            else:
+                errors[SHIFTS[j]].append(rg_peaks_errs[j])
+    # print(peaks)
+    shifts = np.array([float(shift) for shift in SHIFTS])
+    nus = []
+    min_nus = []
+    max_nus = []
+    nu_errs = []
+    plt.figure("peaks")
+    for i in range(1, 10):
+        y = []
+        err = []
+        for shift in shifts[1:]:
+            y.append(peaks[f"{shift}"][i - 1] - peaks["0.0"][i - 1])
+            err.append(errors[f"{shift}"][i - 1])
+        e = plt.errorbar(
+            shifts[1:],
+            y,
+            yerr=err,
+            marker="o",
+            linestyle="none",
+            capsize=2.5,
+        )
+        c = e[0].get_color()
+        slope, r2 = fit_z_peaks(np.array(shifts), peaks_data[f"RG{i}"]["Peaks"])
+        min_slope, min_r2 = fit_z_peaks(
+            np.array(shifts), peaks_data[f"RG{i}"]["Min Peaks"]
+        )
+        max_slope, max_r2 = fit_z_peaks(
+            np.array(shifts), peaks_data[f"RG{i}"]["Max Peaks"]
+        )
+        nus.append(calculate_nu(slope, i))
+        min_nus.append(calculate_nu(min_slope, i))
+        max_nus.append(calculate_nu(max_slope, i))
+        nu_errs.append(abs(max_nus[i - 1] - min_nus[i - 1]))
+        # print(f"{i} : {r2}")
+        plt.plot(shifts, shifts * slope, alpha=0.8, linestyle="--", color=c)
+    plt.xlabel(r"$z_0$")
+    plt.ylabel(r"$z_{peak}$")
+    # plt.savefig("./report/zpeaks.pdf")
+    plt.close("peaks")
+
+    plt.figure("nus")
+    system_sizes = np.array([2**n for n in range(1, 9)])
+    plt.errorbar(
+        system_sizes,
+        nus[:-1],
+        yerr=nu_errs[:-1],
+        marker="o",
+        linestyle="none",
+        capsize=2.5,
+        color="m",
+        alpha=0.9,
+        label="Current work",
+    )
+    print(nus[-2], nu_errs[-2])
+    print(nus)
+    print(nus[:-1])
+    plt.axhline(
+        2.593, linestyle="--", color="b", alpha=0.5, label="Slevin & Ohtsuki 2009"
+    )
+    plt.axhline(2.51, linestyle="--", color="r", alpha=0.5, label="Roemer & Shaw 2025")
+    plt.xticks([2, 8, 16, 32, 64, 128, 256])
+    plt.xlabel(r"$2^n$")
+    plt.ylabel(r"$\nu$")
+    plt.legend()
+    # plt.savefig("./report/nu.pdf")
+    plt.close("nus")
 
 
 def plot_t(
@@ -155,3 +283,6 @@ if __name__ == "__main__":
     for shift in SHIFTS:
         z_dir = f"{exp_plot_dir}/shift_{shift}/hist/z"
         plot_z(z_dir, output_dir, start, end, False, version, float(shift))
+
+    # plot_z_fp()
+    # plot_z_peaks()
