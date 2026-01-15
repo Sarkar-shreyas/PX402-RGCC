@@ -369,6 +369,13 @@ if __name__ == "__main__":
     # Build parser and read CLI args
     parser = build_parser()
     parser.add_argument(
+        "--type",
+        required=True,
+        default="FP",
+        choices=["FP", "EXP"],
+        help="Type of RG workflow",
+    )
+    parser.add_argument(
         "--t",
         type=int,
         default=0,
