@@ -132,9 +132,9 @@ def solve_qshe_matrix_eq(
     M[:, 9, 14] = f5 * np.exp(1j * phi35)
 
     # Row 10
+    M[:, 10, 4] = f1 * np.exp(1j * phi31)
     M[:, 10, 10] = 1
     M[:, 10, 12] = -t1 * np.exp(1j * phi21)
-    M[:, 10, 14] = f1 * np.exp(1j * phi31)
     M[:, 10, 18] = -r1 * np.exp(1j * phi51)
 
     # Row 11
@@ -267,7 +267,16 @@ def check_single_node():
     f = np.full(shape=1000, fill_value=f_val)
     # print(f, t[0], r[0])
     # print(max(np.abs(f) ** 2 + np.abs(t[0]) ** 2 + np.abs(r[0]) ** 2))
-    assert (np.abs(f_val) ** 2 + np.abs(t[0]) ** 2 + np.abs(r[0]) ** 2) <= 1
+    var_sum = np.abs(f_val) ** 2 + np.abs(t[0]) ** 2 + np.abs(r[0]) ** 2
+    try:
+        assert np.abs(var_sum - 1) <= 1e-12
+    except AssertionError:
+        print(f"The sum is not smaller than or equal to 1 : {var_sum}")
+        print(f"f = {np.abs(f_val) ** 2}")
+        print(f"t = {np.abs(t[0]) ** 2}")
+        print(f"r = {np.abs(r[0]) ** 2}")
+        sys.exit(0)
+
     S = np.zeros(shape=(1000, 4, 4), dtype=np.complex128)
     S[:, 0, 0] = t
     S[:, 0, 1] = r
@@ -369,7 +378,7 @@ if __name__ == "__main__":
     output_folder = f"{qshe_dir}/outputs"
     plots_folder = f"{qshe_dir}/plots/{get_current_date('day')}"
     day_output_folder = f"{output_folder}/{get_current_date('day')}"
-    output_file_name = f"{day_output_folder}/qshe_{n}_outputs.txt"
+    output_file_name = f"{day_output_folder}/qshe_{n}_outputs_f_{args.f}.txt"
     os.makedirs(output_folder, exist_ok=True)
     os.makedirs(plots_folder, exist_ok=True)
     os.makedirs(day_output_folder, exist_ok=True)
@@ -439,6 +448,7 @@ if __name__ == "__main__":
     all_data = defaultdict()
     # Run the solver and extract each output
     data_sum = np.full(shape=(n, 1), fill_value=0.0, dtype=np.float64)
+    over_mask_phis = {}
     for index in externals:
         data = numerical_solver(
             starting_t,
@@ -460,6 +470,11 @@ if __name__ == "__main__":
         # Get some statistics
         over_mask = data > 1.0
         under_mask = data < 0.0
+
+        # # Check the values of phi where data is outside the expected domain
+        # over_mask_phi_vals = starting_phases[over_mask, :]
+        # over_mask_phis.update({index: over_mask_phi_vals})
+        # Print the relevant stats
         print(f"Min t = {np.min(data)}, Max t = {np.max(data)}")
         print(
             f"t values > 1.0 = {over_mask.sum()}, t values < 0.0 = {under_mask.sum()}"
@@ -482,7 +497,7 @@ if __name__ == "__main__":
     # o1_down = all_data["12"]
     # o8_down = all_data["19"]
     plt.legend(loc="upper left", bbox_to_anchor=(1, 1))
-    output_plot_file_name = f"{plots_folder}/qshe_outputs_dist_{n}.png"
+    output_plot_file_name = f"{plots_folder}/qshe_{n}_outputs_f_{args.f}.png"
     plt.savefig(output_plot_file_name, dpi=150)
     plt.close("outputs")
     print(f"Outputs plot saved to {output_plot_file_name}")
@@ -539,7 +554,7 @@ if __name__ == "__main__":
         f"Overall analysis done on {get_current_date()} after {time() - start_time:.3f} seconds"
     )
     print("-" * 100)
-    print("Computing stats for |O1|^2 + |O2|^2 + |O3|^2 + |O4|^2:")
+    print("Computing stats for |O3_up|^2 + |O10_up|^2 + |O1_down|^2 + |O8_down|^2:")
     print(f"Mean of output sum: {np.mean(data_sum)}")
     print(f"Median of output sum: {np.median(data_sum)}")
     print(f"Min of output sum: {np.min(data_sum)}")
@@ -547,7 +562,7 @@ if __name__ == "__main__":
     print("=" * 100)
     output_file.close()
     sys.stdout = original_output
-
+    # print(over_mask_phis.keys())
     print(
         f"Overall analysis done on {get_current_date()} after {time() - start_time:.3f} seconds"
     )
