@@ -47,13 +47,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Override config settings. Eg; --set 'rg_settings.steps = 5' 'engine.method = numerical'",
     )
     parser.add_argument("--out", default=None, help="Output path for config")
-    parser.add_argument(
-        "--type",
-        required=True,
-        default="FP",
-        choices=["FP", "EXP"],
-        help="Type of RG workflow",
-    )
 
     return parser
 
