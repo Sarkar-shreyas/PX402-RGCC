@@ -1,0 +1,36 @@
+main:
+  version: "rg_qshe"
+  id: "local"
+  type: "fp"
+  output_folder: "QSHE/outputs"
+
+engine:
+  model: "qshe"
+  method: "analytic"
+  resample: "i"
+  expr: "shaw"
+  symmetrise: 1
+
+rg_settings:
+  seed: 1234
+  steps: 7
+  samples: 1000000
+  matrix_batch_size: 10000
+
+data_settings:
+  inputs: [1.0, 0.0, 0.0, 0.0]
+  outputs: [2, 9, 10, 17]
+  shifts: [0.003, 0.005, 0.007, 0.009]
+
+parameter_settings:
+  z:
+    bins: 50000
+    range: [-25.0, 25.0]
+  tprime:
+      bins: 1000
+      range: [0.0, 1.0]
+  f: 0.01
+
+convergence:
+  msd_tol: 1.0e-3
+  std_tol: 5.0e-4
