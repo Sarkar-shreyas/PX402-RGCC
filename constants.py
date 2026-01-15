@@ -45,8 +45,9 @@ data_dir = os.getenv("DATA_DIR")
 local_dir = os.getenv("LOCAL_DIR")
 root_dir = os.getenv("ROOT_DIR")
 taskfarm_dir = os.getenv("TASKFARM_DIR")
+qshe_dir = os.getenv("QSHE_DIR")
 config_file = os.getenv("CONFIG_FILE")
-host = os.getenv("HOST", "vulcan2")
+host = os.getenv("HOST")
 remote_dir = os.getenv("REMOTE_DIR")
 
 
