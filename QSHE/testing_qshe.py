@@ -1,5 +1,6 @@
 # flake8: noqa: E501
 from collections import defaultdict
+from typing import Optional
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -11,8 +12,9 @@ from source.utilities import (
     get_current_date,
     get_density,
     build_rng,
-    launder,
+    # launder,
 )
+from numpy.typing import ArrayLike
 from source.config import build_config, handle_config, RGConfig
 from source.parse_config import build_parser
 from time import time
@@ -20,13 +22,9 @@ import psutil
 import os
 import sys
 from constants import T_DICT, qshe_dir, data_dir, PHI_DICT
+import argparse
 
 process = psutil.Process(os.getpid())
-
-
-def generate_phase_array(n: int, dimensions: int, phi: float) -> np.ndarray:
-    """Populates the phase arrays with a constant phi value"""
-    return np.full(shape=(n, dimensions), fill_value=phi, dtype=np.float64)
 
 
 def get_memory_usage(item: str = "") -> None:
@@ -42,6 +40,7 @@ def solve_qshe_matrix_eq(
     split: float,
     batch_size: int,
     output_index: int,
+    inputs: ArrayLike,
 ):
     """Build the 20x20 matrix equation and solve Mx = b"""
     t1, t2, t3, t4, t5 = ts.T
@@ -51,7 +50,7 @@ def solve_qshe_matrix_eq(
     r4 = np.sqrt(split - t4 * t4)
     r5 = np.sqrt(split - t5 * t5)
     f1, f2, f3, f4, f5 = fs.T
-
+    input_array = np.array(inputs)
     (
         phi12,
         phi13,
@@ -185,10 +184,10 @@ def solve_qshe_matrix_eq(
     M[:, 19, 14] = -r5 * np.exp(1j * phi35)
     M[:, 19, 19] = 1
     # Set values for the 4 Inputs for testing
-    I1_up = 1.0
-    I3_down = 0.0
-    I10_down = 0.0
-    I8_up = 0.0
+    I1_up = input_array[0]
+    I3_down = input_array[1]
+    I10_down = input_array[2]
+    I8_up = input_array[3]
     # # b matrix for M
     # b[:, 0, 0] = r1 * tau1 * I1
     # b[:, 1, 0] = 1j * t1 * tau1 * I1
@@ -231,6 +230,7 @@ def numerical_solver(
     split: float,
     N: int,
     output_index: int,
+    inputs: ArrayLike,
     batch_size: int,
 ) -> np.ndarray:
     """Solve the matrix equation Mx=b for N samples using batching"""
@@ -246,7 +246,13 @@ def numerical_solver(
         indexes = slice(i * batch_size, (i + 1) * batch_size)
         output[indexes] = np.abs(
             solve_qshe_matrix_eq(
-                ts[indexes], fs[indexes], phis[indexes], split, batch_size, output_index
+                ts[indexes],
+                fs[indexes],
+                phis[indexes],
+                split,
+                batch_size,
+                output_index,
+                inputs,
             )
         )
         if (i + 1) in {10, 50, 100, num_batches}:
@@ -260,6 +266,7 @@ def numerical_solver(
 
 
 def check_single_node():
+    """Performs a unitarity check for the single node S matrix"""
     f_val = np.random.random(size=1)
     split = 1 - f_val**2
     t = np.random.uniform(0, np.sqrt(split), 1000)
@@ -302,46 +309,7 @@ def check_single_node():
     # sys.exit(0)
 
 
-def gen_initial_data(
-    config: RGConfig,
-    t_val: int,
-    phi_val: int,
-    f_val: float,
-    rng: np.random.Generator,
-    fp_data,
-) -> dict:
-    n = config.samples
-    if f_val > 1.0:
-        f_val = 1.0
-    elif f_val < 0.0 or f_val < 1e-10:
-        f_val = 0.0
-    f_array = generate_constant_array(n, f_val, 5)
-    if t_val == 0:
-        # t_sample = launder(
-        #     n,
-        #     fp_data["histval"],
-        #     fp_data["binedges"],
-        #     fp_data["bincenters"],
-        #     rng,
-        #     config.resample,
-        # )
-        # t_array = extract_t_samples(t_sample, n, rng)
-        split = 1 - f_val**2
-        t_array = rng.uniform(0, np.sqrt(split), size=(n, 5))
-    else:
-        t_array = generate_constant_array(n, T_DICT[str(t_val)], 5)
-    if phi_val == 0:
-        phi_array = generate_random_phases(n, rng, 16)
-    else:
-        phi_array = generate_constant_array(n, PHI_DICT[str(phi_val)], 16)
-    data_dict = {"t": t_array, "f": f_array, "phi": phi_array, "split": split}
-    return data_dict
-
-
-if __name__ == "__main__":
-    print(f"Program started on {get_current_date()}")
-    start_time = time()
-    parser = build_parser()
+def append_parser(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     parser.add_argument(
         "--t",
         type=int,
@@ -365,14 +333,73 @@ if __name__ == "__main__":
         action="store_true",
         help="Enter command to plot all outputs, else uses default list in loaded config.",
     )
+
+    return parser
+
+
+def gen_initial_data(
+    config: RGConfig,
+    t_val: int,
+    phi_val: int,
+    f_val: float,
+    rng: np.random.Generator,
+    fp_data: Optional[ArrayLike] = None,
+) -> dict:
+    """Generates initial t, phi and f arrays based on given inputs resolved from CLI input and config file parsing"""
+    n = config.samples
+    if f_val > 1.0:
+        f_val = 1.0
+    elif f_val < 0.0 or f_val < 1e-10:
+        f_val = 0.0
+    f_array = generate_constant_array(n, f_val, 5)
+    if t_val == 0:
+        # t_sample = launder(
+        #     n,
+        #     fp_data["histval"],
+        #     fp_data["binedges"],
+        #     fp_data["bincenters"],
+        #     rng,
+        #     config.resample,
+        # )
+        # t_array = extract_t_samples(t_sample, n, rng)
+        split = 1 - f_val**2
+        # t_array = rng.uniform(0, np.sqrt(split), size=(n, 5))
+        t_sample = generate_initial_t_distribution(n, rng, split)
+        t_array = extract_t_samples(t_sample, n, rng)
+    else:
+        t_array = generate_constant_array(n, T_DICT[f"{t_val}"], 5)
+    if phi_val == 0:
+        phi_array = generate_random_phases(n, rng, 16)
+    else:
+        phi_array = generate_constant_array(n, PHI_DICT[f"{phi_val}"], 16)
+    data_dict = {"t": t_array, "f": f_array, "phi": phi_array, "split": split}
+    return data_dict
+
+
+if __name__ == "__main__":
+    print(f"Program started on {get_current_date()}")
+    start_time = time()
+
+    # Input parsing and config setup
+    base_parser = build_parser()
+    parser = append_parser(base_parser)
     args = parser.parse_args()
     config = handle_config(args.config, args.override)
     rg_config = build_config(config)
     n = rg_config.samples
+    inputs = [float(i) for i in rg_config.inputs]
     num_phases = 16
     rng = build_rng(rg_config.seed)
-    check_single_node()
-    print(f"t = {args.t}, phi = {args.phi}, f = {args.f}")
+    # check_single_node()
+
+    print(
+        f"Beginning QSHE RG workflow for {rg_config.steps} steps and {rg_config.samples} samples"
+    )
+    print(f"t = {T_DICT[str(args.t)]}, phi = {PHI_DICT[str(args.phi)]}, f = {args.f}")
+    print(f"Inputs = {rg_config.inputs}")
+    print(f"Outputs = {rg_config.outputs}")
+    print("-" * 100)
+
     # Folder setup
     original_output = sys.stdout
     output_folder = f"{qshe_dir}/outputs"
@@ -383,6 +410,7 @@ if __name__ == "__main__":
     os.makedirs(plots_folder, exist_ok=True)
     os.makedirs(day_output_folder, exist_ok=True)
     print(f"Output being printed to {output_file_name}")
+
     output_file = open(output_file_name, "w")
     sys.stdout = output_file
     print(f"Program started on {get_current_date()}")
@@ -403,21 +431,11 @@ if __name__ == "__main__":
     starting_f = initial_data["f"]
     starting_phases = initial_data["phi"]
     split = initial_data["split"]
-    # # starting_t = launder(n, fp_density, fp_bins, fp_centers, "i")
-    # starting_t = generate_initial_t_distribution(n, rng)
-    # # starting_t = np.full(shape=n, fill_value=1 / np.sqrt(2), dtype=np.float64)
-    # # starting_tau = generate_initial_t_distribution(n)
-    # starting_tau = np.full(shape=n, fill_value=0.9, dtype=np.float64)
-    # # starting_tau = np.random.uniform(0, 1, n)
-    # phases = generate_random_phases(n, rng, num_phases)
-    # # phases = generate_phase_array(n, num_phases, np.pi / 2)
-    # t_samples = extract_t_samples(starting_t, n, rng)
-    # tau_samples = extract_t_samples(starting_tau, n, rng)
     print(
         f"Initial t, f and phi arrays generated after {time() - start_time:.3f} seconds"
     )
-    # get_memory_usage("Memory usage after generating initial data")
     print("-" * 100)
+
     # Set up initial plots
     plt.figure(num="outputs", figsize=(12, 6))
     plt.title("Distribution of outputs")
@@ -432,6 +450,8 @@ if __name__ == "__main__":
         starting_hist,
         label="Initial",
     )
+
+    # Set up labelling conventions
     # externals = [2, 9, 12, 19]
     if args.all:
         externals = [i for i in range(20)]
@@ -457,12 +477,10 @@ if __name__ == "__main__":
             split,
             n,
             index,
+            inputs,
             rg_config.matrix_batch_size,
         )
         all_data[f"{index}"] = data
-        # clipped_data = np.clip(data, 0.0, 1.0)
-        # r_data = np.sqrt(1 - data * data)
-        # clipped_r = np.clip(r_data, 0.0, 1.0)
         get_memory_usage(f"Memory usage after solving for output {index}")
         print("-" * 100)
 
@@ -488,66 +506,15 @@ if __name__ == "__main__":
         centers = 0.5 * (bins[:-1] + bins[1:])
         plt.plot(centers, density, label=f"{label_dict[index]}")
         data_sum = data_sum + np.abs(data) ** 2
-        # plt.scatter(data[0], data[0], label=f"{label_dict[index]}")
         print("-" * 100)
+
     get_memory_usage("Memory usage after handling all 4 outputs")
     print("-" * 100)
-    # o3_up = all_data["2"]
-    # o10_up = all_data["9"]
-    # o1_down = all_data["12"]
-    # o8_down = all_data["19"]
     plt.legend(loc="upper left", bbox_to_anchor=(1, 1))
     output_plot_file_name = f"{plots_folder}/qshe_{n}_outputs_f_{args.f}.png"
     plt.savefig(output_plot_file_name, dpi=150)
     plt.close("outputs")
     print(f"Outputs plot saved to {output_plot_file_name}")
-
-    # Now extract individual renormalised parameters and plot them
-    # f_prime = o8_down
-    # tau_prime = np.sqrt(1 - f_prime**2)
-    # t_prime = o3_up / tau_prime
-    # r_prime = o10_up / tau_prime
-
-    # renormalised_data = [f_prime, tau_prime, t_prime, r_prime]
-    # # Analyse the data obtained
-    # print("=" * 100)
-    # for _ in renormalised_data:
-    #     over = _ > 1.0
-    #     under = _ < 0.0
-    #     print(f"Min = {np.min(_)}, Max = {np.max(_)}")
-    #     print(f"Values above 1.0 = {over.sum()}, Values under 0.0 = {under.sum()}")
-    #     print(f"Mean = {np.mean(_)}, Median = {np.median(_)}")
-    #     print("-" * 100)
-    # # Set up the figure for the renormalised variables
-    # plt.figure("variables", figsize=(12, 6))
-    # plt.title("Distribution of renormalised parameters")
-    # plt.xlabel("var")
-    # plt.ylabel("P(var)")
-    # plt.xlim((0, 1))
-    # plt.ylim((0, 4))
-
-    # # Build histograms for the 4 renormalised parameters
-    # f_prime_hist, f_prime_bins = np.histogram(f_prime, rg_config.t_bins, rg_config.t_range, density=True)
-    # f_prime_centers = 0.5 * (f_prime_bins[1:] + f_prime_bins[:-1])
-    # tau_prime_hist, tau_prime_bins = np.histogram(
-    #     tau_prime, rg_config.t_bins, rg_config.t_range, density=True
-    # )
-    # tau_prime_centers = 0.5 * (tau_prime_bins[1:] + tau_prime_bins[:-1])
-    # t_prime_hist, t_prime_bins = np.histogram(t_prime, rg_config.t_bins, rg_config.t_range, density=True)
-    # t_prime_centers = 0.5 * (t_prime_bins[1:] + t_prime_bins[:-1])
-    # r_prime_hist, r_prime_bins = np.histogram(r_prime, rg_config.t_bins, rg_config.t_range, density=True)
-    # r_prime_centers = 0.5 * (r_prime_bins[1:] + r_prime_bins[:-1])
-
-    # # Plot the renormalised parameters
-    # plt.plot(f_prime_centers, f_prime_hist, label="f'")
-    # plt.plot(tau_prime_centers, tau_prime_hist, label="tau'")
-    # plt.plot(t_prime_centers, t_prime_hist, label="t'")
-    # plt.plot(r_prime_centers, r_prime_hist, label="r'")
-    # plt.legend(loc="upper left")
-    # var_plot_file_name = f"{plots_folder}/qshe_vars_dist_{n}.png"
-    # plt.savefig(var_plot_file_name, dpi=150)
-    # plt.close("variables")
-    # print(f"Variables plot saved to {var_plot_file_name}")
 
     get_memory_usage("Overall memory usage for this analysis")
     print(
@@ -559,10 +526,14 @@ if __name__ == "__main__":
     print(f"Median of output sum: {np.median(data_sum)}")
     print(f"Min of output sum: {np.min(data_sum)}")
     print(f"Max of output sum: {np.max(data_sum)}")
+    max_output_err = np.max(np.abs(data_sum - 1.0))
+    if max_output_err > 1e-12:
+        print(f"The difference exceeds given tolerance 1e-12 : {max_output_err}")
+    else:
+        print(f"|Max output error - 1.0| = {max_output_err}")
     print("=" * 100)
     output_file.close()
     sys.stdout = original_output
     # print(over_mask_phis.keys())
-    print(
-        f"Overall analysis done on {get_current_date()} after {time() - start_time:.3f} seconds"
-    )
+    print(f"Overall analysis done after {time() - start_time:.3f} seconds")
+    print(f"Program completed on {get_current_date()}")
