@@ -127,7 +127,9 @@ def generate_random_phases(
     return phi_sample
 
 
-def generate_initial_t_distribution(N: int, rng: np.random.Generator) -> np.ndarray:
+def generate_initial_t_distribution(
+    N: int, rng: np.random.Generator, upper_bound: float = 1.0
+) -> np.ndarray:
     """Generate initial amplitude distribution P(t).
 
     Creates an initial distribution of amplitudes t with the property that
@@ -144,7 +146,7 @@ def generate_initial_t_distribution(N: int, rng: np.random.Generator) -> np.ndar
     numpy.ndarray
         Array of N amplitude values t = √g where g ~ U[0,1].
     """
-    g_sample = rng.uniform(0.0, 1.0, N)
+    g_sample = rng.uniform(0.0, upper_bound, N)
     t_dist = np.sqrt(g_sample)
     return t_dist
 
