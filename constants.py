@@ -108,8 +108,9 @@ XLIMS = {
     },
 }
 
-T_DICT = {"1": 0.0, "2": 0.5, "3": float(1 / np.sqrt(2)), "4": 1.0}
+T_DICT = {"0": "random", "1": 0.0, "2": 0.5, "3": float(1 / np.sqrt(2)), "4": 1.0}
 PHI_DICT = {
+    "0": "random",
     "1": 0.0,
     "2": float(np.pi / 4),
     "3": float(np.pi / 2),
