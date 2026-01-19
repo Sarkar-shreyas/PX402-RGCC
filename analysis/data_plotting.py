@@ -358,20 +358,26 @@ if __name__ == "__main__":
     args = parser.parse_args()
     if os.path.exists(args.loc):
         config_path = build_config_path(args.loc, args.version, args.mode)
+        if str(args.loc).strip().lower() == "remote":
+            data_folder = data_dir
+        elif str(args.loc).strip().lower() == "local":
+            data_folder = local_dir
     else:
         config_path = str(config_file)
+        data_folder = data_dir
     config = load_yaml(config_path)
     print(f"Config loaded from {config_path}")
     rg_config = build_config(config)
     # Load constants
+
     version = str(args.version)
     num_rg = int(args.steps)
     var_names = ["t", "z", "input_t", "sym_z"]
     z_vars = ["z", "sym_z"]
     other_vars = ["t", "input_t"]
-    hist_dir = f"{data_dir}/{version}/{TYPE}/hist"
-    stats_dir = f"{data_dir}/{version}/{TYPE}/stats"
-    plots_dir = f"{data_dir}/{version}/{TYPE}/plots"
+    hist_dir = f"{data_folder}/{version}/{TYPE}/hist"
+    stats_dir = f"{data_folder}/{version}/{TYPE}/stats"
+    plots_dir = f"{data_folder}/{version}/{TYPE}/plots"
     t_folder = f"{hist_dir}/t"
     z_folder = f"{hist_dir}/z"
     input_folder = f"{hist_dir}/input_t"
