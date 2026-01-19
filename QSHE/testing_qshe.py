@@ -37,19 +37,18 @@ def solve_qshe_matrix_eq(
     ts: np.ndarray,
     fs: np.ndarray,
     phis: np.ndarray,
-    split: float,
     batch_size: int,
     output_index: int,
     inputs: ArrayLike,
 ):
     """Build the 20x20 matrix equation and solve Mx = b"""
     t1, t2, t3, t4, t5 = ts.T
-    r1 = np.sqrt(split - t1 * t1)
-    r2 = np.sqrt(split - t2 * t2)
-    r3 = np.sqrt(split - t3 * t3)
-    r4 = np.sqrt(split - t4 * t4)
-    r5 = np.sqrt(split - t5 * t5)
     f1, f2, f3, f4, f5 = fs.T
+    r1 = np.sqrt(1 - t1**2 - f1**2)
+    r2 = np.sqrt(1 - t2**2 - f2**2)
+    r3 = np.sqrt(1 - t3**2 - f3**2)
+    r4 = np.sqrt(1 - t4**2 - f4**2)
+    r5 = np.sqrt(1 - t5**2 - f5**2)
     input_array = np.array(inputs)
     (
         phi12,
@@ -227,7 +226,6 @@ def numerical_solver(
     ts: np.ndarray,
     fs: np.ndarray,
     phis: np.ndarray,
-    split: float,
     N: int,
     output_index: int,
     inputs: ArrayLike,
@@ -249,7 +247,6 @@ def numerical_solver(
                 ts[indexes],
                 fs[indexes],
                 phis[indexes],
-                split,
                 batch_size,
                 output_index,
                 inputs,
@@ -258,10 +255,10 @@ def numerical_solver(
         if (i + 1) in {10, 50, 100, num_batches}:
             # get_memory_usage(f"Memory usage after batch {i + 1}")
             print(f"Batch {i + 1} done in {time() - start:.3f} seconds")
-    print("-" * 100)
     print(
         f"Computation for all {num_batches} batches of index {output_index} done after {time() - start:.3f} seconds"
     )
+    print("-" * 100)
     return np.abs(output)
 
 
@@ -362,9 +359,9 @@ def gen_initial_data(
         #     config.resample,
         # )
         # t_array = extract_t_samples(t_sample, n, rng)
-        split = 1 - f_val**2
+        split = 1 - f_array**2
         # t_array = rng.uniform(0, np.sqrt(split), size=(n, 5))
-        t_sample = generate_initial_t_distribution(n, rng, split)
+        t_sample = generate_initial_t_distribution(n, rng, split[0, 0])
         t_array = extract_t_samples(t_sample, n, rng)
     else:
         t_array = generate_constant_array(n, T_DICT[f"{t_val}"], 5)
@@ -372,6 +369,8 @@ def gen_initial_data(
         phi_array = generate_random_phases(n, rng, 16)
     else:
         phi_array = generate_constant_array(n, PHI_DICT[f"{phi_val}"], 16)
+    # split_array = np.full(shape=(n, 1), fill_value=split)
+
     data_dict = {"t": t_array, "f": f_array, "phi": phi_array, "split": split}
     return data_dict
 
@@ -438,7 +437,9 @@ if __name__ == "__main__":
 
     # Set up initial plots
     plt.figure(num="outputs", figsize=(12, 6))
-    plt.title("Distribution of outputs")
+    plt.title(
+        f"Distribution of outputs for f = {args.f} and phi = {PHI_DICT[str(args.phi)]}"
+    )
     plt.xlabel("values")
     plt.ylabel("P(output)")
     plt.ylim((0, 10))
@@ -474,7 +475,6 @@ if __name__ == "__main__":
             starting_t,
             starting_f,
             starting_phases,
-            split,
             n,
             index,
             inputs,
