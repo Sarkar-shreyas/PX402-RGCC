@@ -12,10 +12,11 @@ from source.utilities import (
     get_current_date,
     get_density,
     build_rng,
+    solve_qshe_matrix,
     # launder,
 )
 from numpy.typing import ArrayLike
-from source.config import build_config, handle_config, RGConfig
+from source.config import build_config, handle_config
 from source.parse_config import build_parser
 from time import time
 import psutil
@@ -31,195 +32,6 @@ def get_memory_usage(item: str = "") -> None:
     """Prints the memory usage for a process"""
     memory = process.memory_info().rss / (1024 * 1024)
     print(f"{item} = {memory:.3f} MB")
-
-
-def solve_qshe_matrix_eq(
-    ts: np.ndarray,
-    fs: np.ndarray,
-    phis: np.ndarray,
-    batch_size: int,
-    output_index: int,
-    inputs: ArrayLike,
-):
-    """Build the 20x20 matrix equation and solve Mx = b"""
-    t1, t2, t3, t4, t5 = ts.T
-    f1, f2, f3, f4, f5 = fs.T
-    r1 = np.sqrt(1 - t1**2 - f1**2)
-    r2 = np.sqrt(1 - t2**2 - f2**2)
-    r3 = np.sqrt(1 - t3**2 - f3**2)
-    r4 = np.sqrt(1 - t4**2 - f4**2)
-    r5 = np.sqrt(1 - t5**2 - f5**2)
-    input_array = np.array(inputs)
-    (
-        phi12,
-        phi13,
-        phi15,
-        phi21,
-        phi23,
-        phi24,
-        phi31,
-        phi32,
-        phi34,
-        phi35,
-        phi42,
-        phi43,
-        phi45,
-        phi51,
-        phi53,
-        phi54,
-    ) = phis.T
-
-    # Define our matrices
-    M = np.zeros((batch_size, 20, 20), dtype=np.complex128)
-    b = np.zeros((batch_size, 20, 1), dtype=np.complex128)
-
-    # Now we need to assign data for 20 [0-19] rows... TODO: See if there's a more efficient way at some point
-    # Matrix M
-    # Row 0
-    M[:, 0, 0] = 1
-    M[:, 0, 4] = -r1 * np.exp(1j * phi31)
-    M[:, 0, 18] = -f1 * np.exp(1j * phi51)
-
-    # Row 1
-    M[:, 1, 1] = 1
-    M[:, 1, 4] = t1 * np.exp(1j * phi31)
-    M[:, 1, 12] = f1 * np.exp(1j * phi21)
-
-    # Row 2
-    M[:, 2, 0] = -t2 * np.exp(1j * phi12)
-    M[:, 2, 2] = 1
-    M[:, 2, 6] = -r2 * np.exp(1j * phi42)
-    M[:, 2, 15] = -f2 * np.exp(1j * phi32)
-
-    # Row 3
-    M[:, 3, 0] = -r2 * np.exp(1j * phi12)
-    M[:, 3, 3] = 1
-    M[:, 3, 6] = t2 * np.exp(1j * phi42)
-
-    # Row 4
-    M[:, 4, 3] = -r3 * np.exp(1j * phi23)
-    M[:, 4, 4] = 1
-    M[:, 4, 8] = -t3 * np.exp(1j * phi53)
-    M[:, 4, 16] = -f3 * np.exp(1j * phi43)
-
-    # Row 5
-    M[:, 5, 3] = t3 * np.exp(1j * phi23)
-    M[:, 5, 5] = 1
-    M[:, 5, 8] = -r3 * np.exp(1j * phi53)
-    M[:, 5, 11] = f3 * np.exp(1j * phi13)
-
-    # Row 6
-    M[:, 6, 5] = -t4 * np.exp(1j * phi34)
-    M[:, 6, 6] = 1
-    M[:, 6, 19] = -f4 * np.exp(1j * phi54)
-
-    # Row 7
-    M[:, 7, 5] = -r4 * np.exp(1j * phi34)
-    M[:, 7, 7] = 1
-    M[:, 7, 13] = f4 * np.exp(1j * phi24)
-
-    # Row 8
-    M[:, 8, 1] = -t5 * np.exp(1j * phi15)
-    M[:, 8, 7] = -r5 * np.exp(1j * phi45)
-    M[:, 8, 8] = 1
-
-    # Row 9
-    M[:, 9, 1] = -r5 * np.exp(1j * phi15)
-    M[:, 9, 7] = t5 * np.exp(1j * phi45)
-    M[:, 9, 9] = 1
-    M[:, 9, 14] = f5 * np.exp(1j * phi35)
-
-    # Row 10
-    M[:, 10, 4] = f1 * np.exp(1j * phi31)
-    M[:, 10, 10] = 1
-    M[:, 10, 12] = -t1 * np.exp(1j * phi21)
-    M[:, 10, 18] = -r1 * np.exp(1j * phi51)
-
-    # Row 11
-    M[:, 11, 11] = 1
-    M[:, 11, 12] = -r1 * np.exp(1j * phi21)
-    M[:, 11, 18] = t1 * np.exp(1j * phi51)
-
-    # Row 12
-    M[:, 12, 6] = f2 * np.exp(1j * phi42)
-    M[:, 12, 12] = 1
-    M[:, 12, 15] = -r2 * np.exp(1j * phi32)
-
-    # Row 13
-    M[:, 13, 0] = -f2 * np.exp(1j * phi12)
-    M[:, 13, 13] = 1
-    M[:, 13, 15] = t2 * np.exp(1j * phi32)
-
-    # Row 14
-    M[:, 14, 3] = f3 * np.exp(1j * phi23)
-    M[:, 14, 11] = -t3 * np.exp(1j * phi13)
-    M[:, 14, 14] = 1
-    M[:, 14, 16] = -r3 * np.exp(1j * phi43)
-
-    # Row 15
-    M[:, 15, 8] = -f3 * np.exp(1j * phi53)
-    M[:, 15, 11] = -r3 * np.exp(1j * phi13)
-    M[:, 15, 15] = 1
-    M[:, 15, 16] = t3 * np.exp(1j * phi43)
-
-    # Row 16
-    M[:, 16, 13] = -t4 * np.exp(1j * phi24)
-    M[:, 16, 16] = 1
-    M[:, 16, 19] = -r4 * np.exp(1j * phi54)
-
-    # Row 17
-    M[:, 17, 5] = -f4 * np.exp(1j * phi34)
-    M[:, 17, 13] = -r4 * np.exp(1j * phi24)
-    M[:, 17, 17] = 1
-    M[:, 17, 19] = t4 * np.exp(1j * phi54)
-
-    # Row 18
-    M[:, 18, 7] = f5 * np.exp(1j * phi45)
-    M[:, 18, 14] = -t5 * np.exp(1j * phi35)
-    M[:, 18, 18] = 1
-
-    # Row 19
-    M[:, 19, 1] = -f5 * np.exp(1j * phi15)
-    M[:, 19, 14] = -r5 * np.exp(1j * phi35)
-    M[:, 19, 19] = 1
-    # Set values for the 4 Inputs for testing
-    I1_up = input_array[0]
-    I3_down = input_array[1]
-    I10_down = input_array[2]
-    I8_up = input_array[3]
-    # # b matrix for M
-    # b[:, 0, 0] = r1 * tau1 * I1
-    # b[:, 1, 0] = 1j * t1 * tau1 * I1
-    # b[:, 2, 0] = -f1 * I1
-    # b[:, 5, 0] = f2 * I2
-    # b[:, 6, 0] = 1j * t2 * tau2 * I2
-    # b[:, 7, 0] = r2 * tau2 * I2
-    # b[:, 12, 0] = 1j * t4 * tau4 * I3
-    # b[:, 13, 0] = r4 * tau4 * I3
-    # b[:, 15, 0] = f4 * I3
-    # b[:, 16, 0] = f5 * I4
-    # b[:, 18, 0] = r5 * tau5 * I4
-    # b[:, 19, 0] = 1j * t5 * tau5 * I4
-
-    # b matrix for M2
-    b[:, 0, 0] = t1 * I1_up
-    b[:, 1, 0] = r1 * I1_up
-    b[:, 3, 0] = -f2 * I3_down
-    b[:, 6, 0] = r4 * I8_up
-    b[:, 7, 0] = -t4 * I8_up
-    b[:, 8, 0] = f5 * I10_down
-    b[:, 11, 0] = f1 * I1_up
-    b[:, 12, 0] = t2 * I3_down
-    b[:, 13, 0] = r2 * I3_down
-    b[:, 16, 0] = -f4 * I8_up
-    b[:, 18, 0] = r5 * I10_down
-    b[:, 19, 0] = -t5 * I10_down
-
-    x = np.linalg.solve(M, b)
-
-    # Outputs are index 2, 9, 10 and 17 in order of O3_up, O10_up, O1_down and O8_down
-    # return x
-    return x[:, output_index]
 
 
 def numerical_solver(
@@ -243,7 +55,7 @@ def numerical_solver(
     for i in range(num_batches):
         indexes = slice(i * batch_size, (i + 1) * batch_size)
         output[indexes] = np.abs(
-            solve_qshe_matrix_eq(
+            solve_qshe_matrix(
                 ts[indexes],
                 fs[indexes],
                 phis[indexes],
@@ -335,7 +147,7 @@ def append_parser(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
 
 
 def gen_initial_data(
-    config: RGConfig,
+    samples: int,
     t_val: int,
     phi_val: int,
     f_val: float,
@@ -343,7 +155,7 @@ def gen_initial_data(
     fp_data: Optional[ArrayLike] = None,
 ) -> dict:
     """Generates initial t, phi and f arrays based on given inputs resolved from CLI input and config file parsing"""
-    n = config.samples
+    n = samples
     if f_val > 1.0:
         f_val = 1.0
     elif f_val < 0.0 or f_val < 1e-10:
@@ -425,7 +237,9 @@ if __name__ == "__main__":
     fp_density = get_density(fp_hist, fp_bins)
 
     # Generate initial arrays
-    initial_data = gen_initial_data(rg_config, args.t, args.phi, args.f, rng, fp_data)
+    initial_data = gen_initial_data(
+        rg_config.samples, args.t, args.phi, args.f, rng, fp_data
+    )
     starting_t = initial_data["t"]
     starting_f = initial_data["f"]
     starting_phases = initial_data["phi"]
