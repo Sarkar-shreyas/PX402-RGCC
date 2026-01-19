@@ -64,14 +64,20 @@ NUM_RG = 9
 # NUM_RG = 12
 LEGENDS = {
     "FP": {
+        "r": "upper left",
         "t": "upper left",
+        "tau": "upper left",
+        "f": "upper left",
         "g": "upper right",
         "input_t": "upper left",
         "z": "upper left",
         "sym_z": "upper left",
     },
     "EXP": {
+        "r": "upper left",
         "t": "upper left",
+        "tau": "upper left",
+        "f": "upper left",
         "g": "upper right",
         "input_t": "upper left",
         "z": "upper left",
@@ -79,14 +85,20 @@ LEGENDS = {
 }
 YLIMS = {
     "FP": {
+        "r": (0.0, 3.0),
         "t": (0.0, 3.0),
+        "tau": (0.0, 5.0),
+        "f": (0.0, 5.0),
         "g": (0.0, 3.0),
         "input_t": (0.0, 3.0),
         "z": (0.0, 0.3),
         "sym_z": (0.0, 0.25),
     },
     "EXP": {
+        "r": (0.0, 3.0),
         "t": (0.0, 3.0),
+        "tau": (0.0, 5.0),
+        "f": (0.0, 5.0),
         "g": (0.0, 3.0),
         "input_t": (0.0, 3.0),
         "z": (0.0, 0.3),
@@ -94,14 +106,20 @@ YLIMS = {
 }
 XLIMS = {
     "FP": {
+        "r": (0.0, 1.0),
         "t": (0.0, 1.0),
+        "tau": (0.0, 1.0),
+        "f": (0.0, 1.0),
         "g": (0.0, 1.0),
         "input_t": (0.0, 1.0),
         "z": (-25.0, 25.0),
         "sym_z": (-25.0, 25.0),
     },
     "EXP": {
+        "r": (0.0, 1.0),
         "t": (0.0, 1.0),
+        "tau": (0.0, 1.0),
+        "f": (0.0, 1.0),
         "g": (0.0, 1.0),
         "input_t": (0.0, 1.0),
         "z": (-25.0, 25.0),
