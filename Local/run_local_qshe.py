@@ -34,12 +34,7 @@ from source.config import (
 from source.utilities import (
     convert_t_to_z,
     convert_z_to_t,
-    generate_constant_array,
-    extract_t_samples,
-    # generate_initial_t_distribution,
-    generate_random_phases,
     get_current_date,
-    rg_data_workflow,
     build_rng,
     center_z_distribution,
     launder,
@@ -150,7 +145,6 @@ def qshe_rg_workflow(
     t_array: np.ndarray,
     f_array: np.ndarray,
     phi_array: np.ndarray,
-    split_val: float,
     num_samples: int,
     output_index: int,
     matrix_batch_size: int,
@@ -161,7 +155,6 @@ def qshe_rg_workflow(
         t_array,
         f_array,
         phi_array,
-        split_val,
         num_samples,
         output_index,
         inputs,
@@ -228,29 +221,36 @@ def rg_fp(
     z_range = rg_config.z_range
     inputs = rg_config.inputs
     rng = build_rng(seed)
+    r_data_folder = output_folders["r"]
     t_data_folder = output_folders["t"]
+    tau_data_folder = output_folders["tau"]
+    f_data_folder = output_folders["f"]
     z_data_folder = output_folders["z"]
 
     # Generate initial arrays
     initial_data = gen_initial_data(
-        rg_config, starting_t, starting_phi, starting_f, rng
+        rg_config.samples, starting_t, starting_phi, starting_f, rng
     )
     ts = initial_data["t"]
     fs = initial_data["f"]
     phases = initial_data["phi"]
-    split = initial_data["split"]
 
-    output_index = 2  # Track t' for now
+    # output_index = 9  # Track t'
 
     output_files = {}
     # Main rg loop
     for step in range(steps):
-        print(f" Proceeding with RG step {step}. ")
-        tprime = numerical_solver(
-            ts, fs, phases, split, samples, output_index, inputs, batch_size
-        )
+        print(f"Proceeding with RG step {step}. ")
+        # For now, track all 4 outputs.
+        rprime = numerical_solver(ts, fs, phases, samples, 2, inputs, batch_size)
+        tprime = numerical_solver(ts, fs, phases, samples, 9, inputs, batch_size)
+        tauprime = numerical_solver(ts, fs, phases, samples, 10, inputs, batch_size)
+        fprime = numerical_solver(ts, fs, phases, samples, 17, inputs, batch_size)
         z = convert_t_to_z(tprime)
+        r_data = build_hist(rprime, t_bins, t_range)
         t_data = build_hist(tprime, t_bins, t_range)
+        tau_data = build_hist(tauprime, t_bins, t_range)
+        f_data = build_hist(fprime, t_bins, t_range)
         z_data = build_hist(z, z_bins, z_range)
         if symmetrise == 1:
             print(" Symmetrising ")
@@ -277,123 +277,148 @@ def rg_fp(
             )
         else:
             raise ValueError(f"Invalid symmetrise value entered: {symmetrise}")
-
-        ts = extract_t_samples(t_sample, samples, rng)
-        t_filename = f"{t_data_folder}/t_hist_RG{step + 1}.npz"
-        z_filename = f"{z_data_folder}/z_{sym}hist_RG{step + 1}.npz"
+        # f_sample = launder(
+        #     samples, f_data["hist"], f_data["edges"], f_data["centers"], rng, resample
+        # )
+        indexes = rng.integers(0, samples, size=(samples, 5))
+        ts = np.take(tprime, indexes)
+        fs = np.take(fprime, indexes)
+        assert ts.shape == (samples, 5) and fs.shape == (samples, 5)
+        # print(np.max(ts**2 + fs**2))
+        # sys.exit(0)
+        r_filename = f"{r_data_folder}/r_hist_RG{step}.npz"
+        t_filename = f"{t_data_folder}/t_hist_RG{step}.npz"
+        tau_filename = f"{tau_data_folder}/tau_hist_RG{step}.npz"
+        f_filename = f"{f_data_folder}/f_hist_RG{step}.npz"
+        z_filename = f"{z_data_folder}/{sym}z_hist_RG{step}.npz"
+        save_data(r_data["hist"], r_data["edges"], r_data["centers"], r_filename)
         save_data(t_data["hist"], t_data["edges"], t_data["centers"], t_filename)
+        save_data(
+            tau_data["hist"], tau_data["edges"], tau_data["centers"], tau_filename
+        )
+        save_data(f_data["hist"], f_data["edges"], f_data["centers"], f_filename)
         save_data(z_data["hist"], z_data["edges"], z_data["centers"], z_filename)
-        output_files.update({f"RG{step}": {"t": t_filename, "z": z_filename}})
+        output_files.update(
+            {
+                f"RG{step}": {
+                    "r": r_filename,
+                    "t": t_filename,
+                    "tau": tau_filename,
+                    "f": f_filename,
+                    "z": z_filename,
+                }
+            }
+        )
     print(" All RG steps completed. ")
     return output_files
 
 
-def rg_exp(
-    rg_config: RGConfig, output_folders: dict, fp_dist: str, starting_phi: int
-) -> dict:
-    """Run an EXP (shifted / exponent) RG workflow locally and write histograms.
+# def rg_exp(
+#     rg_config: RGConfig, output_folders: dict, fp_dist: str, starting_phi: int
+# ) -> dict:
+#     """Run an EXP (shifted / exponent) RG workflow locally and write histograms.
 
-    Parameters
-    ----------
-    rg_config : RGConfig
-        Configuration dataclass with samples, bins, ranges, shifts and other
-        resampling parameters.
-    output_folders : dict
-        Mapping that, for each shift value, provides folders for ``t`` and
-        ``z`` histograms (strings).
-    fp_dist : str
-        Path to a fixed-point NPZ file (containing keys ``'histval'``,
-        ``'binedges'`` and ``'bincenters'``). The file is loaded to construct
-        a laundered initial distribution.
-    starting_phi : int
-        If non-zero, a constant phase array is used; otherwise phases are
-        generated randomly from RNG.
+#     Parameters
+#     ----------
+#     rg_config : RGConfig
+#         Configuration dataclass with samples, bins, ranges, shifts and other
+#         resampling parameters.
+#     output_folders : dict
+#         Mapping that, for each shift value, provides folders for ``t`` and
+#         ``z`` histograms (strings).
+#     fp_dist : str
+#         Path to a fixed-point NPZ file (containing keys ``'histval'``,
+#         ``'binedges'`` and ``'bincenters'``). The file is loaded to construct
+#         a laundered initial distribution.
+#     starting_phi : int
+#         If non-zero, a constant phase array is used; otherwise phases are
+#         generated randomly from RNG.
 
-    Returns
-    -------
-    dict
-        Nested mapping containing NPZ output paths per shift and RG step.
+#     Returns
+#     -------
+#     dict
+#         Nested mapping containing NPZ output paths per shift and RG step.
 
-    Side effects
-    ------------
-    Writes NPZ files to disk (via :func:`source.utilities.save_data`) and prints
-    progress to stdout.
-    """
-    samples = rg_config.samples
-    batch_size = rg_config.matrix_batch_size
-    steps = rg_config.steps
-    method = rg_config.method
-    expr = rg_config.expr
-    resample = rg_config.resample
-    symmetrise = rg_config.symmetrise
-    seed = rg_config.seed
-    t_bins = rg_config.t_bins
-    t_range = rg_config.t_range
-    z_bins = rg_config.z_bins
-    z_range = rg_config.z_range
-    shifts = [float(shift) for shift in rg_config.shifts]
-    rng = build_rng(seed)
-    if method == "analytic":
-        i = 4
-    else:
-        i = 8
-    output_files = {}
-    fp_data = np.load(fp_dist)
-    fp_hist = fp_data["histval"]
-    fp_edges = fp_data["binedges"]
-    fp_centers = fp_data["bincenters"]
-    initial_z = launder(samples, fp_hist, fp_edges, fp_centers, rng, resample)
-    for shift in shifts:
-        t_data_folder = output_folders[f"{shift}"]["t"]
-        z_data_folder = output_folders[f"{shift}"]["z"]
-        shifted_z = initial_z + shift
-        shifted_t = convert_z_to_t(shifted_z)
-        if starting_phi != 0:
-            phases = generate_constant_array(samples, starting_phi, i)
-        else:
-            phases = generate_random_phases(samples, rng, i)
-        ts = extract_t_samples(shifted_t, samples, rng)
-        for step in range(steps):
-            print(f" Proceeding with RG step {step} of shift {shift}. ")
-            tprime = rg_data_workflow(method, ts, phases, samples, expr, batch_size)
-            z = convert_t_to_z(tprime)
-            t_data = build_hist(tprime, t_bins, t_range)
-            z_data = build_hist(z, z_bins, z_range)
-            if symmetrise == 1:
-                print(" Symmetrising ")
-                sym = "sym_"
-                z_data["hist"] = center_z_distribution(z_data["hist"])
-                z_sample = launder(
-                    samples,
-                    z_data["hist"],
-                    z_data["edges"],
-                    z_data["centers"],
-                    rng,
-                    resample,
-                )
-                t_sample = convert_z_to_t(z_sample)
-            elif symmetrise == 0:
-                sym = ""
-                t_sample = launder(
-                    samples,
-                    t_data["hist"],
-                    t_data["edges"],
-                    t_data["centers"],
-                    rng,
-                    resample,
-                )
-            else:
-                raise ValueError(f"Invalid symmetrise value entered: {symmetrise}")
-            ts = extract_t_samples(t_sample, samples, rng)
-            t_filename = f"{t_data_folder}/t_hist_RG{step + 1}.npz"
-            z_filename = f"{z_data_folder}/z_{sym}hist_RG{step + 1}.npz"
-            save_data(t_data["hist"], t_data["edges"], t_data["centers"], t_filename)
-            save_data(z_data["hist"], z_data["edges"], z_data["centers"], z_filename)
-            output_files.update(
-                {f"{shift}": {f"RG{step}": {"t": t_filename, "z": z_filename}}}
-            )
-        print(f" All RG steps of shift {shift} completed. ")
-    return output_files
+#     Side effects
+#     ------------
+#     Writes NPZ files to disk (via :func:`source.utilities.save_data`) and prints
+#     progress to stdout.
+#     """
+#     samples = rg_config.samples
+#     batch_size = rg_config.matrix_batch_size
+#     steps = rg_config.steps
+#     method = rg_config.method
+#     expr = rg_config.expr
+#     resample = rg_config.resample
+#     symmetrise = rg_config.symmetrise
+#     seed = rg_config.seed
+#     t_bins = rg_config.t_bins
+#     t_range = rg_config.t_range
+#     z_bins = rg_config.z_bins
+#     z_range = rg_config.z_range
+#     shifts = [float(shift) for shift in rg_config.shifts]
+#     rng = build_rng(seed)
+#     if method == "analytic":
+#         i = 4
+#     else:
+#         i = 8
+#     output_files = {}
+#     fp_data = np.load(fp_dist)
+#     fp_hist = fp_data["histval"]
+#     fp_edges = fp_data["binedges"]
+#     fp_centers = fp_data["bincenters"]
+#     initial_z = launder(samples, fp_hist, fp_edges, fp_centers, rng, resample)
+#     for shift in shifts:
+#         t_data_folder = output_folders[f"{shift}"]["t"]
+#         z_data_folder = output_folders[f"{shift}"]["z"]
+#         shifted_z = initial_z + shift
+#         shifted_t = convert_z_to_t(shifted_z)
+#         if starting_phi != 0:
+#             phases = generate_constant_array(samples, starting_phi, i)
+#         else:
+#             phases = generate_random_phases(samples, rng, i)
+#         ts = extract_t_samples(shifted_t, samples, rng)
+#         for step in range(steps):
+#             print(f" Proceeding with RG step {step} of shift {shift}. ")
+#             tprime = rg_data_workflow(method, ts, phases, samples, expr, batch_size)
+#             z = convert_t_to_z(tprime)
+#             t_data = build_hist(tprime, t_bins, t_range)
+#             z_data = build_hist(z, z_bins, z_range)
+#             if symmetrise == 1:
+#                 print(" Symmetrising ")
+#                 sym = "sym_"
+#                 z_data["hist"] = center_z_distribution(z_data["hist"])
+#                 z_sample = launder(
+#                     samples,
+#                     z_data["hist"],
+#                     z_data["edges"],
+#                     z_data["centers"],
+#                     rng,
+#                     resample,
+#                 )
+#                 t_sample = convert_z_to_t(z_sample)
+#             elif symmetrise == 0:
+#                 sym = ""
+#                 t_sample = launder(
+#                     samples,
+#                     t_data["hist"],
+#                     t_data["edges"],
+#                     t_data["centers"],
+#                     rng,
+#                     resample,
+#                 )
+#             else:
+#                 raise ValueError(f"Invalid symmetrise value entered: {symmetrise}")
+#             ts = extract_t_samples(t_sample, samples, rng)
+#             t_filename = f"{t_data_folder}/t_hist_RG{step + 1}.npz"
+#             z_filename = f"{z_data_folder}/{sym}z_hist_RG{step + 1}.npz"
+#             save_data(t_data["hist"], t_data["edges"], t_data["centers"], t_filename)
+#             save_data(z_data["hist"], z_data["edges"], z_data["centers"], z_filename)
+#             output_files.update(
+#                 {f"{shift}": {f"RG{step}": {"t": t_filename, "z": z_filename}}}
+#             )
+#         print(f" All RG steps of shift {shift} completed. ")
+#     return output_files
 
 
 if __name__ == "__main__":
@@ -431,10 +456,10 @@ if __name__ == "__main__":
     error_filename = f"{output_dir}/error.txt"
     orig_output = sys.stdout
     orig_err = sys.stderr
-    output_file = open(output_filename, "w")
-    error_file = open(error_filename, "w")
-    sys.stdout = output_file
-    sys.stderr = error_file
+    # output_file = open(output_filename, "w")
+    # error_file = open(error_filename, "w")
+    # sys.stdout = output_file
+    # sys.stderr = error_file
 
     # Create children output folders for this workflow
     print_config(rg_config)
@@ -442,22 +467,50 @@ if __name__ == "__main__":
     if args_dict["type"] == "EXP":
         shifts = [float(shift) for shift in rg_config.shifts]
         for shift in shifts:
+            r_data_folder = output_dir / f"{shift}" / "hist/r"
             t_data_folder = output_dir / f"{shift}" / "hist/t"
+            tau_data_folder = output_dir / f"{shift}" / "hist/tau"
+            f_data_folder = output_dir / f"{shift}" / "hist/f"
             z_data_folder = output_dir / f"{shift}" / "hist/z"
+            r_data_folder.mkdir(parents=True, exist_ok=True)
             t_data_folder.mkdir(parents=True, exist_ok=True)
+            tau_data_folder.mkdir(parents=True, exist_ok=True)
+            f_data_folder.mkdir(parents=True, exist_ok=True)
             z_data_folder.mkdir(parents=True, exist_ok=True)
             output_folders.update(
-                {f"{shift}": {"t": str(t_data_folder), "z": str(z_data_folder)}}
+                {
+                    f"{shift}": {
+                        "r": str(r_data_folder),
+                        "t": str(t_data_folder),
+                        "tau": str(tau_data_folder),
+                        "f": str(f_data_folder),
+                        "z": str(z_data_folder),
+                    }
+                }
             )
     else:
+        r_data_folder = output_dir / "hist/r"
         t_data_folder = output_dir / "hist/t"
+        tau_data_folder = output_dir / "hist/tau"
+        f_data_folder = output_dir / "hist/f"
         z_data_folder = output_dir / "hist/z"
+        r_data_folder.mkdir(parents=True, exist_ok=True)
         t_data_folder.mkdir(parents=True, exist_ok=True)
+        tau_data_folder.mkdir(parents=True, exist_ok=True)
+        f_data_folder.mkdir(parents=True, exist_ok=True)
         z_data_folder.mkdir(parents=True, exist_ok=True)
-        output_folders.update({"t": str(t_data_folder), "z": str(z_data_folder)})
+        output_folders.update(
+            {
+                "r": str(r_data_folder),
+                "t": str(t_data_folder),
+                "tau": str(tau_data_folder),
+                "f": str(f_data_folder),
+                "z": str(z_data_folder),
+            }
+        )
 
-    print(f" Output folders: {json.dumps(output_folders, indent=2)} ")
-    print("-" * 100)
+    # print(f" Output folders: {json.dumps(output_folders, indent=2)} ")
+    # print("-" * 100)
     # Run RG workflow
     starting_t = args.t
     starting_phi = args.phi
@@ -467,15 +520,15 @@ if __name__ == "__main__":
         hist_outputs = rg_fp(
             rg_config, output_folders, starting_t, starting_phi, starting_f
         )
-    else:
-        hist_outputs = rg_exp(rg_config, output_folders, fp_data_file, starting_phi)
+    # else:
+    # hist_outputs = rg_exp(rg_config, output_folders, fp_data_file, starting_phi)
     print("-" * 100)
 
     # Closing off
-    sys.stdout = orig_output
-    sys.stderr = orig_err
-    output_file.close()
-    error_file.close()
+    # sys.stdout = orig_output
+    # sys.stderr = orig_err
+    # output_file.close()
+    # error_file.close()
     with open(f"{output_dir}/output_locs.json", "w") as file:
         json.dump(hist_outputs, file, indent=2)
     print(f" Outputs printed to {output_dir}. ")
