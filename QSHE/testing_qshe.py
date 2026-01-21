@@ -5,6 +5,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from source.utilities import (
+    convert_t_to_z,
+    convert_z_to_t,
     generate_constant_array,
     generate_initial_t_distribution,
     generate_random_phases,
@@ -12,7 +14,12 @@ from source.utilities import (
     get_current_date,
     get_density,
     build_rng,
+    hist_moments,
+    rejection_sampler_2d,
     solve_qshe_matrix,
+    build_2d_hist,
+    inverse_cdf_2d,
+    conditional_2d_resampler,
     # launder,
 )
 from numpy.typing import ArrayLike
@@ -187,6 +194,44 @@ def gen_initial_data(
     return data_dict
 
 
+def plot_2d_hist(data_dict: dict) -> None:
+    """Generate various plots from 2d histogram data"""
+    vars = ["z", "f"]
+    for var in vars:
+        # print(np.mean(data_dict[var]["densities"]), np.std(data_dict[var]["densities"]))
+        plt.figure(var)
+        plt.title(f"Distribution of {var}")
+        # plt.xlim((-1.0, 1.0))
+        plt.plot(data_dict[var]["bincenters"], data_dict[var]["densities"])
+        plt.savefig(f"{var}_test.png", dpi=150)
+        plt.close(var)
+        print(f"Plot for {var} created")
+    fig, ax = plt.subplots()
+    zf_counts = data_dict["zf"]["counts"].T
+    image = ax.imshow(
+        zf_counts,
+        origin="lower",
+        extent=(
+            data_dict["z"]["binedges"][0],
+            data_dict["z"]["binedges"][-1],
+            data_dict["f"]["binedges"][0],
+            data_dict["f"]["binedges"][-1],
+        ),
+        aspect="auto",
+        # norm=LogNorm(
+        #     vmin=max(zf_counts.min(), 1e-6),
+        #     vmax=zf_counts.max(),
+        # ),
+    )
+    ax.set_xlabel("z")
+    ax.set_ylabel("f")
+    ax.set_xlim((-7.0, 7.0))
+    fig.colorbar(image, ax=ax, label="p(z,f)")
+    fig.savefig("zf_test.png", dpi=150)
+    print("Plot for zf created")
+    plt.close(fig)
+
+
 if __name__ == "__main__":
     print(f"Program started on {get_current_date()}")
     start_time = time()
@@ -351,3 +396,81 @@ if __name__ == "__main__":
     # print(over_mask_phis.keys())
     print(f"Overall analysis done after {time() - start_time:.3f} seconds")
     print(f"Program completed on {get_current_date()}")
+
+    t_prime = all_data["2"]
+    f_prime = all_data["17"]
+    z = convert_t_to_z(t_prime)
+
+    # hists = build_2d_hist(
+    #     z,
+    #     f_prime,
+    #     rg_config.z_bins,
+    #     rg_config.t_bins,
+    #     rg_config.z_range,
+    #     rg_config.t_range,
+    #     True,
+    # )
+    zbins = 200
+    fbins = 100
+    hists = build_2d_hist(
+        z,
+        f_prime,
+        zbins,
+        fbins,
+        rg_config.z_range,
+        rg_config.t_range,
+        True,
+    )
+    plot_2d_hist(hists)
+
+    z_sample, f_sample = rejection_sampler_2d(hists, rng, n)
+    # z_sample, f_sample = inverse_cdf_2d(hists, rng, n)
+    t_sample = convert_z_to_t(z_sample)
+    z_hist, z_bins = np.histogram(z_sample, bins=hists["z"]["binedges"])
+    f_hist, f_bins = np.histogram(f_sample, bins=hists["f"]["binedges"])
+
+    # z_unsym_hist, z_unsym_bins = np.histogram(z, bins=200)
+    # f_unsym_hist, f_unsym_bins = np.histogram(f_prime, bins=100)
+
+    z_con, f_con = conditional_2d_resampler(hists, rng, n)
+    t_con = convert_z_to_t(z_con)
+    zcon_hist, zcon_bins = np.histogram(z_con, bins=hists["z"]["binedges"])
+    fcon_hist, fcon_bins = np.histogram(f_con, bins=hists["f"]["binedges"])
+
+    print(np.max(np.abs(f_sample)[:, None] ** 2 + np.abs(t_sample)[:, None] ** 2))
+    print(np.max(np.abs(f_prime)[:, None] ** 2 + np.abs(t_prime)[:, None] ** 2))
+    print(np.max(np.abs(f_con)[:, None] ** 2 + np.abs(t_con)[:, None] ** 2))
+
+    z_com_mean, z_com_std = hist_moments(hists["z"]["counts"], hists["z"]["binedges"])
+    z_rej_mean, z_rej_std = hist_moments(z_hist, z_bins)
+    z_con_mean, z_con_std = hist_moments(zcon_hist, zcon_bins)
+    f_com_mean, f_com_std = hist_moments(hists["f"]["counts"], hists["f"]["binedges"])
+    f_rej_mean, f_rej_std = hist_moments(f_hist, f_bins)
+    f_con_mean, f_con_std = hist_moments(fcon_hist, fcon_bins)
+
+    print(
+        f"Computed: Z Mean = {z_com_mean}, Z STD = {z_com_std}, F Mean = {f_com_mean}, f STD = {f_com_std}"
+    )
+    print(
+        f"Rejection: Z Mean = {z_rej_mean}, Z STD = {z_rej_std}, F Mean = {f_rej_mean}, f STD = {f_rej_std}"
+    )
+    print(
+        f"Conditional: Z Mean = {z_con_mean}, Z STD = {z_con_std}, F Mean = {f_con_mean}, f STD = {f_con_std}"
+    )
+    # print(np.min(z_unsym_hist), np.max(z_unsym_hist))
+    # print(np.min(z), np.max(z))
+    # print(np.median(z_hist), np.median(hists["z"]["counts"]))
+    fig, (ax0, ax1) = plt.subplots(1, 2, figsize=(12, 8))
+    ax0.plot(hists["z"]["bincenters"], hists["z"]["counts"], label="z computed")
+    ax0.plot(0.5 * (z_bins[1:] + z_bins[:-1]), z_hist, label="z rej sample")
+    ax0.plot(0.5 * (zcon_bins[1:] + zcon_bins[:-1]), zcon_hist, label="z con sample")
+    # ax0.plot(0.5 * (z_unsym_bins[1:] + z_unsym_bins[:-1]), z_unsym_hist, label="z 1d")
+    ax1.plot(hists["f"]["bincenters"], hists["f"]["counts"], label="f computed")
+    ax1.plot(0.5 * (f_bins[1:] + f_bins[:-1]), f_hist, label="f rej sample")
+    ax1.plot(0.5 * (fcon_bins[1:] + fcon_bins[:-1]), fcon_hist, label="f con sample")
+    # ax1.plot(0.5 * (f_unsym_bins[1:] + f_unsym_bins[:-1]), f_unsym_hist, label="f 1d")
+    ax0.set_title("Distributions of z for different sampling methods")
+    ax1.set_title("Distributions of f for different sampling methods")
+    ax0.legend()
+    ax1.legend()
+    plt.show()
