@@ -40,6 +40,9 @@ from source.utilities import (
     launder,
     get_density,
     save_data,
+    rejection_sampler_2d,
+    build_2d_hist,
+    conditional_2d_resampler,
 )
 from QSHE.testing_qshe import (
     # solve_qshe_matrix_eq,
@@ -242,16 +245,35 @@ def rg_fp(
     for step in range(steps):
         print(f"Proceeding with RG step {step}. ")
         # For now, track all 4 outputs.
-        rprime = numerical_solver(ts, fs, phases, samples, 2, inputs, batch_size)
-        tprime = numerical_solver(ts, fs, phases, samples, 9, inputs, batch_size)
-        tauprime = numerical_solver(ts, fs, phases, samples, 10, inputs, batch_size)
-        fprime = numerical_solver(ts, fs, phases, samples, 17, inputs, batch_size)
+        tprime = numerical_solver(ts, fs, phases, samples, 2, inputs, batch_size)[
+            :, None
+        ]
+        rprime = numerical_solver(ts, fs, phases, samples, 9, inputs, batch_size)[
+            :, None
+        ]
+        tauprime = numerical_solver(ts, fs, phases, samples, 10, inputs, batch_size)[
+            :, None
+        ]
+        fprime = numerical_solver(ts, fs, phases, samples, 17, inputs, batch_size)[
+            :, None
+        ]
+        assert (
+            np.abs(
+                np.abs(tprime) ** 2
+                + np.abs(rprime) ** 2
+                + np.abs(tauprime) ** 2
+                + np.abs(fprime) ** 2
+                - 1.0
+            )
+            < 1e-12
+        )
         z = convert_t_to_z(tprime)
-        r_data = build_hist(rprime, t_bins, t_range)
         t_data = build_hist(tprime, t_bins, t_range)
+        r_data = build_hist(rprime, t_bins, t_range)
         tau_data = build_hist(tauprime, t_bins, t_range)
         f_data = build_hist(fprime, t_bins, t_range)
         z_data = build_hist(z, z_bins, z_range)
+        hist_dict = build_2d_hist(z, fprime, z_bins, t_bins, z_range, t_range)
         if symmetrise == 1:
             print(" Symmetrising ")
             sym = "sym_"
@@ -267,32 +289,28 @@ def rg_fp(
             t_sample = convert_z_to_t(z_sample)
         elif symmetrise == 0:
             sym = ""
-            t_sample = launder(
-                samples,
-                t_data["hist"],
-                t_data["edges"],
-                t_data["centers"],
-                rng,
-                resample,
-            )
+            z_sample, f_sample = rejection_sampler_2d(hist_dict, rng, samples)
+            t_sample = convert_z_to_t(z_sample)
         else:
             raise ValueError(f"Invalid symmetrise value entered: {symmetrise}")
         # f_sample = launder(
         #     samples, f_data["hist"], f_data["edges"], f_data["centers"], rng, resample
         # )
         indexes = rng.integers(0, samples, size=(samples, 5))
-        ts = np.take(tprime, indexes)
-        fs = np.take(fprime, indexes)
+        # ts = np.take(tprime, indexes)
+        # fs = np.take(fprime, indexes)
+        ts = np.take(t_sample, indexes)
+        fs = np.take(f_sample, indexes)
         assert ts.shape == (samples, 5) and fs.shape == (samples, 5)
         # print(np.max(ts**2 + fs**2))
         # sys.exit(0)
-        r_filename = f"{r_data_folder}/r_hist_RG{step}.npz"
         t_filename = f"{t_data_folder}/t_hist_RG{step}.npz"
+        r_filename = f"{r_data_folder}/r_hist_RG{step}.npz"
         tau_filename = f"{tau_data_folder}/tau_hist_RG{step}.npz"
         f_filename = f"{f_data_folder}/f_hist_RG{step}.npz"
         z_filename = f"{z_data_folder}/{sym}z_hist_RG{step}.npz"
-        save_data(r_data["hist"], r_data["edges"], r_data["centers"], r_filename)
         save_data(t_data["hist"], t_data["edges"], t_data["centers"], t_filename)
+        save_data(r_data["hist"], r_data["edges"], r_data["centers"], r_filename)
         save_data(
             tau_data["hist"], tau_data["edges"], tau_data["centers"], tau_filename
         )
@@ -301,8 +319,8 @@ def rg_fp(
         output_files.update(
             {
                 f"RG{step}": {
-                    "r": r_filename,
                     "t": t_filename,
+                    "r": r_filename,
                     "tau": tau_filename,
                     "f": f_filename,
                     "z": z_filename,
@@ -467,21 +485,21 @@ if __name__ == "__main__":
     if args_dict["type"] == "EXP":
         shifts = [float(shift) for shift in rg_config.shifts]
         for shift in shifts:
-            r_data_folder = output_dir / f"{shift}" / "hist/r"
             t_data_folder = output_dir / f"{shift}" / "hist/t"
+            r_data_folder = output_dir / f"{shift}" / "hist/r"
             tau_data_folder = output_dir / f"{shift}" / "hist/tau"
             f_data_folder = output_dir / f"{shift}" / "hist/f"
             z_data_folder = output_dir / f"{shift}" / "hist/z"
-            r_data_folder.mkdir(parents=True, exist_ok=True)
             t_data_folder.mkdir(parents=True, exist_ok=True)
+            r_data_folder.mkdir(parents=True, exist_ok=True)
             tau_data_folder.mkdir(parents=True, exist_ok=True)
             f_data_folder.mkdir(parents=True, exist_ok=True)
             z_data_folder.mkdir(parents=True, exist_ok=True)
             output_folders.update(
                 {
                     f"{shift}": {
-                        "r": str(r_data_folder),
                         "t": str(t_data_folder),
+                        "r": str(r_data_folder),
                         "tau": str(tau_data_folder),
                         "f": str(f_data_folder),
                         "z": str(z_data_folder),
@@ -489,20 +507,20 @@ if __name__ == "__main__":
                 }
             )
     else:
-        r_data_folder = output_dir / "hist/r"
         t_data_folder = output_dir / "hist/t"
+        r_data_folder = output_dir / "hist/r"
         tau_data_folder = output_dir / "hist/tau"
         f_data_folder = output_dir / "hist/f"
         z_data_folder = output_dir / "hist/z"
-        r_data_folder.mkdir(parents=True, exist_ok=True)
         t_data_folder.mkdir(parents=True, exist_ok=True)
+        r_data_folder.mkdir(parents=True, exist_ok=True)
         tau_data_folder.mkdir(parents=True, exist_ok=True)
         f_data_folder.mkdir(parents=True, exist_ok=True)
         z_data_folder.mkdir(parents=True, exist_ok=True)
         output_folders.update(
             {
-                "r": str(r_data_folder),
                 "t": str(t_data_folder),
+                "r": str(r_data_folder),
                 "tau": str(tau_data_folder),
                 "f": str(f_data_folder),
                 "z": str(z_data_folder),
