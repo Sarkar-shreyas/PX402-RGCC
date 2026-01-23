@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 
 from source.utilities import (
     convert_t_to_z,
+    convert_z_to_g,
     convert_z_to_t,
     generate_constant_array,
     generate_initial_t_distribution,
@@ -18,7 +19,10 @@ from source.utilities import (
     rejection_sampler_2d,
     solve_qshe_matrix,
     build_2d_hist,
-    inverse_cdf_2d,
+    convert_t_to_geff,
+    convert_g_to_z,
+    # convert_geff_to_t,
+    convert_zeff_to_t,
     conditional_2d_resampler,
     # launder,
 )
@@ -223,12 +227,12 @@ def plot_2d_hist(data_dict: dict) -> None:
         #     vmax=zf_counts.max(),
         # ),
     )
-    ax.set_xlabel("z")
-    ax.set_ylabel("f")
-    ax.set_xlim((-7.0, 7.0))
-    fig.colorbar(image, ax=ax, label="p(z,f)")
-    fig.savefig("zf_test.png", dpi=150)
-    print("Plot for zf created")
+    ax.set_xlabel(r"$z_{eff}$")
+    ax.set_ylabel("loss")
+    ax.set_xlim((-5.0, 5.0))
+    fig.colorbar(image, ax=ax, label=r"p($z_{eff}$,loss)")
+    fig.savefig("zeff_loss_test.png", dpi=150)
+    print("Plot for zeff vs loss created")
     plt.close(fig)
 
 
@@ -398,8 +402,19 @@ if __name__ == "__main__":
     print(f"Program completed on {get_current_date()}")
 
     t_prime = all_data["2"]
+    r_prime = all_data["9"]
+    tau_prime = all_data["10"]
     f_prime = all_data["17"]
+    loss = (
+        np.abs(np.reshape(tau_prime, shape=n)) ** 2
+        + np.abs(np.reshape(f_prime, shape=n)) ** 2
+    )
+    print(loss.shape)
+    # assert loss.shape == n
     z = convert_t_to_z(t_prime)
+
+    g_eff = convert_t_to_geff(t_prime, f_prime)
+    z_eff = convert_g_to_z(g_eff)
 
     # hists = build_2d_hist(
     #     z,
@@ -410,8 +425,8 @@ if __name__ == "__main__":
     #     rg_config.t_range,
     #     True,
     # )
-    zbins = 200
-    fbins = 100
+    zbins = 5000
+    fbins = 1000
     hists = build_2d_hist(
         z,
         f_prime,
@@ -419,11 +434,37 @@ if __name__ == "__main__":
         fbins,
         rg_config.z_range,
         rg_config.t_range,
-        True,
+        False,
     )
-    plot_2d_hist(hists)
+    # plot_2d_hist(hists)
 
-    z_sample, f_sample = rejection_sampler_2d(hists, rng, n)
+    # eff_hists = build_2d_hist(
+    #     z_eff, f_prime, zbins, fbins, rg_config.z_range, rg_config.t_range, False
+    # )
+    stay = np.reshape(np.abs(t_prime) ** 2 + np.abs(r_prime) ** 2, shape=n)
+    geff = convert_t_to_geff(t_prime, r_prime)
+    zeff = np.reshape(convert_g_to_z(geff), shape=n)
+    # eff_hists = build_2d_hist(
+    #     stay,
+    #     loss,
+    #     rg_config.t_bins,
+    #     fbins,
+    #     rg_config.t_range,
+    #     rg_config.t_range,
+    #     False,
+    # )
+    eff_hists = build_2d_hist(
+        zeff, loss, zbins, fbins, rg_config.z_range, rg_config.t_range, False
+    )
+    plot_2d_hist(eff_hists)
+    z_eff_sample, f_eff_sample = rejection_sampler_2d(eff_hists, rng, n)
+
+    g_eff_sample = convert_z_to_g(z_eff_sample)
+    t_eff_sample = convert_zeff_to_t(z_eff_sample, f_eff_sample)
+    z_eff_hist, z_eff_bins = np.histogram(z_eff_sample, bins=eff_hists["z"]["binedges"])
+    f_eff_hist, f_eff_bins = np.histogram(f_eff_sample, bins=eff_hists["f"]["binedges"])
+
+    z_sample, f_sample = conditional_2d_resampler(hists, rng, n)
     # z_sample, f_sample = inverse_cdf_2d(hists, rng, n)
     t_sample = convert_z_to_t(z_sample)
     z_hist, z_bins = np.histogram(z_sample, bins=hists["z"]["binedges"])
@@ -437,19 +478,36 @@ if __name__ == "__main__":
     zcon_hist, zcon_bins = np.histogram(z_con, bins=hists["z"]["binedges"])
     fcon_hist, fcon_bins = np.histogram(f_con, bins=hists["f"]["binedges"])
 
+    print(
+        np.max(np.abs(f_eff_sample)[:, None] ** 2 + np.abs(t_eff_sample)[:, None] ** 2)
+    )
     print(np.max(np.abs(f_sample)[:, None] ** 2 + np.abs(t_sample)[:, None] ** 2))
     print(np.max(np.abs(f_prime)[:, None] ** 2 + np.abs(t_prime)[:, None] ** 2))
     print(np.max(np.abs(f_con)[:, None] ** 2 + np.abs(t_con)[:, None] ** 2))
 
     z_com_mean, z_com_std = hist_moments(hists["z"]["counts"], hists["z"]["binedges"])
+    zeff_com_mean, zeff_com_std = hist_moments(
+        eff_hists["z"]["counts"], eff_hists["z"]["binedges"]
+    )
+    zeff_samp_mean, zeff_samp_std = hist_moments(z_eff_hist, z_eff_bins)
     z_rej_mean, z_rej_std = hist_moments(z_hist, z_bins)
     z_con_mean, z_con_std = hist_moments(zcon_hist, zcon_bins)
     f_com_mean, f_com_std = hist_moments(hists["f"]["counts"], hists["f"]["binedges"])
+    feff_com_mean, feff_com_std = hist_moments(
+        eff_hists["f"]["counts"], eff_hists["f"]["binedges"]
+    )
+    feff_samp_mean, feff_samp_std = hist_moments(f_eff_hist, f_eff_bins)
     f_rej_mean, f_rej_std = hist_moments(f_hist, f_bins)
     f_con_mean, f_con_std = hist_moments(fcon_hist, fcon_bins)
 
     print(
         f"Computed: Z Mean = {z_com_mean}, Z STD = {z_com_std}, F Mean = {f_com_mean}, f STD = {f_com_std}"
+    )
+    print(
+        f"Effective Computed: Z Mean = {zeff_com_mean}, Z STD = {zeff_com_std}, F Mean = {feff_com_mean}, f STD = {feff_com_std}"
+    )
+    print(
+        f"Effective Sampled: Z Mean = {zeff_samp_mean}, Z STD = {zeff_samp_std}, F Mean = {feff_samp_mean}, f STD = {feff_samp_std}"
     )
     print(
         f"Rejection: Z Mean = {z_rej_mean}, Z STD = {z_rej_std}, F Mean = {f_rej_mean}, f STD = {f_rej_std}"
@@ -461,14 +519,31 @@ if __name__ == "__main__":
     # print(np.min(z), np.max(z))
     # print(np.median(z_hist), np.median(hists["z"]["counts"]))
     fig, (ax0, ax1) = plt.subplots(1, 2, figsize=(12, 8))
+    ax0.plot(
+        eff_hists["z"]["bincenters"],
+        eff_hists["z"]["counts"],
+        label=r"$z_{eff}$ computed",
+    )
+    ax0.plot(
+        0.5 * (z_eff_bins[1:] + z_eff_bins[:-1]), z_eff_hist, label=r"$z_{eff}$ sampled"
+    )
     ax0.plot(hists["z"]["bincenters"], hists["z"]["counts"], label="z computed")
     ax0.plot(0.5 * (z_bins[1:] + z_bins[:-1]), z_hist, label="z rej sample")
     ax0.plot(0.5 * (zcon_bins[1:] + zcon_bins[:-1]), zcon_hist, label="z con sample")
     # ax0.plot(0.5 * (z_unsym_bins[1:] + z_unsym_bins[:-1]), z_unsym_hist, label="z 1d")
+    ax1.plot(
+        eff_hists["f"]["bincenters"],
+        eff_hists["f"]["counts"],
+        label=r"$f_{eff}$ computed",
+    )
+    ax1.plot(
+        0.5 * (f_eff_bins[1:] + f_eff_bins[:-1]), f_eff_hist, label=r"$f_{eff}$ sampled"
+    )
     ax1.plot(hists["f"]["bincenters"], hists["f"]["counts"], label="f computed")
     ax1.plot(0.5 * (f_bins[1:] + f_bins[:-1]), f_hist, label="f rej sample")
     ax1.plot(0.5 * (fcon_bins[1:] + fcon_bins[:-1]), fcon_hist, label="f con sample")
     # ax1.plot(0.5 * (f_unsym_bins[1:] + f_unsym_bins[:-1]), f_unsym_hist, label="f 1d")
+    ax0.set_xlim((-10.0, 10.0))
     ax0.set_title("Distributions of z for different sampling methods")
     ax1.set_title("Distributions of f for different sampling methods")
     ax0.legend()
