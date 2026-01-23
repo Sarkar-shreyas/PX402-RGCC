@@ -823,6 +823,23 @@ def convert_t_to_z(t: np.ndarray) -> np.ndarray:
     return np.log((1.0 / (t**2.0)) - 1.0)
 
 
+def convert_t_to_geff(t: np.ndarray, r: np.ndarray) -> np.ndarray:
+    t2 = np.abs(t) ** 2
+    r2 = np.abs(r) ** 2
+    return t2 / (t2 + r2)
+
+
+def convert_geff_to_t(g_eff: np.ndarray, r: np.ndarray) -> np.ndarray:
+    r2 = np.abs(r) ** 2
+    t2 = r2 * (g_eff / (1 - g_eff))
+    return np.sqrt(t2)
+
+
+def convert_zeff_to_t(z_eff: np.ndarray, loss: np.ndarray) -> np.ndarray:
+    t2 = (1 - loss) / (1 + np.exp(z_eff))
+    return np.sqrt(t2)
+
+
 # ---------- Sampling helpers decoupled from P_D ---------- #
 def normalise_samplers(sampler: str) -> str:
     """Normalise a sampler name to the internal short key.
@@ -1071,7 +1088,8 @@ def rejection_sampler_2d(data_dict: dict, rng: np.random.Generator, N: int) -> t
         remaining = N - filled
         batch_size = max(min_batch_size, min(remaining, max_batch_size))
         z_sample, f_sample = inverse_cdf_2d(data_dict, rng, batch_size)
-        t_sample = convert_z_to_t(z_sample)
+        g_eff_sample = convert_z_to_g(z_sample)
+        t_sample = convert_geff_to_t(g_eff_sample, f_sample)
         # Validity mask for unitarity constraint
         mask = t_sample**2 + f_sample**2 <= 1.0 + 1e-12
         valid = mask.sum()
@@ -1145,9 +1163,9 @@ def conditional_2d_resampler(
     z_edges = data_dict["z"]["binedges"]
     f_edges = data_dict["f"]["binedges"]
 
-    total = zf_counts.sum()
+    # total = zf_counts.sum()
 
-    z_size, f_size = zf_counts.shape
+    # z_size, f_size = zf_counts.shape
     # Manually compute z marginal and construct the 1D z cdf
     z_marginal = zf_counts.sum(axis=1)
     z_cdf = np.cumsum(z_marginal / z_marginal.sum())
@@ -1209,10 +1227,10 @@ def conditional_2d_resampler(
         f_diff = f_top - f_bottom
         z_sample = z_left + z_diff * rng.random(size=batch_size)
         f_sample = f_bottom + f_diff * rng.random(size=batch_size)
-        t_sample = convert_z_to_t(z_sample)
+        t_sample = convert_zeff_to_t(z_sample, f_sample)
 
         # Validity check
-        mask = t_sample**2 + f_sample**2 <= 1.0 + 1e-12
+        mask = t_sample**2 + f_sample <= 1.0 + 1e-12
         valid = mask.sum()
         if valid == 0:
             continue
