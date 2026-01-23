@@ -31,13 +31,20 @@ def plot_z_fp():
     z_fp = np.load(f"{data_dir}/v1.90S/FP/hist/sym_z/sym_z_hist_RG8.npz")
     z_bins = z_fp["bincenters"]
     z_vals = z_fp["histval"]
+    z_binedges = z_fp["binedges"]
     z_densities = get_density(z_vals, z_fp["binedges"])
 
     # Load FP moments from v1.90S
-    z_moments = json.load(open(f"{data_dir}/v1.90S/FP/stats/sym_z_moments.json", "r"))
+    # z_moments = json.load(open(f"{data_dir}/v1.90S/FP/stats/sym_z_moments.json", "r"))
 
-    mean = z_moments["RG_8"]["mean"]
-    std = z_moments["RG_8"]["std"]
+    mask = np.logical_and(z_binedges <= 5.0, z_binedges >= -5.0)
+    mask2 = np.logical_and(z_bins <= 5.0, z_bins >= -5.0)
+    counts = z_vals[mask2]
+    bins = z_binedges[mask]
+
+    # mean = z_moments["RG_8"]["mean"]
+    # std = z_moments["RG_8"]["std"]
+    mean, std = hist_moments(counts, bins)
     plt.figure("fp")
     plt.plot(
         z_bins,
@@ -284,5 +291,5 @@ if __name__ == "__main__":
         z_dir = f"{exp_plot_dir}/shift_{shift}/hist/z"
         plot_z(z_dir, output_dir, start, end, False, version, float(shift))
 
-    # plot_z_fp()
+    plot_z_fp()
     # plot_z_peaks()
