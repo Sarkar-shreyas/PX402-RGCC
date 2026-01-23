@@ -10,6 +10,7 @@ from analysis.data_plotting import (
     get_density,
     plot_data,
     construct_moments_dict,
+    plot_3d,
 )
 
 
@@ -32,8 +33,8 @@ if __name__ == "__main__":
 
     version = str(args.version)
     num_rg = int(args.steps)
-    var_names = ["r", "t", "tau", "f", "z", "sym_z"]
-    var_names = ["r", "t", "tau", "f", "z"]
+    var_names = ["r", "t", "tau", "f", "loss", "z", "sym_z"]
+    # var_names = ["r", "t", "tau", "f", "z"]
     z_vars = ["z", "sym_z"]
     other_vars = ["r", "t", "tau", "f"]
     hist_dir = f"{data_folder}/{version}/{rg_config.type}/hist"
@@ -43,6 +44,7 @@ if __name__ == "__main__":
     t_folder = f"{hist_dir}/t"
     tau_folder = f"{hist_dir}/tau"
     f_folder = f"{hist_dir}/f"
+    loss_folder = f"{hist_dir}/loss"
     z_folder = f"{hist_dir}/z"
     folder_names = {
         "hist": hist_dir,
@@ -52,6 +54,7 @@ if __name__ == "__main__":
         "t": t_folder,
         "tau": tau_folder,
         "f": f_folder,
+        "loss": loss_folder,
         "z": z_folder,
     }
     for folder in folder_names:
@@ -60,47 +63,74 @@ if __name__ == "__main__":
 
     # Load histogram data
     data_map = defaultdict(list)
+    missing_vars = []
     for var in var_names:
         for i in range(num_rg):
-            if var == "sym_z":
-                file = f"{folder_names['z']}/{var}_hist_RG{i}.npz"
-            else:
-                file = f"{folder_names[var]}/{var}_hist_RG{i}.npz"
-            counts, bins, centers = load_hist_data(file)
-            densities = get_density(counts, bins)
-            data_map[var].append([counts, bins, centers, densities])
+            try:
+                if var == "sym_z":
+                    file = f"{folder_names['z']}/{var}_hist_RG{i}.npz"
+                else:
+                    file = f"{folder_names[var]}/{var}_hist_RG{i}.npz"
+                counts, bins, centers = load_hist_data(file)
+                densities = get_density(counts, bins)
+                data_map[var].append([counts, bins, centers, densities])
+            except FileNotFoundError:
+                missing_vars.append(var)
     print("All histogram datasets have been loaded")
 
     # Plot the other 3 variables without clipping bounds
     for var in var_names:
-        if var == "z":
+        if var in missing_vars:
             continue
         filename = f"{plots_dir}/{var}_histogram.png"
         plot_data(var, filename, data_map[var], rg_config.type.upper(), num_rg)
 
-    z_filename = f"{plots_dir}/z_histogram.png"
-    fig, (ax0, ax1) = plt.subplots(1, 2, num="z", figsize=(12, 6))
-    ax0.set_title("Histogram of z")
-    ax0.set_xlabel("z")
-    ax0.set_ylabel("Q(z)")
-    ax1.set_title("Clipped Histogram of z")
-    ax1.set_xlabel("z")
-    ax1.set_ylabel("Q(z)")
-    ax0.set_xlim((-25.0, 25.0))
-    ax1.set_xlim((-5.0, 5.0))
-    for i in range(num_rg):
-        x_data = data_map["z"][i][2]
-        y_data = data_map["z"][i][3]
-        ax0.plot(x_data, y_data, label=f"RG{i}")
-        ax1.scatter(x_data[::100], y_data[::100], label=f"RG{i}")
-    ax0.legend(loc="upper left")
-    ax1.legend(loc="upper left")
-    fig.savefig(z_filename, dpi=150)
-    plt.close(fig)
+    if "z" in missing_vars:
+        z_vars = ["sym_z"]
+    elif "sym_z" in missing_vars:
+        z_vars = ["z"]
+    else:
+        z_vars = ["z", "sym_z"]
+
+    for z_var in z_vars:
+        z_filename = f"{plots_dir}/{z_var}_histogram.png"
+        fig, (ax0, ax1) = plt.subplots(1, 2, num=f"{z_var}", figsize=(12, 6))
+        ax0.set_title(f"Histogram of {z_var}")
+        ax0.set_xlabel(f"{z_var}")
+        ax0.set_ylabel(f"Q({z_var})")
+        ax1.set_title(f"Clipped Histogram of {z_var}")
+        ax1.set_xlabel(f"{z_var}")
+        ax1.set_ylabel(f"Q({z_var})")
+        ax0.set_xlim((-25.0, 25.0))
+        ax1.set_xlim((-5.0, 5.0))
+        for i in range(num_rg):
+            x_data = data_map[z_var][i][2]
+            y_data = data_map[z_var][i][3]
+            ax0.plot(x_data, y_data, label=f"RG{i}")
+            if z_var == "z":
+                ax1.scatter(x_data[::100], y_data[::100], label=f"RG{i}")
+            else:
+                ax1.scatter(x_data, y_data, label=f"RG{i}")
+        ax0.legend(loc="upper left")
+        ax1.legend(loc="upper left")
+        fig.savefig(z_filename, dpi=150)
+        plt.close(fig)
+
+    # zf_filename = f"{hist_dir}/zf/zf_hist"
+    # zf_plot = f"{plots_dir}/3d_plot.png"
+    # plot_3d(zf_filename, num_rg, zf_plot)
+    # print(f"3d plot saved to {zf_plot}")
+
+    present_vars = []
+    for var in var_names:
+        if var in missing_vars:
+            continue
+        else:
+            present_vars.append(var)
 
     print(f"Plots for {var_names} have been made")
     print("-" * 100)
-    construct_moments_dict(stats_dir, plots_dir, var_names, data_map, num_rg)
+    construct_moments_dict(stats_dir, plots_dir, present_vars, data_map, num_rg)
     # print("-" * 100)
     # print(data_map["sym_z"][0][1])
     print("Analysis done.")
