@@ -1,6 +1,7 @@
 import numpy as np
 import argparse
 import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm, Normalize
 from source.utilities import (
     l2_distance,
     mean_squared_distance,
@@ -20,6 +21,7 @@ from constants import (
     YLIMS,
     config_file,
 )
+from mpl_toolkits.mplot3d import Axes3D
 
 TYPE = "FP"
 DIST_TOLERANCE = 1e-3
@@ -84,6 +86,66 @@ def build_config_path(data_location: str, version_name: str, rg_mode: str) -> st
 
 
 # ---------- Plotting helpers ---------- #
+def plot_3d(hist_2d_filename: str, num_rg: int, output_filename: str):
+    # hist_data = np.load(hist_2d_filename)
+    fig, ax = plt.subplots()
+    densities = []
+    z_centers = None
+    f_centers = None
+    for i in range(num_rg):
+        hist_data = np.load(f"{hist_2d_filename}_RG{i}.npz")
+        densities.append(hist_data["zfdensities"])
+
+        if z_centers is None:
+            z_centers = hist_data["zcenters"]
+
+        if f_centers is None:
+            f_centers = hist_data["fcenters"]
+
+    print("Loaded all 2dhist files")
+
+    densities = np.array(densities)
+    steps, zshape, fshape = densities.shape
+
+    zgrid, fgrid = np.meshgrid(z_centers[::50], f_centers[::50], indexing="ij")  # type: ignore
+    vmin = densities.min()
+    vmax = densities.max()
+    norm = LogNorm(vmin=max(vmin, 1e-6), vmax=vmax)
+    cmap = plt.cm._colormaps["viridis"]
+    fig = plt.figure(figsize=(10, 7))
+    ax = fig.add_subplot(111, projection="3d")
+
+    for i in range(num_rg):
+        density = densities[i][::50]
+        z_height = np.full_like(zgrid, fill_value=i, dtype=float)
+        colors = cmap(norm(density))
+
+        ax.plot_surface(
+            zgrid,
+            fgrid,
+            z_height,
+            facecolors=colors,
+            rstride=1,
+            cstride=1,
+            linewidth=0,
+            antialiased=False,
+            shade=False,
+            alpha=0.9,
+        )
+        print(f"Figure plotted for RG {i}")
+    ax.set_xlabel("z")
+    # ax.set_xlim((-10.0, 10.0))
+    ax.set_ylabel("f")
+    ax.set_zlabel("RG step")
+    mappable = plt.cm.ScalarMappable(norm=norm, cmap=cmap)
+    mappable.set_array([])
+    cbar = fig.colorbar(mappable, ax=ax, shrink=0.6, pad=0.1)
+    cbar.set_label("Histogram density")
+    print("3D plot with colorbar generated.")
+    plt.tight_layout()
+    plt.savefig(output_filename)
+
+
 def plot_data(var: str, filename: str, data: list, mode: str, num_rg: int):
     """
     Plot histogram or scatter data for a given variable and save to file.
@@ -107,7 +169,7 @@ def plot_data(var: str, filename: str, data: list, mode: str, num_rg: int):
     ylim = YLIMS[mode][var]
     legend_loc = LEGENDS[mode][var]
     if var == "z" or var == "sym_z":
-        fig, (ax1, ax2) = plt.subplots(1, 2, num=f"{var}", figsize=(12, 4))
+        fig, (ax1, ax2) = plt.subplots(1, 2, num=f"{var}", figsize=(12, 8))
         ax1.set_title(f"Histogram of {var}")
         ax1.set_xlabel(f"{var}")
         ax1.set_ylabel(f"Q({var})")
