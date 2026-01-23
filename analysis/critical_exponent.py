@@ -30,7 +30,7 @@ from analysis.data_plotting import (
 import os
 import json
 from time import time
-from constants import data_dir, SHIFTS, config_file
+from constants import data_dir, SHIFTS, config_file, local_dir
 
 TYPE = "EXP"
 
@@ -104,17 +104,21 @@ def main():
     version = str(args.version)
     num_rg = int(args.steps)
     rg = num_rg + 1
-    main_dir = f"{data_dir}/{version}"
-    stats_dir = f"{data_dir}/{version}/{TYPE}/stats"
-    plots_dir = f"{data_dir}/{version}/{TYPE}/plots"
+    if args.loc == "local":
+        data_folder = local_dir
+    else:
+        data_folder = data_dir
+    main_dir = f"{data_folder}/{version}"
+    stats_dir = f"{data_folder}/{version}/{TYPE}/stats"
+    plots_dir = f"{data_folder}/{version}/{TYPE}/plots"
     os.makedirs(stats_dir, exist_ok=True)
     os.makedirs(plots_dir, exist_ok=True)
     data_map = defaultdict(dict)
-    vars = ["t", "input_t", "z"]
+    vars = ["t", "r", "f", "tau", "loss", "z"]
     print(f"Performing peak estimation for {version}")
     print("=" * 100)
     # Load the FP distribution
-    fp_file = f"{data_dir}/{version}/FP/hist/sym_z/sym_z_hist_RG{num_rg - 1}.npz"
+    fp_file = f"{data_folder}/{version}/FP/hist/z/sym_z_hist_RG{num_rg - 1}.npz"
     fp_counts, fp_bins, fp_centers = load_hist_data(fp_file)
     fp_density = get_density(fp_counts, fp_bins)
 
@@ -123,7 +127,7 @@ def main():
     for shift in SHIFTS:
         for var in vars:
             data_map[shift][var] = []
-            shift_dir = f"{data_dir}/{version}/{TYPE}/shift_{shift}/hist/{var}"
+            shift_dir = f"{data_folder}/{version}/{TYPE}/{shift}/hist/{var}"
             shift_plot_dir = f"{plots_dir}/{shift}"
             shift_stats_dir = f"{stats_dir}/{shift}"
             os.makedirs(shift_plot_dir, exist_ok=True)
@@ -134,13 +138,13 @@ def main():
                 )
             for i in range(1, rg):
                 if var == "z":
-                    filename = f"{shift_dir}/{var}_hist_unsym_RG{i - 1}.npz"
+                    filename = f"{shift_dir}/{var}_hist_RG{i - 1}.npz"
                 else:
                     filename = f"{shift_dir}/{var}_hist_RG{i - 1}.npz"
                 counts, bins, centers = load_hist_data(filename)
                 densities = get_density(counts, bins)
                 data_map[shift][var].append([counts, bins, centers, densities])
-            filename = f"{shift_plot_dir}/{var}_hist_shift_{shift}.png"
+            filename = f"{shift_plot_dir}/{var}_hist_{shift}.png"
             plot_data(var, filename, data_map[shift][var], TYPE, num_rg)
         construct_moments_dict(
             shift_stats_dir, shift_plot_dir, vars, data_map[shift], num_rg
