@@ -32,15 +32,15 @@ from source.config import (
     RGConfig,
 )
 from source.utilities import (
-    convert_t_to_z,
-    convert_z_to_t,
+    convert_t_to_geff,
+    convert_zeff_to_t,
+    generate_constant_array,
+    generate_random_phases,
     get_current_date,
     build_rng,
-    center_z_distribution,
-    launder,
+    convert_g_to_z,
     get_density,
     save_data,
-    rejection_sampler_2d,
     build_2d_hist,
     conditional_2d_resampler,
 )
@@ -215,7 +215,7 @@ def rg_fp(
     steps = rg_config.steps
     # method = rg_config.method
     # expr = rg_config.expr
-    resample = rg_config.resample
+    # resample = rg_config.resample
     symmetrise = rg_config.symmetrise
     seed = rg_config.seed
     t_bins = rg_config.t_bins
@@ -228,8 +228,9 @@ def rg_fp(
     t_data_folder = output_folders["t"]
     tau_data_folder = output_folders["tau"]
     f_data_folder = output_folders["f"]
+    loss_data_folder = output_folders["loss"]
     z_data_folder = output_folders["z"]
-
+    zf_data_folder = output_folders["zf"]
     # Generate initial arrays
     initial_data = gen_initial_data(
         rg_config.samples, starting_t, starting_phi, starting_f, rng
@@ -237,7 +238,8 @@ def rg_fp(
     ts = initial_data["t"]
     fs = initial_data["f"]
     phases = initial_data["phi"]
-
+    z_2d_bins = z_bins // 100
+    t_2d_bins = t_bins // 10
     # output_index = 9  # Track t'
 
     output_files = {}
@@ -245,77 +247,93 @@ def rg_fp(
     for step in range(steps):
         print(f"Proceeding with RG step {step}. ")
         # For now, track all 4 outputs.
-        tprime = numerical_solver(ts, fs, phases, samples, 2, inputs, batch_size)[
-            :, None
-        ]
-        rprime = numerical_solver(ts, fs, phases, samples, 9, inputs, batch_size)[
-            :, None
-        ]
-        tauprime = numerical_solver(ts, fs, phases, samples, 10, inputs, batch_size)[
-            :, None
-        ]
-        fprime = numerical_solver(ts, fs, phases, samples, 17, inputs, batch_size)[
-            :, None
-        ]
-        assert (
-            np.abs(
-                np.abs(tprime) ** 2
-                + np.abs(rprime) ** 2
-                + np.abs(tauprime) ** 2
-                + np.abs(fprime) ** 2
-                - 1.0
+        tprime = numerical_solver(ts, fs, phases, samples, 2, inputs, batch_size)
+        rprime = numerical_solver(ts, fs, phases, samples, 9, inputs, batch_size)
+        tauprime = numerical_solver(ts, fs, phases, samples, 10, inputs, batch_size)
+        fprime = numerical_solver(ts, fs, phases, samples, 17, inputs, batch_size)
+        try:
+            output_sum = np.abs(tprime**2 + rprime**2 + tauprime**2 + fprime**2)
+            abs_err = np.abs(output_sum - 1.0)
+            assert np.all(abs_err < 1e-12)
+        except AssertionError:
+            print(
+                f"The sum of outputs deviates from 1. Min : {np.min(abs_err)}, Max : {np.max(abs_err)}"
             )
-            < 1e-12
+        g_eff = convert_t_to_geff(tprime, rprime)
+        z = convert_g_to_z(g_eff)
+        loss = (
+            np.abs(np.reshape(tauprime, shape=samples)) ** 2
+            + np.abs(np.reshape(fprime, shape=samples)) ** 2
         )
-        z = convert_t_to_z(tprime)
+        # z = convert_t_to_z(tprime)
         t_data = build_hist(tprime, t_bins, t_range)
         r_data = build_hist(rprime, t_bins, t_range)
         tau_data = build_hist(tauprime, t_bins, t_range)
         f_data = build_hist(fprime, t_bins, t_range)
+        loss_data = build_hist(loss, t_bins, t_range)
         z_data = build_hist(z, z_bins, z_range)
-        hist_dict = build_2d_hist(z, fprime, z_bins, t_bins, z_range, t_range)
+        print(f"Is 0.0 a bin edge? {np.any(np.isclose(z_data['edges'], 0.0))}")
         if symmetrise == 1:
-            print(" Symmetrising ")
-            sym = "sym_"
-            z_data["hist"] = center_z_distribution(z_data["hist"])
-            z_sample = launder(
-                samples,
-                z_data["hist"],
-                z_data["edges"],
-                z_data["centers"],
-                rng,
-                resample,
+            print("Symmetrising")
+            hist_dict = build_2d_hist(
+                z, loss, z_2d_bins, t_2d_bins, z_range, t_range, True
             )
-            t_sample = convert_z_to_t(z_sample)
+            sym_z_filename = f"{z_data_folder}/sym_z_hist_RG{step}.npz"
+            save_data(
+                hist_dict["z"]["counts"],
+                hist_dict["z"]["binedges"],
+                hist_dict["z"]["bincenters"],
+                sym_z_filename,
+            )
+            print(
+                f"Is 0.0 a bin edge of z post sym? {np.any(np.isclose(hist_dict['z']['binedges'], 0.0))}"
+            )
+            print(
+                f"Sum of reflected centers: {np.max(np.abs(hist_dict['z']['bincenters'] + hist_dict['z']['bincenters'][::-1]))}"
+            )
+            z_sample, loss_sample = conditional_2d_resampler(hist_dict, rng, samples)
+            t_sample = convert_zeff_to_t(z_sample, loss_sample)
         elif symmetrise == 0:
-            sym = ""
-            z_sample, f_sample = rejection_sampler_2d(hist_dict, rng, samples)
-            t_sample = convert_z_to_t(z_sample)
+            hist_dict = build_2d_hist(z, loss, z_2d_bins, t_2d_bins, z_range, t_range)
+            z_sample, loss_sample = conditional_2d_resampler(hist_dict, rng, samples)
+            t_sample = convert_zeff_to_t(z_sample, loss_sample)
         else:
             raise ValueError(f"Invalid symmetrise value entered: {symmetrise}")
-        # f_sample = launder(
-        #     samples, f_data["hist"], f_data["edges"], f_data["centers"], rng, resample
-        # )
+
         indexes = rng.integers(0, samples, size=(samples, 5))
-        # ts = np.take(tprime, indexes)
-        # fs = np.take(fprime, indexes)
         ts = np.take(t_sample, indexes)
-        fs = np.take(f_sample, indexes)
+        fs = np.take(np.sqrt(loss_sample), indexes)
         assert ts.shape == (samples, 5) and fs.shape == (samples, 5)
-        # print(np.max(ts**2 + fs**2))
-        # sys.exit(0)
         t_filename = f"{t_data_folder}/t_hist_RG{step}.npz"
         r_filename = f"{r_data_folder}/r_hist_RG{step}.npz"
         tau_filename = f"{tau_data_folder}/tau_hist_RG{step}.npz"
         f_filename = f"{f_data_folder}/f_hist_RG{step}.npz"
-        z_filename = f"{z_data_folder}/{sym}z_hist_RG{step}.npz"
+        loss_filename = f"{loss_data_folder}/loss_hist_RG{step}.npz"
+        z_filename = f"{z_data_folder}/z_hist_RG{step}.npz"
+        zf_filename = f"{zf_data_folder}/zf_hist_RG{step}.npz"
         save_data(t_data["hist"], t_data["edges"], t_data["centers"], t_filename)
         save_data(r_data["hist"], r_data["edges"], r_data["centers"], r_filename)
         save_data(
             tau_data["hist"], tau_data["edges"], tau_data["centers"], tau_filename
         )
         save_data(f_data["hist"], f_data["edges"], f_data["centers"], f_filename)
+        save_data(
+            loss_data["hist"], loss_data["edges"], loss_data["centers"], loss_filename
+        )
         save_data(z_data["hist"], z_data["edges"], z_data["centers"], z_filename)
+        np.savez_compressed(
+            zf_filename,
+            zfcounts=hist_dict["zf"]["counts"],
+            zfdensities=hist_dict["zf"]["densities"],
+            zcounts=hist_dict["z"]["counts"],
+            zbins=hist_dict["z"]["binedges"],
+            zcenters=hist_dict["z"]["bincenters"],
+            zdensities=hist_dict["z"]["densities"],
+            fcounts=hist_dict["f"]["counts"],
+            fbins=hist_dict["f"]["binedges"],
+            fcenters=hist_dict["f"]["bincenters"],
+            fdensities=hist_dict["f"]["densities"],
+        )
         output_files.update(
             {
                 f"RG{step}": {
@@ -323,7 +341,9 @@ def rg_fp(
                     "r": r_filename,
                     "tau": tau_filename,
                     "f": f_filename,
+                    "loss": loss_filename,
                     "z": z_filename,
+                    "zf": zf_filename,
                 }
             }
         )
@@ -331,112 +351,195 @@ def rg_fp(
     return output_files
 
 
-# def rg_exp(
-#     rg_config: RGConfig, output_folders: dict, fp_dist: str, starting_phi: int
-# ) -> dict:
-#     """Run an EXP (shifted / exponent) RG workflow locally and write histograms.
+def rg_exp(
+    rg_config: RGConfig, output_folders: dict, fp_dist: str, starting_phi: int
+) -> dict:
+    """Run an EXP (shifted / exponent) RG workflow locally and write histograms.
 
-#     Parameters
-#     ----------
-#     rg_config : RGConfig
-#         Configuration dataclass with samples, bins, ranges, shifts and other
-#         resampling parameters.
-#     output_folders : dict
-#         Mapping that, for each shift value, provides folders for ``t`` and
-#         ``z`` histograms (strings).
-#     fp_dist : str
-#         Path to a fixed-point NPZ file (containing keys ``'histval'``,
-#         ``'binedges'`` and ``'bincenters'``). The file is loaded to construct
-#         a laundered initial distribution.
-#     starting_phi : int
-#         If non-zero, a constant phase array is used; otherwise phases are
-#         generated randomly from RNG.
+    Parameters
+    ----------
+    rg_config : RGConfig
+        Configuration dataclass with samples, bins, ranges, shifts and other
+        resampling parameters.
+    output_folders : dict
+        Mapping that, for each shift value, provides folders for ``t`` and
+        ``z`` histograms (strings).
+    fp_dist : str
+        Path to a fixed-point NPZ file (containing keys ``'histval'``,
+        ``'binedges'`` and ``'bincenters'``). The file is loaded to construct
+        a laundered initial distribution.
+    starting_phi : int
+        If non-zero, a constant phase array is used; otherwise phases are
+        generated randomly from RNG.
 
-#     Returns
-#     -------
-#     dict
-#         Nested mapping containing NPZ output paths per shift and RG step.
+    Returns
+    -------
+    dict
+        Nested mapping containing NPZ output paths per shift and RG step.
 
-#     Side effects
-#     ------------
-#     Writes NPZ files to disk (via :func:`source.utilities.save_data`) and prints
-#     progress to stdout.
-#     """
-#     samples = rg_config.samples
-#     batch_size = rg_config.matrix_batch_size
-#     steps = rg_config.steps
-#     method = rg_config.method
-#     expr = rg_config.expr
-#     resample = rg_config.resample
-#     symmetrise = rg_config.symmetrise
-#     seed = rg_config.seed
-#     t_bins = rg_config.t_bins
-#     t_range = rg_config.t_range
-#     z_bins = rg_config.z_bins
-#     z_range = rg_config.z_range
-#     shifts = [float(shift) for shift in rg_config.shifts]
-#     rng = build_rng(seed)
-#     if method == "analytic":
-#         i = 4
-#     else:
-#         i = 8
-#     output_files = {}
-#     fp_data = np.load(fp_dist)
-#     fp_hist = fp_data["histval"]
-#     fp_edges = fp_data["binedges"]
-#     fp_centers = fp_data["bincenters"]
-#     initial_z = launder(samples, fp_hist, fp_edges, fp_centers, rng, resample)
-#     for shift in shifts:
-#         t_data_folder = output_folders[f"{shift}"]["t"]
-#         z_data_folder = output_folders[f"{shift}"]["z"]
-#         shifted_z = initial_z + shift
-#         shifted_t = convert_z_to_t(shifted_z)
-#         if starting_phi != 0:
-#             phases = generate_constant_array(samples, starting_phi, i)
-#         else:
-#             phases = generate_random_phases(samples, rng, i)
-#         ts = extract_t_samples(shifted_t, samples, rng)
-#         for step in range(steps):
-#             print(f" Proceeding with RG step {step} of shift {shift}. ")
-#             tprime = rg_data_workflow(method, ts, phases, samples, expr, batch_size)
-#             z = convert_t_to_z(tprime)
-#             t_data = build_hist(tprime, t_bins, t_range)
-#             z_data = build_hist(z, z_bins, z_range)
-#             if symmetrise == 1:
-#                 print(" Symmetrising ")
-#                 sym = "sym_"
-#                 z_data["hist"] = center_z_distribution(z_data["hist"])
-#                 z_sample = launder(
-#                     samples,
-#                     z_data["hist"],
-#                     z_data["edges"],
-#                     z_data["centers"],
-#                     rng,
-#                     resample,
-#                 )
-#                 t_sample = convert_z_to_t(z_sample)
-#             elif symmetrise == 0:
-#                 sym = ""
-#                 t_sample = launder(
-#                     samples,
-#                     t_data["hist"],
-#                     t_data["edges"],
-#                     t_data["centers"],
-#                     rng,
-#                     resample,
-#                 )
-#             else:
-#                 raise ValueError(f"Invalid symmetrise value entered: {symmetrise}")
-#             ts = extract_t_samples(t_sample, samples, rng)
-#             t_filename = f"{t_data_folder}/t_hist_RG{step + 1}.npz"
-#             z_filename = f"{z_data_folder}/{sym}z_hist_RG{step + 1}.npz"
-#             save_data(t_data["hist"], t_data["edges"], t_data["centers"], t_filename)
-#             save_data(z_data["hist"], z_data["edges"], z_data["centers"], z_filename)
-#             output_files.update(
-#                 {f"{shift}": {f"RG{step}": {"t": t_filename, "z": z_filename}}}
-#             )
-#         print(f" All RG steps of shift {shift} completed. ")
-#     return output_files
+    Side effects
+    ------------
+    Writes NPZ files to disk (via :func:`source.utilities.save_data`) and prints
+    progress to stdout.
+    """
+    samples = rg_config.samples
+    batch_size = rg_config.matrix_batch_size
+    steps = rg_config.steps
+    # method = rg_config.method
+    # expr = rg_config.expr
+    # resample = rg_config.resample
+    symmetrise = rg_config.symmetrise
+    seed = rg_config.seed
+    t_bins = rg_config.t_bins
+    t_range = rg_config.t_range
+    z_bins = rg_config.z_bins
+    z_range = rg_config.z_range
+    inputs = rg_config.inputs
+    shifts = [float(shift) for shift in rg_config.shifts]
+    rng = build_rng(seed)
+    i = 16
+    # Load FP data
+    fp_data = np.load(fp_dist)
+    fp_zf_counts = fp_data["zfcounts"]
+    fp_z_binedges = fp_data["zbins"]
+    fp_loss_binedges = fp_data["fbins"]
+    fp_dict = {
+        "zf": {"counts": fp_zf_counts},
+        "z": {"binedges": fp_z_binedges},
+        "f": {"binedges": fp_loss_binedges},
+    }
+    z_sample, loss_sample = conditional_2d_resampler(fp_dict, rng, samples)
+    output_files = {}
+    initial_z = z_sample
+    z_2d_bins = z_bins // 100
+    t_2d_bins = t_bins // 10
+    for shift in shifts:
+        r_data_folder = output_folders[f"{shift}"]["r"]
+        t_data_folder = output_folders[f"{shift}"]["t"]
+        tau_data_folder = output_folders[f"{shift}"]["tau"]
+        f_data_folder = output_folders[f"{shift}"]["f"]
+        loss_data_folder = output_folders[f"{shift}"]["loss"]
+        z_data_folder = output_folders[f"{shift}"]["z"]
+        zf_data_folder = output_folders[f"{shift}"]["zf"]
+        shifted_z = initial_z + shift
+        z_min, z_max = z_range
+        shifted_zmin = z_min + shift
+        shifted_zmax = z_max + shift
+        shifted_zrange = (shifted_zmin, shifted_zmax)
+        shifted_t = convert_zeff_to_t(shifted_z, loss_sample)
+        if starting_phi != 0:
+            phases = generate_constant_array(samples, starting_phi, i)
+        else:
+            phases = generate_random_phases(samples, rng, i)
+        indexes = rng.integers(0, samples, size=(samples, 5))
+        ts = np.take(shifted_t, indexes)
+        fs = np.take(np.sqrt(loss_sample), indexes)
+        assert ts.shape == (samples, 5) and fs.shape == (samples, 5)
+        for step in range(steps):
+            print(f" Proceeding with RG step {step} of shift {shift}. ")
+            tprime = numerical_solver(ts, fs, phases, samples, 2, inputs, batch_size)
+            rprime = numerical_solver(ts, fs, phases, samples, 9, inputs, batch_size)
+            tauprime = numerical_solver(ts, fs, phases, samples, 10, inputs, batch_size)
+            fprime = numerical_solver(ts, fs, phases, samples, 17, inputs, batch_size)
+            try:
+                output_sum = np.abs(tprime**2 + rprime**2 + tauprime**2 + fprime**2)
+                abs_err = np.abs(output_sum - 1.0)
+                assert np.all(abs_err < 1e-12)
+            except AssertionError:
+                print(
+                    f"The sum of outputs deviates from 1. Min : {np.min(abs_err)}, Max : {np.max(abs_err)}"
+                )
+            g_eff = convert_t_to_geff(tprime, rprime)
+            z = convert_g_to_z(g_eff)
+            loss = (
+                np.abs(np.reshape(tauprime, shape=samples)) ** 2
+                + np.abs(np.reshape(fprime, shape=samples)) ** 2
+            )
+            t_data = build_hist(tprime, t_bins, t_range)
+            r_data = build_hist(rprime, t_bins, t_range)
+            tau_data = build_hist(tauprime, t_bins, t_range)
+            f_data = build_hist(fprime, t_bins, t_range)
+            loss_data = build_hist(loss, t_bins, t_range)
+            z_data = build_hist(z, z_bins, shifted_zrange)
+            if symmetrise == 1:
+                print("Symmetrising")
+                hist_dict = build_2d_hist(
+                    z, loss, z_2d_bins, t_2d_bins, shifted_zrange, t_range, True
+                )
+                sym_z_filename = f"{z_data_folder}/sym_z_hist_RG{step}.npz"
+                save_data(
+                    hist_dict["z"]["counts"],
+                    hist_dict["z"]["binedges"],
+                    hist_dict["z"]["bincenters"],
+                    sym_z_filename,
+                )
+                z_sample, loss_sample = conditional_2d_resampler(
+                    hist_dict, rng, samples
+                )
+                shifted_t = convert_zeff_to_t(z_sample, loss_sample)
+            elif symmetrise == 0:
+                hist_dict = build_2d_hist(
+                    z, loss, z_2d_bins, t_2d_bins, shifted_zrange, t_range
+                )
+                z_sample, loss_sample = conditional_2d_resampler(
+                    hist_dict, rng, samples
+                )
+                shifted_t = convert_zeff_to_t(z_sample, loss_sample)
+            else:
+                raise ValueError(f"Invalid symmetrise value entered: {symmetrise}")
+            indexes = rng.integers(0, samples, size=(samples, 5))
+            ts = np.take(shifted_t, indexes)
+            fs = np.take(np.sqrt(loss_sample), indexes)
+            t_filename = f"{t_data_folder}/t_hist_RG{step}.npz"
+            r_filename = f"{r_data_folder}/r_hist_RG{step}.npz"
+            tau_filename = f"{tau_data_folder}/tau_hist_RG{step}.npz"
+            f_filename = f"{f_data_folder}/f_hist_RG{step}.npz"
+            loss_filename = f"{loss_data_folder}/loss_hist_RG{step}.npz"
+            z_filename = f"{z_data_folder}/z_hist_RG{step}.npz"
+            zf_filename = f"{zf_data_folder}/zf_hist_RG{step}.npz"
+            save_data(t_data["hist"], t_data["edges"], t_data["centers"], t_filename)
+            save_data(r_data["hist"], r_data["edges"], r_data["centers"], r_filename)
+            save_data(
+                tau_data["hist"], tau_data["edges"], tau_data["centers"], tau_filename
+            )
+            save_data(f_data["hist"], f_data["edges"], f_data["centers"], f_filename)
+            save_data(
+                loss_data["hist"],
+                loss_data["edges"],
+                loss_data["centers"],
+                loss_filename,
+            )
+            save_data(z_data["hist"], z_data["edges"], z_data["centers"], z_filename)
+            np.savez_compressed(
+                zf_filename,
+                zfcounts=hist_dict["zf"]["counts"],
+                zfdensities=hist_dict["zf"]["densities"],
+                zcounts=hist_dict["z"]["counts"],
+                zbins=hist_dict["z"]["binedges"],
+                zcenters=hist_dict["z"]["bincenters"],
+                zdensities=hist_dict["z"]["densities"],
+                fcounts=hist_dict["f"]["counts"],
+                fbins=hist_dict["f"]["binedges"],
+                fcenters=hist_dict["f"]["bincenters"],
+                fdensities=hist_dict["f"]["densities"],
+            )
+            output_files.update(
+                {
+                    f"{shift}": {
+                        f"RG{step}": {
+                            "t": t_filename,
+                            "r": r_filename,
+                            "tau": tau_filename,
+                            "f": f_filename,
+                            "loss": loss_filename,
+                            "z": z_filename,
+                            "zf": zf_filename,
+                        }
+                    }
+                }
+            )
+        print(f" All RG steps of shift {shift} completed. ")
+    return output_files
 
 
 if __name__ == "__main__":
@@ -489,12 +592,16 @@ if __name__ == "__main__":
             r_data_folder = output_dir / f"{shift}" / "hist/r"
             tau_data_folder = output_dir / f"{shift}" / "hist/tau"
             f_data_folder = output_dir / f"{shift}" / "hist/f"
+            loss_data_folder = output_dir / f"{shift}" / "hist/loss"
             z_data_folder = output_dir / f"{shift}" / "hist/z"
+            zf_data_folder = output_dir / f"{shift}" / "hist/zf"
             t_data_folder.mkdir(parents=True, exist_ok=True)
             r_data_folder.mkdir(parents=True, exist_ok=True)
             tau_data_folder.mkdir(parents=True, exist_ok=True)
             f_data_folder.mkdir(parents=True, exist_ok=True)
+            loss_data_folder.mkdir(parents=True, exist_ok=True)
             z_data_folder.mkdir(parents=True, exist_ok=True)
+            zf_data_folder.mkdir(parents=True, exist_ok=True)
             output_folders.update(
                 {
                     f"{shift}": {
@@ -502,7 +609,9 @@ if __name__ == "__main__":
                         "r": str(r_data_folder),
                         "tau": str(tau_data_folder),
                         "f": str(f_data_folder),
+                        "loss": str(loss_data_folder),
                         "z": str(z_data_folder),
+                        "zf": str(zf_data_folder),
                     }
                 }
             )
@@ -511,19 +620,25 @@ if __name__ == "__main__":
         r_data_folder = output_dir / "hist/r"
         tau_data_folder = output_dir / "hist/tau"
         f_data_folder = output_dir / "hist/f"
+        loss_data_folder = output_dir / "hist/loss"
         z_data_folder = output_dir / "hist/z"
+        zf_data_folder = output_dir / "hist/zf"
         t_data_folder.mkdir(parents=True, exist_ok=True)
         r_data_folder.mkdir(parents=True, exist_ok=True)
         tau_data_folder.mkdir(parents=True, exist_ok=True)
         f_data_folder.mkdir(parents=True, exist_ok=True)
+        loss_data_folder.mkdir(parents=True, exist_ok=True)
         z_data_folder.mkdir(parents=True, exist_ok=True)
+        zf_data_folder.mkdir(parents=True, exist_ok=True)
         output_folders.update(
             {
                 "t": str(t_data_folder),
                 "r": str(r_data_folder),
                 "tau": str(tau_data_folder),
                 "f": str(f_data_folder),
+                "loss": str(loss_data_folder),
                 "z": str(z_data_folder),
+                "zf": str(zf_data_folder),
             }
         )
 
@@ -533,11 +648,13 @@ if __name__ == "__main__":
     starting_t = args.t
     starting_phi = args.phi
     starting_f = args.f
-    fp_data_file = f"{base_output_dir}/FP/hist/z/z_sym_hist_RG{rg_config.steps - 1}.npz"
+    fp_data_file = f"{base_output_dir}/FP/hist/zf/zf_hist_RG{rg_config.steps - 1}.npz"
     if args_dict["type"] == "FP":
         hist_outputs = rg_fp(
             rg_config, output_folders, starting_t, starting_phi, starting_f
         )
+    else:
+        hist_outputs = rg_exp(rg_config, output_folders, fp_data_file, starting_phi)
     # else:
     # hist_outputs = rg_exp(rg_config, output_folders, fp_data_file, starting_phi)
     print("-" * 100)
