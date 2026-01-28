@@ -178,8 +178,8 @@ def plot_data(var: str, filename: str, data: list, mode: str, num_rg: int):
         ax2.set_ylabel(f"Q({var})")
 
         ax1.set_xlim(xlim)
-        ax2.set_xlim((-1.0, 1.0))
-        ax2.set_ylim((0.15, 0.25))
+        ax2.set_xlim((-5.0, 5.0))
+        # ax2.set_ylim((0.15, 0.25))
         # inset = inset_locator.inset_axes(ax, width="25%", height=1.0)
         # inset.set_xlim([-25.0, 25.0])
         for i in range(0, num_rg, 1):
@@ -318,7 +318,11 @@ def load_hist_data(filename: str) -> tuple:
         KeyError: If required arrays are missing.
     """
     data = np.load(filename)
-    counts = data["histval"]
+    try:
+        counts = data["histval"]
+    except KeyError:
+        print(data)
+        counts = data["counts"]
     bins = data["binedges"]
     centers = data["bincenters"]
     return (counts, bins, centers)

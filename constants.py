@@ -51,7 +51,9 @@ host = os.getenv("HOST")
 remote_dir = os.getenv("REMOTE_DIR")
 
 
-SHIFTS = [0.003, 0.005, 0.007, 0.009]
+# SHIFTS = [0.0, 0.003, 0.005, 0.007, 0.009]
+# SHIFTS = [0.0, 0.1, 0.2, 0.3, 0.4]
+SHIFTS = [-0.4, -0.3, -0.2, -0.1, 0.0, 0.1, 0.2, 0.3, 0.4]
 # SHIFTS = ["0.0", "0.003", "0.005", "0.0075", "0.010"]
 # SHIFTS = ["0.0", "0.003", "0.004", "0.005", "0.006", "0.0075", "0.010"]
 N = 480000000
@@ -68,7 +70,8 @@ LEGENDS = {
         "t": "upper left",
         "tau": "upper left",
         "f": "upper left",
-        "loss": "upper right",
+        "leak": "upper right",
+        "surv": "upper right",
         "g": "upper right",
         "input_t": "upper left",
         "z": "upper left",
@@ -79,7 +82,8 @@ LEGENDS = {
         "t": "upper left",
         "tau": "upper left",
         "f": "upper left",
-        "loss": "upper right",
+        "leak": "upper right",
+        "surv": "upper right",
         "g": "upper right",
         "input_t": "upper left",
         "z": "upper left",
@@ -91,7 +95,8 @@ YLIMS = {
         "t": (0.0, 3.0),
         "tau": (0.0, 5.0),
         "f": (0.0, 5.0),
-        "loss": (0.0, 3.0),
+        "leak": (0.0, 3.0),
+        "surv": (0.0, 5.0),
         "g": (0.0, 3.0),
         "input_t": (0.0, 3.0),
         "z": (0.0, 0.3),
@@ -102,7 +107,8 @@ YLIMS = {
         "t": (0.0, 3.0),
         "tau": (0.0, 5.0),
         "f": (0.0, 5.0),
-        "loss": (0.0, 3.0),
+        "leak": (0.0, 3.0),
+        "surv": (0.0, 5.0),
         "g": (0.0, 3.0),
         "input_t": (0.0, 3.0),
         "z": (0.0, 0.3),
@@ -114,7 +120,8 @@ XLIMS = {
         "t": (0.0, 1.0),
         "tau": (0.0, 1.0),
         "f": (0.0, 1.0),
-        "loss": (0.0, 1.0),
+        "leak": (0.0, 1.0),
+        "surv": (0.0, 1.0),
         "g": (0.0, 1.0),
         "input_t": (0.0, 1.0),
         "z": (-25.0, 25.0),
@@ -125,7 +132,8 @@ XLIMS = {
         "t": (0.0, 1.0),
         "tau": (0.0, 1.0),
         "f": (0.0, 1.0),
-        "loss": (0.0, 1.0),
+        "leak": (0.0, 1.0),
+        "surv": (0.0, 1.0),
         "g": (0.0, 1.0),
         "input_t": (0.0, 1.0),
         "z": (-25.0, 25.0),

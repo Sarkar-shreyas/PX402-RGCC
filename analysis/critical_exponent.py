@@ -104,7 +104,7 @@ def main():
     version = str(args.version)
     num_rg = int(args.steps)
     rg = num_rg + 1
-    if args.loc == "local":
+    if str(args.loc).strip().lower() == "local":
         data_folder = local_dir
     else:
         data_folder = data_dir
@@ -114,7 +114,7 @@ def main():
     os.makedirs(stats_dir, exist_ok=True)
     os.makedirs(plots_dir, exist_ok=True)
     data_map = defaultdict(dict)
-    vars = ["t", "r", "f", "tau", "loss", "z"]
+    vars = ["t", "r", "f", "tau", "leak", "surv", "z"]
     print(f"Performing peak estimation for {version}")
     print("=" * 100)
     # Load the FP distribution
@@ -127,7 +127,7 @@ def main():
     for shift in SHIFTS:
         for var in vars:
             data_map[shift][var] = []
-            shift_dir = f"{data_folder}/{version}/{TYPE}/{shift}/hist/{var}"
+            shift_dir = f"{data_folder}/{version}/{TYPE}/hist/{shift}/{var}"
             shift_plot_dir = f"{plots_dir}/{shift}"
             shift_stats_dir = f"{stats_dir}/{shift}"
             os.makedirs(shift_plot_dir, exist_ok=True)
@@ -156,7 +156,7 @@ def main():
     print("=" * 100)
     # print(data_map.keys())
     fig, (ax_0, ax_1) = plt.subplots(1, 2, figsize=(10, 4))
-    ax_0.set_xlim([0, 0.01])
+    ax_0.set_xlim([0, float(max(SHIFTS)) + SHIFTS[1]])
     # ax_0.set_ylim([0.0, 2])
     ax_0.set_title("Scatter plot of z peaks")
     ax_0.set_xlabel("z_0")
@@ -164,7 +164,7 @@ def main():
     ax_1.set_title("Scatter plot and line fit of z peaks")
     ax_1.set_xlabel("z_0")
     ax_1.set_ylabel("z_peak")
-    ax_1.set_xlim([0, float(max(SHIFTS)) + 0.001])
+    ax_1.set_xlim([0, float(max(SHIFTS)) + SHIFTS[1]])
     # ax_1.set_ylim([0, 2])
 
     peaks = np.zeros((rg, len(SHIFTS))).astype(float)
@@ -193,8 +193,9 @@ def main():
                 counts, bins, centers, densities, shift_val
             )
             mean, std = hist_moments(sliced_counts, sliced_bins)
-            test = launder(1000000, sliced_counts, sliced_bins, sliced_centers, rng)
-            test_mu, test_std = norm.fit(test)
+            # test = launder(1000000, sliced_counts, sliced_bins, sliced_centers, rng)
+
+            # test_mu, test_std = norm.fit(test)
             # print(f"Fitted mu = {test_mu}, Calculated mean = {mean}")
             min_peaks[i, j], max_peaks[i, j], peaks[i, j] = estimate_z_peak(
                 sliced_counts, sliced_bins, sliced_centers, rng, sampler
@@ -268,7 +269,7 @@ def main():
             )
             c = e[0].get_color()
             # ax_1.set_ylim((0.0, 0.01))
-            x_line = np.linspace(0, 0.01, 200)
+            x_line = np.linspace(0, float(max(SHIFTS)) + SHIFTS[1], 200)
             y_line = slope * x_line
             ax_1.plot(x_line, y_line, label=f"RG_{i}", color=c)
 

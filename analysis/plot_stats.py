@@ -1,4 +1,4 @@
-from constants import data_dir, config_file
+from constants import data_dir, config_file, local_dir
 from analysis.data_plotting import (
     calculate_average_nu,
     build_plot_parser,
@@ -45,19 +45,23 @@ def main():
         config_path = str(config_file)
     config = load_yaml(config_path)
     print(f"Config loaded from {config_path}")
+
+    if args.loc == "local":
+        data_folder = local_dir
+    else:
+        data_folder = data_dir
     rg_config = build_config(config)
     num_rg = int(args.steps)
     num_samples = rg_config.samples
     version = str(args.version)
-    filename = f"{data_dir}/{version}/overall_stats.json"
-    plots_filename = f"{data_dir}/{version}/overall_stats.png"
+    filename = f"{data_folder}/{version}/overall_stats.json"
+    plots_filename = f"{data_folder}/{version}/overall_stats.png"
     print(f"Loading data from {filename}")
     with open(filename, "r", encoding="utf-8") as file:
         stats = json.load(file)
     data = pd.read_json(filename, orient="index")
     start = int(args.start)
     end = int(args.end)
-
     if start > num_rg:
         raise ValueError(
             f"Start cannot be larger than the number of steps. Got start = {start}, steps = {num_rg}"

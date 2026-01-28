@@ -33,30 +33,19 @@ if __name__ == "__main__":
 
     version = str(args.version)
     num_rg = int(args.steps)
-    var_names = ["r", "t", "tau", "f", "loss", "z", "sym_z"]
+    var_names = rg_config.vars
+    if rg_config.symmetrise:
+        var_names.append("sym_z")
     # var_names = ["r", "t", "tau", "f", "z"]
-    z_vars = ["z", "sym_z"]
     other_vars = ["r", "t", "tau", "f"]
     hist_dir = f"{data_folder}/{version}/{rg_config.type}/hist"
     stats_dir = f"{data_folder}/{version}/{rg_config.type}/stats"
     plots_dir = f"{data_folder}/{version}/{rg_config.type}/plots"
-    r_folder = f"{hist_dir}/r"
-    t_folder = f"{hist_dir}/t"
-    tau_folder = f"{hist_dir}/tau"
-    f_folder = f"{hist_dir}/f"
-    loss_folder = f"{hist_dir}/loss"
-    z_folder = f"{hist_dir}/z"
-    folder_names = {
-        "hist": hist_dir,
-        "stats": stats_dir,
-        "plots": plots_dir,
-        "r": r_folder,
-        "t": t_folder,
-        "tau": tau_folder,
-        "f": f_folder,
-        "loss": loss_folder,
-        "z": z_folder,
-    }
+    folder_names = {"hist": hist_dir, "stats": stats_dir, "plots": plots_dir}
+    for var in var_names:
+        var_folder = f"{hist_dir}/{var}"
+        folder_names.update({var: var_folder})
+
     for folder in folder_names:
         os.makedirs(folder_names[folder], exist_ok=True)
     print("Folders created")
@@ -85,13 +74,9 @@ if __name__ == "__main__":
         filename = f"{plots_dir}/{var}_histogram.png"
         plot_data(var, filename, data_map[var], rg_config.type.upper(), num_rg)
 
-    if "z" in missing_vars:
+    if rg_config.symmetrise:
         z_vars = ["sym_z"]
-    elif "sym_z" in missing_vars:
-        z_vars = ["z"]
-    else:
-        z_vars = ["z", "sym_z"]
-
+    # print(data_map.keys())
     for z_var in z_vars:
         z_filename = f"{plots_dir}/{z_var}_histogram.png"
         fig, (ax0, ax1) = plt.subplots(1, 2, num=f"{z_var}", figsize=(12, 6))
@@ -103,14 +88,17 @@ if __name__ == "__main__":
         ax1.set_ylabel(f"Q({z_var})")
         ax0.set_xlim((-25.0, 25.0))
         ax1.set_xlim((-5.0, 5.0))
-        for i in range(num_rg):
-            x_data = data_map[z_var][i][2]
-            y_data = data_map[z_var][i][3]
-            ax0.plot(x_data, y_data, label=f"RG{i}")
-            if z_var == "z":
-                ax1.scatter(x_data[::100], y_data[::100], label=f"RG{i}")
-            else:
-                ax1.scatter(x_data, y_data, label=f"RG{i}")
+        try:
+            for i in range(num_rg):
+                x_data = data_map[z_var][i][2]
+                y_data = data_map[z_var][i][3]
+                ax0.plot(x_data, y_data, label=f"RG{i}")
+                if z_var == "z":
+                    ax1.plot(x_data[::10], y_data[::10], label=f"RG{i}")
+                else:
+                    ax1.scatter(x_data[::100], y_data[::100], label=f"RG{i}")
+        except IndexError:
+            print(f"Could not find data loaded for : {z_var}")
         ax0.legend(loc="upper left")
         ax1.legend(loc="upper left")
         fig.savefig(z_filename, dpi=150)
