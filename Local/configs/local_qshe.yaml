@@ -7,8 +7,8 @@ main:
 engine:
   model: "qshe"
   method: "numerical"
-  resample: "i"
-  expr: "shaw"
+  resample: "c"
+  expr: "shreyas"
   symmetrise: 1
 
 rg_settings:
@@ -20,12 +20,13 @@ rg_settings:
 data_settings:
   inputs: [1.0, 0.0, 0.0, 0.0]
   outputs: [2, 9, 10, 17]
-  shifts: [0.003, 0.005, 0.007, 0.009]
+  shifts: [0.0, 0.003, 0.005, 0.007, 0.009]
 
 parameter_settings:
+  vars: ["r", "t", "tau", "f", "leak", "surv", "z"]
   z:
     bins: 50000
-    range: [-50.0, 50.0]
+    range: [-25.0, 25.0]
   tprime:
       bins: 1000
       range: [0.0, 1.0]
