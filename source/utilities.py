@@ -836,7 +836,7 @@ def convert_geff_to_t(g_eff: np.ndarray, r: np.ndarray) -> np.ndarray:
 
 
 def convert_zeff_to_t(z_eff: np.ndarray, loss: np.ndarray) -> np.ndarray:
-    t2 = (1 - loss) / (1 + np.exp(z_eff))
+    t2 = (1 - loss.ravel()) / (1 + np.exp(z_eff.ravel()))
     return np.sqrt(t2)
 
 
@@ -1003,6 +1003,7 @@ def rejection_sampler(
 
 
 def build_2d_hist(
+    vars: list,
     data1: np.ndarray,
     data2: np.ndarray,
     data1_bins: int,
@@ -1021,6 +1022,8 @@ def build_2d_hist(
         range=(data1_range, data2_range),
         density=False,
     )
+    var1 = vars[0]
+    var2 = vars[1]
 
     # Compute bin centers
     z_centers = 0.5 * (z_edges[1:] + z_edges[:-1])
@@ -1052,15 +1055,15 @@ def build_2d_hist(
 
     # Store relevant data, labelled for intuitive access
     hist_data = {
-        "zf": {"counts": hist2d, "densities": p_zf},
-        "z": {
-            "counts": z_counts,
+        f"{var1}_{var2}": {"histval": hist2d, "densities": p_zf},
+        var1: {
+            "histval": z_counts,
             "binedges": z_edges,
             "bincenters": z_centers,
             "densities": p_z,
         },
-        "f": {
-            "counts": f_counts,
+        var2: {
+            "histval": f_counts,
             "binedges": f_edges,
             "bincenters": f_centers,
             "densities": p_f,
@@ -1149,7 +1152,10 @@ def inverse_cdf_2d(data_dict: dict, rng: np.random.Generator, N: int) -> tuple:
 
 
 def conditional_2d_resampler(
-    data_dict: dict, rng: np.random.Generator, N: int
+    data_dict: dict,
+    rng: np.random.Generator,
+    N: int,
+    var2d: str,
 ) -> tuple:
     """
     Generate random z and f samples from their 2D histogram.
@@ -1158,10 +1164,13 @@ def conditional_2d_resampler(
         - Uniformly samples within the generated rectangle
         - Rejects values that violate |t|^2 + |f|^2 <= 1.0
     """
+    vars = var2d.split("_")
+    var0 = vars[0]
+    var1 = vars[1]
     # Load 2D counts and respective axis bins
-    zf_counts = data_dict["zf"]["counts"]
-    z_edges = data_dict["z"]["binedges"]
-    f_edges = data_dict["f"]["binedges"]
+    zf_counts = data_dict[var2d]["histval"]
+    z_edges = data_dict[var0]["binedges"]
+    f_edges = data_dict[var1]["binedges"]
 
     # total = zf_counts.sum()
 

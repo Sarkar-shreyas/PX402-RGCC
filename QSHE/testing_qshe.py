@@ -163,55 +163,61 @@ def gen_initial_data(
     phi_val: int,
     f_val: float,
     rng: np.random.Generator,
-    fp_data: Optional[ArrayLike] = None,
+    fp_file: Optional[str] = None,
+    shift: Optional[float] = None,
 ) -> dict:
     """Generates initial t, phi and f arrays based on given inputs resolved from CLI input and config file parsing"""
     n = samples
-    if f_val > 1.0:
-        f_val = 1.0
-    elif f_val < 0.0 or f_val < 1e-10:
-        f_val = 0.0
-    f_array = generate_constant_array(n, f_val, 5)
-    if t_val == 0:
-        # t_sample = launder(
-        #     n,
-        #     fp_data["histval"],
-        #     fp_data["binedges"],
-        #     fp_data["bincenters"],
-        #     rng,
-        #     config.resample,
-        # )
-        # t_array = extract_t_samples(t_sample, n, rng)
-        split = 1 - f_array**2
-        # t_array = rng.uniform(0, np.sqrt(split), size=(n, 5))
-        t_sample = generate_initial_t_distribution(n, rng, split[0, 0])
-        t_array = extract_t_samples(t_sample, n, rng)
+    if fp_file is None:
+        # Then we're doing generating data from scratch
+        if f_val > 1.0:
+            f_val = 1.0
+        elif f_val < 0.0 or f_val < 1e-10:
+            f_val = 0.0
+        f_array = generate_constant_array(n, f_val, 5)
+        if t_val == 0:
+            split = 1 - f_array**2
+            t_sample = generate_initial_t_distribution(n, rng, split[0, 0])
+            t_array = extract_t_samples(t_sample, n, rng)
+        else:
+            t_array = generate_constant_array(n, T_DICT[f"{t_val}"], 5)
     else:
-        t_array = generate_constant_array(n, T_DICT[f"{t_val}"], 5)
+        # Then we're resampling from the 2d histogram
+        fp_data = np.load(fp_file, allow_pickle=True)
+        hist2d = {}
+        vars = []
+        for key in fp_data.keys():
+            hist2d.update({key: fp_data[key].item()})
+            vars.append(key)
+        z_sample, loss_sample = conditional_2d_resampler(hist2d, rng, samples, vars[0])
+        if shift is not None:
+            z_sample = z_sample + shift
+        indexes = rng.integers(0, samples, size=(samples, 5))
+        t_sample = convert_zeff_to_t(z_sample, loss_sample)
+        t_array = np.take(t_sample, indexes)
+        f_array = np.take(np.sqrt(loss_sample), indexes)
     if phi_val == 0:
         phi_array = generate_random_phases(n, rng, 16)
     else:
         phi_array = generate_constant_array(n, PHI_DICT[f"{phi_val}"], 16)
-    # split_array = np.full(shape=(n, 1), fill_value=split)
-
-    data_dict = {"t": t_array, "f": f_array, "phi": phi_array, "split": split}
+    data_dict = {"t": t_array, "f": f_array, "phi": phi_array}
     return data_dict
 
 
-def plot_2d_hist(data_dict: dict) -> None:
+def plot_2d_hist(data_dict: dict, var2d: str = "") -> None:
     """Generate various plots from 2d histogram data"""
-    vars = ["z", "f"]
-    for var in vars:
-        # print(np.mean(data_dict[var]["densities"]), np.std(data_dict[var]["densities"]))
-        plt.figure(var)
-        plt.title(f"Distribution of {var}")
-        # plt.xlim((-1.0, 1.0))
-        plt.plot(data_dict[var]["bincenters"], data_dict[var]["densities"])
-        plt.savefig(f"{var}_test.png", dpi=150)
-        plt.close(var)
-        print(f"Plot for {var} created")
+    vars = var2d.split("_")
+    # for var in vars:
+    #     # print(np.mean(data_dict[var]["densities"]), np.std(data_dict[var]["densities"]))
+    #     plt.figure(var)
+    #     plt.title(f"Distribution of {var}")
+    #     # plt.xlim((-1.0, 1.0))
+    #     plt.plot(data_dict[var]["bincenters"], data_dict[var]["densities"])
+    #     plt.savefig(f"{var}_test.png", dpi=150)
+    #     plt.close(var)
+    #     print(f"Plot for {var} created")
     fig, ax = plt.subplots()
-    zf_counts = data_dict["zf"]["counts"].T
+    zf_counts = data_dict[var2d]["counts"].T
     image = ax.imshow(
         zf_counts,
         origin="lower",
@@ -229,14 +235,14 @@ def plot_2d_hist(data_dict: dict) -> None:
     )
     ax.set_xlabel(r"$z_{eff}$")
     ax.set_ylabel("loss")
-    ax.set_xlim((-5.0, 5.0))
+    # ax.set_xlim((-5.0, 5.0))
     fig.colorbar(image, ax=ax, label=r"p($z_{eff}$,loss)")
-    fig.savefig("zeff_loss_test.png", dpi=150)
+    fig.savefig("z_eff_loss_test.png", dpi=150)
     print("Plot for zeff vs loss created")
     plt.close(fig)
 
 
-if __name__ == "__main__":
+def main():
     print(f"Program started on {get_current_date()}")
     start_time = time()
 
@@ -425,16 +431,17 @@ if __name__ == "__main__":
     #     rg_config.t_range,
     #     True,
     # )
-    zbins = 5000
-    fbins = 1000
+    zbins = 200
+    fbins = 100
     hists = build_2d_hist(
+        ["z", "f"],
         z,
         f_prime,
         zbins,
         fbins,
         rg_config.z_range,
         rg_config.t_range,
-        False,
+        True,
     )
     # plot_2d_hist(hists)
 
@@ -445,16 +452,23 @@ if __name__ == "__main__":
     geff = convert_t_to_geff(t_prime, r_prime)
     zeff = np.reshape(convert_g_to_z(geff), shape=n)
     # eff_hists = build_2d_hist(
-    #     stay,
+    #     geff,
     #     loss,
-    #     rg_config.t_bins,
-    #     fbins,
+    #     100,
+    #     100,
     #     rg_config.t_range,
     #     rg_config.t_range,
     #     False,
     # )
     eff_hists = build_2d_hist(
-        zeff, loss, zbins, fbins, rg_config.z_range, rg_config.t_range, False
+        ["z", "loss"],
+        zeff,
+        loss,
+        zbins,
+        fbins,
+        rg_config.z_range,
+        rg_config.t_range,
+        True,
     )
     plot_2d_hist(eff_hists)
     z_eff_sample, f_eff_sample = rejection_sampler_2d(eff_hists, rng, n)
@@ -464,7 +478,7 @@ if __name__ == "__main__":
     z_eff_hist, z_eff_bins = np.histogram(z_eff_sample, bins=eff_hists["z"]["binedges"])
     f_eff_hist, f_eff_bins = np.histogram(f_eff_sample, bins=eff_hists["f"]["binedges"])
 
-    z_sample, f_sample = conditional_2d_resampler(hists, rng, n)
+    z_sample, f_sample = conditional_2d_resampler(hists, rng, n, "z_f")
     # z_sample, f_sample = inverse_cdf_2d(hists, rng, n)
     t_sample = convert_z_to_t(z_sample)
     z_hist, z_bins = np.histogram(z_sample, bins=hists["z"]["binedges"])
@@ -473,7 +487,7 @@ if __name__ == "__main__":
     # z_unsym_hist, z_unsym_bins = np.histogram(z, bins=200)
     # f_unsym_hist, f_unsym_bins = np.histogram(f_prime, bins=100)
 
-    z_con, f_con = conditional_2d_resampler(hists, rng, n)
+    z_con, f_con = conditional_2d_resampler(hists, rng, n, "z_f")
     t_con = convert_z_to_t(z_con)
     zcon_hist, zcon_bins = np.histogram(z_con, bins=hists["z"]["binedges"])
     fcon_hist, fcon_bins = np.histogram(f_con, bins=hists["f"]["binedges"])
@@ -549,3 +563,7 @@ if __name__ == "__main__":
     ax0.legend()
     ax1.legend()
     plt.show()
+
+
+if __name__ == "__main__":
+    main()

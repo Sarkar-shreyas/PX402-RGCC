@@ -53,6 +53,7 @@ class RGConfig:
     inputs: list
     outputs: list
     shifts: list
+    vars: list
     z_bins: int
     z_range: tuple
     z_min: float
@@ -107,6 +108,8 @@ def build_config(config: dict) -> RGConfig:
         config, "data_settings.shifts", [0.003, 0.005, 0.007, 0.009]
     )
     shifts = [float(str(shift).strip()) for shift in shift_config]
+    vars = get_nested_data(config, "parameter_settings.vars")
+
     z_bins = int(get_nested_data(config, "parameter_settings.z.bins", 200))
     z_range = tuple(get_nested_data(config, "parameter_settings.z.range", [0.0, 1.0]))
     z_min = float(z_range[0])
@@ -137,6 +140,7 @@ def build_config(config: dict) -> RGConfig:
         inputs=inputs,
         outputs=outputs,
         shifts=shifts,
+        vars=vars,
         z_bins=z_bins,
         z_range=z_range,
         z_min=z_min,
