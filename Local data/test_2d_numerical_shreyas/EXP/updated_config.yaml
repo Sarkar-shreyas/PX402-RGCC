@@ -6,13 +6,13 @@ main:
 engine:
   model: qshe
   method: numerical
-  resample: c
+  resample: i
   expr: shreyas
   symmetrise: 0
 rg_settings:
   seed: 1234
-  steps: 10
-  samples: 5000000
+  steps: 6
+  samples: 1000000
   matrix_batch_size: 100000
 data_settings:
   inputs:
@@ -26,15 +26,14 @@ data_settings:
   - 10
   - 17
   shifts:
-  - -0.4
-  - -0.3
-  - -0.2
-  - -0.1
-  - 0.0
-  - 0.1
-  - 0.2
-  - 0.3
-  - 0.4
+  - -4.0
+  - -3.0
+  - -2.0
+  - -1.0
+  - 1.0
+  - 2.0
+  - 3.0
+  - 4.0
 parameter_settings:
   vars:
   - r
