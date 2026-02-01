@@ -30,7 +30,7 @@ from analysis.data_plotting import (
 import os
 import json
 from time import time
-from constants import data_dir, SHIFTS, config_file, local_dir
+from constants import data_dir, config_file, local_dir
 
 TYPE = "EXP"
 
@@ -121,10 +121,10 @@ def main():
     fp_file = f"{data_folder}/{version}/FP/hist/z/sym_z_hist_RG{num_rg - 1}.npz"
     fp_counts, fp_bins, fp_centers = load_hist_data(fp_file)
     fp_density = get_density(fp_counts, fp_bins)
-
+    shifts = rg_config.shifts
     # Get all the initial plots made for inspection
     start = time()
-    for shift in SHIFTS:
+    for shift in shifts:
         for var in vars:
             data_map[shift][var] = []
             shift_dir = f"{data_folder}/{version}/{TYPE}/hist/{shift}/{var}"
@@ -156,7 +156,7 @@ def main():
     print("=" * 100)
     # print(data_map.keys())
     fig, (ax_0, ax_1) = plt.subplots(1, 2, figsize=(10, 4))
-    ax_0.set_xlim([0, float(max(SHIFTS)) + SHIFTS[1]])
+    ax_0.set_xlim([0, float(max(shifts))])
     # ax_0.set_ylim([0.0, 2])
     ax_0.set_title("Scatter plot of z peaks")
     ax_0.set_xlabel("z_0")
@@ -164,19 +164,19 @@ def main():
     ax_1.set_title("Scatter plot and line fit of z peaks")
     ax_1.set_xlabel("z_0")
     ax_1.set_ylabel("z_peak")
-    ax_1.set_xlim([0, float(max(SHIFTS)) + SHIFTS[1]])
+    ax_1.set_xlim([0, float(max(shifts))])
     # ax_1.set_ylim([0, 2])
 
-    peaks = np.zeros((rg, len(SHIFTS))).astype(float)
-    min_peaks = np.zeros((rg, len(SHIFTS))).astype(float)
-    max_peaks = np.zeros((rg, len(SHIFTS))).astype(float)
-    peak_errs = np.zeros((rg, len(SHIFTS))).astype(float)
-    means = np.zeros((rg, len(SHIFTS))).astype(float)
-    stds = np.zeros((rg, len(SHIFTS))).astype(float)
+    peaks = np.zeros((rg, len(shifts))).astype(float)
+    min_peaks = np.zeros((rg, len(shifts))).astype(float)
+    max_peaks = np.zeros((rg, len(shifts))).astype(float)
+    peak_errs = np.zeros((rg, len(shifts))).astype(float)
+    means = np.zeros((rg, len(shifts))).astype(float)
+    stds = np.zeros((rg, len(shifts))).astype(float)
     print("Beginning peak estimations")
     print("-" * 100)
-    for j in range(len(SHIFTS)):
-        shift = SHIFTS[j]
+    for j in range(len(shifts)):
+        shift = shifts[j]
         shift_val = float(shift)
         print(f"Estimating peak for shift {shift}")
         # peaks[0, j] = estimate_z_peak(fp_counts, fp_bins, fp_centers)
@@ -215,7 +215,7 @@ def main():
     peak_data = defaultdict(dict)
     peak_data_file = f"{main_dir}/peaks.json"
     overall_stats_file = f"{main_dir}/overall_stats.json"
-    x = np.array(SHIFTS).astype(float)
+    x = np.array(shifts).astype(float)
     nus = []
     other_nus = []
     r2s = []
@@ -269,7 +269,7 @@ def main():
             )
             c = e[0].get_color()
             # ax_1.set_ylim((0.0, 0.01))
-            x_line = np.linspace(0, float(max(SHIFTS)) + SHIFTS[1], 200)
+            x_line = np.linspace(0, float(max(shifts)) + shifts[1], 200)
             y_line = slope * x_line
             ax_1.plot(x_line, y_line, label=f"RG_{i}", color=c)
 
@@ -304,7 +304,7 @@ def main():
     ax_0.legend()
     ax_1.legend()
     z_peaks_plot = f"{main_dir}/z_peaks.png"
-    Nu_plot = f"{main_dir}/Nu_{len(SHIFTS)}_shifts.png"
+    Nu_plot = f"{main_dir}/Nu_{len(shifts)}_shifts.png"
     plt.savefig(z_peaks_plot, dpi=150)
     plt.close()
     with open(overall_stats_file, "w") as f:
@@ -317,7 +317,7 @@ def main():
     system_size = [2**i for i in range(starting_index, rg)]
     fig, (ax_2, ax_3) = plt.subplots(1, 2, figsize=(10, 4))
     # ax_2.set_xlim([0, 0.01])
-    ax_2.set_ylim([2.3, 2.8])
+    # ax_2.set_ylim([2.3, 2.8])
     ax_2.set_title("Scatter plot of Nu vs System size from means")
     ax_2.set_xlabel("2^n")
     ax_2.set_ylabel("Nu")
@@ -327,7 +327,7 @@ def main():
     ax_3.set_ylabel("Nu")
     # ax_3.set_xticks(system_size, system_size)
     # ax_3.set_xlim([0, 0.01])
-    ax_3.set_ylim([2, 5])
+    # ax_3.set_ylim([2, 5])
     # ind = 2
     ax_2.scatter(system_size, other_nus)
     ax_3.errorbar(
@@ -345,7 +345,7 @@ def main():
     plt.close()
     print(f"Nu data plotted and saved to {Nu_plot}")
     print("-" * 100)
-    calculate_average_nu(overall_stats, 7, rg)
+    # calculate_average_nu(overall_stats, 7, rg)
     print("-" * 100)
     print(f"Analysis done after {time() - start:.3f} seconds")
 
