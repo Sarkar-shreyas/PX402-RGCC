@@ -1048,6 +1048,9 @@ def build_2d_hist(
     assert np.abs(np.sum(p_z * np.diff(z_edges)) - 1.0) <= 1e-12
     p_f = (p_zf * dz).sum(axis=0)
     assert np.abs(np.sum(p_f * np.diff(f_edges)) - 1.0) <= 1e-12
+    P = np.sum(p_zf * dz * df)
+    assert P > 0.0
+    p_zf /= P
 
     # Obtain 1D counts
     z_counts = hist2d.sum(axis=1)
