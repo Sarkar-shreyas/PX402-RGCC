@@ -823,15 +823,15 @@ def convert_t_to_z(t: np.ndarray) -> np.ndarray:
     return np.log((1.0 / (t**2.0)) - 1.0)
 
 
-def convert_t_to_geff(t: np.ndarray, r: np.ndarray) -> np.ndarray:
+def convert_t_to_geff(t: np.ndarray, f: np.ndarray) -> np.ndarray:
     t2 = np.abs(t) ** 2
-    r2 = np.abs(r) ** 2
-    return t2 / (t2 + r2)
+    f2 = np.abs(f) ** 2
+    return t2 + f2
 
 
-def convert_geff_to_t(g_eff: np.ndarray, r: np.ndarray) -> np.ndarray:
-    r2 = np.abs(r) ** 2
-    t2 = r2 * (g_eff / (1 - g_eff))
+def convert_geff_to_t(g_eff: np.ndarray, f: np.ndarray) -> np.ndarray:
+    f2 = np.abs(f) ** 2
+    t2 = g_eff - f2
     return np.sqrt(t2)
 
 
@@ -1024,10 +1024,21 @@ def build_2d_hist(
     )
     var1 = vars[0]
     var2 = vars[1]
-
+    print(f"Building 2D histogram for : {vars}")
     # Compute bin centers
     z_centers = 0.5 * (z_edges[1:] + z_edges[:-1])
     f_centers = 0.5 * (f_edges[1:] + f_edges[:-1])
+
+    # If we're symmetrising, manually symmetrise counts and densities
+    if sym:
+        mode = float(z_centers[np.argmax(hist2d.sum(axis=1))])
+        output = np.empty_like(hist2d, dtype=float)
+        new = z_centers
+        old = z_centers - mode
+        for j in range(hist2d.shape[1]):
+            output[:, j] = np.interp(new, old, hist2d[:, j], left=0.0, right=0.0)
+        print(f"Shifted zcenters by {mode}")
+        hist2d = output
 
     # Compute probability densities
     dz = np.diff(z_edges)[:, None]
@@ -1038,24 +1049,16 @@ def build_2d_hist(
     total = hist2d.sum()
     p_zf = hist2d / total / area
 
-    # If we're symmetrising, manually symmetrise counts and densities
-    if sym:
-        hist2d = 0.5 * (hist2d + hist2d[::-1, :])
-        p_zf = 0.5 * (p_zf + p_zf[::-1, :])
-
     # Obtain 1D densities and assert they are normalised
     p_z = (p_zf * df).sum(axis=1)
     assert np.abs(np.sum(p_z * np.diff(z_edges)) - 1.0) <= 1e-12
     p_f = (p_zf * dz).sum(axis=0)
     assert np.abs(np.sum(p_f * np.diff(f_edges)) - 1.0) <= 1e-12
-    P = np.sum(p_zf * dz * df)
-    assert P > 0.0
-    p_zf /= P
 
     # Obtain 1D counts
     z_counts = hist2d.sum(axis=1)
     f_counts = hist2d.sum(axis=0)
-
+    print(f"Hist keys are : {var1}_{var2}")
     # Store relevant data, labelled for intuitive access
     hist_data = {
         f"{var1}_{var2}": {"histval": hist2d, "densities": p_zf},
@@ -1171,15 +1174,15 @@ def conditional_2d_resampler(
     var0 = vars[0]
     var1 = vars[1]
     # Load 2D counts and respective axis bins
-    zf_counts = data_dict[var2d]["histval"]
+    zmix_counts = data_dict[var2d]["histval"]
     z_edges = data_dict[var0]["binedges"]
-    f_edges = data_dict[var1]["binedges"]
+    mix_edges = data_dict[var1]["binedges"]
 
-    # total = zf_counts.sum()
+    # total = zmix_counts.sum()
 
-    # z_size, f_size = zf_counts.shape
+    # z_size, mix_size = zmix_counts.shape
     # Manually compute z marginal and construct the 1D z cdf
-    z_marginal = zf_counts.sum(axis=1)
+    z_marginal = zmix_counts.sum(axis=1)
     z_cdf = np.cumsum(z_marginal / z_marginal.sum())
 
     # Guard against floating point errors
@@ -1187,7 +1190,7 @@ def conditional_2d_resampler(
 
     # Initialise output arrays
     z_take = np.empty(N, dtype=np.float64)
-    f_take = np.empty(N, dtype=np.float64)
+    mix_take = np.empty(N, dtype=np.float64)
 
     # Set batch boundaries to avoid large loop overhead
     min_batch_size = 50000
@@ -1204,7 +1207,7 @@ def conditional_2d_resampler(
         z_bins = np.searchsorted(z_cdf, rng.random(batch_size), side="right")
 
         # Generate empty f bins array
-        f_bins = np.empty(batch_size, dtype=np.int64)
+        mix_bins = np.empty(batch_size, dtype=np.int64)
 
         # Get unique z bins to prevent resampling from same bin
         unique_z, inv_z = np.unique(z_bins, return_inverse=True)
@@ -1213,36 +1216,36 @@ def conditional_2d_resampler(
         for index, bin in enumerate(unique_z):
             # Check for similar z bins, and pull the f row for the corresponding bin
             similar = inv_z == index
-            f_row = zf_counts[bin, :]
-            f_row_sum = f_row.sum()
+            mix_row = zmix_counts[bin, :]
+            mix_row_sum = mix_row.sum()
 
             # If the bin is empty, fallback to f_marginal
-            if f_row_sum <= 0:
-                f_row = zf_counts.sum(axis=0)
-                f_row_sum = f_row.sum()
+            if mix_row_sum <= 0:
+                mix_row = zmix_counts.sum(axis=0)
+                mix_row_sum = mix_row.sum()
 
             # For similar z bins, pull f bin indexes from the constructed f cdf
-            f_row_cdf = np.cumsum(f_row / f_row_sum)
-            f_row_cdf[-1] = 1.0
-            f_bins[similar] = np.searchsorted(
-                f_row_cdf, rng.random(similar.sum()), side="right"
+            mix_row_cdf = np.cumsum(mix_row / mix_row_sum)
+            mix_row_cdf[-1] = 1.0
+            mix_bins[similar] = np.searchsorted(
+                mix_row_cdf, rng.random(similar.sum()), side="right"
             )
 
         # Define rectangle to sample within
         z_left = z_edges[z_bins]
         z_right = z_edges[z_bins + 1]
-        f_bottom = f_edges[f_bins]
-        f_top = f_edges[f_bins + 1]
+        mix_bottom = mix_edges[mix_bins]
+        mix_top = mix_edges[mix_bins + 1]
 
         # Sample uniformly within rectangle
         z_diff = z_right - z_left
-        f_diff = f_top - f_bottom
+        mix_diff = mix_top - mix_bottom
         z_sample = z_left + z_diff * rng.random(size=batch_size)
-        f_sample = f_bottom + f_diff * rng.random(size=batch_size)
-        t_sample = convert_zeff_to_t(z_sample, f_sample)
+        mix_sample = mix_bottom + mix_diff * rng.random(size=batch_size)
+        t_sample = convert_zeff_to_t(z_sample, mix_sample)
 
         # Validity check
-        mask = t_sample**2 + f_sample <= 1.0 + 1e-12
+        mask = t_sample**2 + mix_sample <= 1.0 + 1e-12
         valid = mask.sum()
         if valid == 0:
             continue
@@ -1250,16 +1253,31 @@ def conditional_2d_resampler(
         # Take valid indexes
         take = min(valid, remaining)
         z_take[filled : filled + take] = z_sample[mask][:take]
-        f_take[filled : filled + take] = f_sample[mask][:take]
+        mix_take[filled : filled + take] = mix_sample[mask][:take]
         filled += take
 
         if num_iters % 100 == 0:
             print(
                 f"Rejection sampler iteration {num_iters}. {filled} samples accepted so far."
             )
-
+    # z_centers = data_dict[var0]["bincenters"]
+    # mix_centers = data_dict[var1]["bincenters"]
+    # z_take = rejection_sampler(
+    #     N,
+    #     data_dict[var0]["histval"],
+    #     data_dict[var0]["binedges"],
+    #     data_dict[var0]["bincenters"],
+    #     rng,
+    # )
+    # mix_take = rejection_sampler(
+    #     N,
+    #     data_dict[var1]["histval"],
+    #     data_dict[var1]["binedges"],
+    #     data_dict[var1]["bincenters"],
+    #     rng,
+    # )
     print(f"Took {num_iters} iterations in total.")
-    return z_take, f_take
+    return z_take, mix_take
 
 
 def get_density(hist_vals: np.ndarray, bin_edges: np.ndarray) -> np.ndarray:
