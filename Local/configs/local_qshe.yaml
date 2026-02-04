@@ -23,7 +23,7 @@ data_settings:
   shifts: [0.0, 0.003, 0.005, 0.007, 0.009]
 
 parameter_settings:
-  vars: ["r", "t", "tau", "f", "leak", "surv", "z"]
+  vars: ["r", "t", "tau", "f", "g", "surv", "z", "mix"]
   z:
     bins: 50000
     range: [-25.0, 25.0]
