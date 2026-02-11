@@ -505,7 +505,7 @@ def solve_qshe_matrix(
     # return x
     return x[:, output_index]
 
-    return ts
+    # return ts
 
 
 def generate_t_prime(
