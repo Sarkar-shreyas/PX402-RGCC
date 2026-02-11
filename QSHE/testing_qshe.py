@@ -16,12 +16,14 @@ from source.utilities import (
     get_density,
     build_rng,
     hist_moments,
+    inverse_cdf_2d,
+    inverse_cdf_sampler,
     rejection_sampler_2d,
     solve_qshe_matrix,
     build_2d_hist,
     convert_t_to_geff,
     convert_g_to_z,
-    # convert_geff_to_t,
+    convert_geff_to_t,
     convert_zeff_to_t,
     conditional_2d_resampler,
     # launder,
@@ -33,7 +35,7 @@ from time import time
 import psutil
 import os
 import sys
-from constants import T_DICT, qshe_dir, data_dir, PHI_DICT
+from constants import T_DICT, qshe_dir, data_dir, PHI_DICT, THETA_DICT
 import argparse
 
 process = psutil.Process(os.getpid())
@@ -58,10 +60,10 @@ def numerical_solver(
     start = time()
     num_batches = N // batch_size
     output = np.empty(shape=(N, 1), dtype=np.float64)
-    print(
-        f"Beginning numerical solver for index {output_index} on {get_current_date()}"
-    )
-    print(f"Computing {num_batches} batches of size {batch_size}")
+    # print(
+    #     f"Beginning numerical solver for index {output_index} on {get_current_date()}"
+    # )
+    # print(f"Computing {num_batches} batches of size {batch_size}")
     # get_memory_usage("Memory usage before computation")
     for i in range(num_batches):
         indexes = slice(i * batch_size, (i + 1) * batch_size)
@@ -75,13 +77,13 @@ def numerical_solver(
                 inputs,
             )
         )
-        if (i + 1) in {10, 50, 100, num_batches}:
-            # get_memory_usage(f"Memory usage after batch {i + 1}")
-            print(f"Batch {i + 1} done in {time() - start:.3f} seconds")
-    print(
-        f"Computation for all {num_batches} batches of index {output_index} done after {time() - start:.3f} seconds"
-    )
-    print("-" * 100)
+        # if (i + 1) in {10, 50, 100, num_batches}:
+        # get_memory_usage(f"Memory usage after batch {i + 1}")
+        # print(f"Batch {i + 1} done in {time() - start:.3f} seconds")
+    # print(
+    #     f"Computation for all {num_batches} batches of index {output_index} done after {time() - start:.3f} seconds"
+    # )
+    # print("-" * 100)
     return np.abs(output)
 
 
@@ -143,10 +145,10 @@ def append_parser(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
         help="Enter a constant value for the phi array. 1: phi=0, 2: phi=pi/4, 3: phi=pi/2, 4: phi=pi, 5: phi=2pi",
     )
     parser.add_argument(
-        "--f",
-        type=float,
-        default=0.0,
-        help="Enter a constant float value for the f array.",
+        "--th",
+        type=int,
+        default=0,
+        help="Enter a constant value for spin-mixing theta. 1: theta=0, 2: theta=pi/8, 3: theta=3pi/16, 4: theta=pi/4, 5: theta=3pi/8, 6: theta=pi/2",
     )
     parser.add_argument(
         "--all",
@@ -161,46 +163,89 @@ def gen_initial_data(
     samples: int,
     t_val: int,
     phi_val: int,
-    f_val: float,
+    th_val: int,
     rng: np.random.Generator,
     fp_file: Optional[str] = None,
     shift: Optional[float] = None,
+    gval: float = 0.5,
 ) -> dict:
     """Generates initial t, phi and f arrays based on given inputs resolved from CLI input and config file parsing"""
     n = samples
     if fp_file is None:
         # Then we're doing generating data from scratch
-        if f_val > 1.0:
-            f_val = 1.0
-        elif f_val < 0.0 or f_val < 1e-10:
-            f_val = 0.0
-        f_array = generate_constant_array(n, f_val, 5)
-        if t_val == 0:
-            split = 1 - f_array**2
-            t_sample = generate_initial_t_distribution(n, rng, split[0, 0])
-            t_array = extract_t_samples(t_sample, n, rng)
+        g_array = np.full(shape=(samples, 5), fill_value=gval)
+        if th_val != 0:
+            theta = THETA_DICT[f"{th_val}"]
+            costheta = np.full(shape=(samples, 5), fill_value=np.cos(theta))
+            t_array = np.sqrt((costheta**2) * g_array)
+            f_array = np.sqrt((1 - costheta**2) * g_array)
+            try:
+                dist = np.abs(t_array**2 + f_array**2 - g_array)
+                assert np.allclose(dist, 1e-12)
+            except AssertionError:
+                print(
+                    f"The distance from g is too large : Min = {np.min(dist)}, Max = {np.max(dist)}"
+                )
         else:
-            t_array = generate_constant_array(n, T_DICT[f"{t_val}"], 5)
+            costheta = rng.uniform(0, 1, (samples, 5))
+            if t_val == 0:
+                # t_sample = generate_initial_t_distribution(n, rng, split[0, 0])
+                # t_array = extract_t_samples(t_sample, n, rng)
+                # t_array = generate_constant_array(samples, np.sqrt(split[0, 0]), 5)
+                t_array = np.sqrt((costheta**2) * g_array)
+                f_array = np.sqrt((1 - costheta**2) * g_array)
+                try:
+                    dist = np.abs(t_array**2 + f_array**2 - g_array)
+                    assert np.allclose(dist, 1e-12)
+                except AssertionError:
+                    print(
+                        f"The distance from g is too large : Min = {np.min(dist)}, Max = {np.max(dist)}"
+                    )
+            else:
+                t_array = generate_constant_array(n, T_DICT[f"{t_val}"], 5)
+                f_array = np.sqrt(g_array - t_array**2)
     else:
-        # Then we're resampling from the 2d histogram
-        fp_data = np.load(fp_file, allow_pickle=True)
-        hist2d = {}
-        vars = []
-        for key in fp_data.keys():
-            hist2d.update({key: fp_data[key].item()})
-            vars.append(key)
-        z_sample, loss_sample = conditional_2d_resampler(hist2d, rng, samples, vars[0])
-        if shift is not None:
-            z_sample = z_sample + shift
+        fp_data = np.load(fp_file)
+        z_sample = inverse_cdf_sampler(n, fp_data["histval"], fp_data["binedges"], rng)
+        z_sample = z_sample + shift
+        g_sample = convert_z_to_g(z_sample)
         indexes = rng.integers(0, samples, size=(samples, 5))
-        t_sample = convert_zeff_to_t(z_sample, loss_sample)
-        t_array = np.take(t_sample, indexes)
-        f_array = np.take(np.sqrt(loss_sample), indexes)
+        g_array = np.take(g_sample, indexes)
+        if th_val != 0:
+            theta = THETA_DICT[f"{th_val}"]
+            costheta = np.full(shape=(samples, 5), fill_value=np.cos(theta))
+        else:
+            costheta = rng.uniform(0, 1, (samples, 5))
+        t_array = np.sqrt((costheta**2) * g_array)
+        f_array = np.sqrt((1 - costheta**2) * g_array)
+        try:
+            dist = np.abs(t_array**2 + f_array**2 - g_array)
+            assert np.allclose(dist, 1e-12)
+        except AssertionError:
+            print(
+                f"The distance from g is too large : Min = {np.min(dist)}, Max = {np.max(dist)}"
+            )
+        # Then we're resampling from the 2d histogram
+        # fp_data = np.load(fp_file, allow_pickle=True)
+        # hist2d = {}
+        # vars = []
+        # for key in fp_data.keys():
+        #     hist2d.update({key: fp_data[key].item()})
+        #     vars.append(key)
+        # z_sample, mix_sample = conditional_2d_resampler(hist2d, rng, samples, vars[0])
+        # if shift is not None:
+        #     z_sample = z_sample + shift
+        # g_sample = convert_z_to_g(z_sample)
+        # t_sample = mix_sample / np.sqrt(1.0 + np.exp(z_sample))
+        # f_sample = convert_geff_to_t(g_sample, t_sample)
+        # indexes = rng.integers(0, samples, size=(samples, 5))
+        # t_array = np.take(t_sample, indexes)
+        # f_array = np.take(f_sample, indexes)
     if phi_val == 0:
         phi_array = generate_random_phases(n, rng, 16)
     else:
         phi_array = generate_constant_array(n, PHI_DICT[f"{phi_val}"], 16)
-    data_dict = {"t": t_array, "f": f_array, "phi": phi_array}
+    data_dict = {"t": t_array, "f": f_array, "phi": phi_array, "theta": costheta}
     return data_dict
 
 
