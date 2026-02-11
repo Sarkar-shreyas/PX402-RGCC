@@ -7,7 +7,7 @@ main:
 engine:
   model: "qshe"
   method: "numerical"
-  resample: "c"
+  resample: "i"
   expr: "shreyas"
   symmetrise: 1
 
