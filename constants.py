@@ -49,7 +49,7 @@ qshe_dir = os.getenv("QSHE_DIR")
 config_file = os.getenv("CONFIG_FILE")
 host = os.getenv("HOST")
 remote_dir = os.getenv("REMOTE_DIR")
-
+qshe_test_dir = os.getenv("QSHE_TEST_DIR")
 
 # SHIFTS = [0.0, 0.003, 0.005, 0.007, 0.009]
 # SHIFTS = [0.0, 0.1, 0.2, 0.3, 0.4]
@@ -163,4 +163,6 @@ THETA_DICT = {
     "4": float(np.pi / 4),
     "5": float(3 * np.pi / 8),
     "6": float(np.pi / 2),
+    "7": float(0.1),
+    "8": float(7 * np.pi / 32),
 }

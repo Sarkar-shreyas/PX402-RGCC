@@ -1,3 +1,4 @@
+from typing import Optional
 import numpy as np
 import argparse
 import matplotlib.pyplot as plt
@@ -54,7 +55,9 @@ def build_plot_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def build_config_path(data_location: str, version_name: str, rg_mode: str) -> str:
+def build_config_path(
+    data_location: str, version_name: str, rg_mode: str, th_num: Optional[int] = None
+) -> str:
     """
     Construct the path to the config file for a given data location and version.
 
@@ -80,7 +83,12 @@ def build_config_path(data_location: str, version_name: str, rg_mode: str) -> st
     version = version_name.strip().lower()
     version = f"{version[:-1]}{version[-1].upper()}"
     rg_mode = rg_mode.strip().upper()
-    config_location = f"{data_folder}/{version}/{rg_mode}/updated_config.yaml"
+    if th_num is not None:
+        config_location = (
+            f"{data_folder}/theta_{th_num}/{version}/{rg_mode}/updated_config.yaml"
+        )
+    else:
+        config_location = f"{data_folder}/{version}/{rg_mode}/updated_config.yaml"
 
     return config_location
 

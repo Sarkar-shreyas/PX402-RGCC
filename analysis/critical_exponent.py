@@ -114,14 +114,14 @@ def main():
     os.makedirs(stats_dir, exist_ok=True)
     os.makedirs(plots_dir, exist_ok=True)
     data_map = defaultdict(dict)
-    vars = ["t", "r", "f", "tau", "leak", "surv", "z"]
+    vars = rg_config.vars
     print(f"Performing peak estimation for {version}")
     print("=" * 100)
     # Load the FP distribution
-    fp_file = f"{data_folder}/{version}/FP/hist/z/sym_z_hist_RG{num_rg - 1}.npz"
+    fp_file = f"{data_folder}/{version}/FP/hist/z/z_hist_RG{5}.npz"
     fp_counts, fp_bins, fp_centers = load_hist_data(fp_file)
     fp_density = get_density(fp_counts, fp_bins)
-    shifts = rg_config.shifts
+    shifts = np.array([shift for shift in rg_config.shifts if shift >= 0.0])
     # Get all the initial plots made for inspection
     start = time()
     for shift in shifts:

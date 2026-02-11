@@ -10,15 +10,15 @@ from analysis.data_plotting import (
     get_density,
     plot_data,
     construct_moments_dict,
-    plot_3d,
 )
 
 
 if __name__ == "__main__":
     parser = build_plot_parser()
+    parser.add_argument("--th", type=int, default=None)
     args = parser.parse_args()
     if os.path.exists(args.loc):
-        config_path = build_config_path(args.loc, args.version, args.mode)
+        config_path = build_config_path(args.loc, args.version, args.mode, args.th)
         if str(args.loc).strip().lower() == "remote":
             data_folder = data_dir
         elif str(args.loc).strip().lower() == "local":
@@ -34,13 +34,15 @@ if __name__ == "__main__":
     version = str(args.version)
     num_rg = int(args.steps)
     var_names = rg_config.vars
+    if args.th is None:
+        ths = ""
+    else:
+        ths = f"theta_{args.th}/"
     if rg_config.symmetrise:
         var_names.append("sym_z")
-    # var_names = ["r", "t", "tau", "f", "z"]
-    other_vars = ["r", "t", "tau", "f"]
-    hist_dir = f"{data_folder}/{version}/{rg_config.type}/hist"
-    stats_dir = f"{data_folder}/{version}/{rg_config.type}/stats"
-    plots_dir = f"{data_folder}/{version}/{rg_config.type}/plots"
+    hist_dir = f"{data_folder}/{ths}{version}/{rg_config.type}/hist"
+    stats_dir = f"{data_folder}/{ths}{version}/{rg_config.type}/stats"
+    plots_dir = f"{data_folder}/{ths}{version}/{rg_config.type}/plots"
     folder_names = {"hist": hist_dir, "stats": stats_dir, "plots": plots_dir}
     for var in var_names:
         var_folder = f"{hist_dir}/{var}"
@@ -76,33 +78,33 @@ if __name__ == "__main__":
 
     if rg_config.symmetrise:
         z_vars = ["sym_z"]
-    # print(data_map.keys())
-    for z_var in z_vars:
-        z_filename = f"{plots_dir}/{z_var}_histogram.png"
-        fig, (ax0, ax1) = plt.subplots(1, 2, num=f"{z_var}", figsize=(12, 6))
-        ax0.set_title(f"Histogram of {z_var}")
-        ax0.set_xlabel(f"{z_var}")
-        ax0.set_ylabel(f"Q({z_var})")
-        ax1.set_title(f"Clipped Histogram of {z_var}")
-        ax1.set_xlabel(f"{z_var}")
-        ax1.set_ylabel(f"Q({z_var})")
-        ax0.set_xlim((-25.0, 25.0))
-        ax1.set_xlim((-5.0, 5.0))
-        try:
-            for i in range(num_rg):
-                x_data = data_map[z_var][i][2]
-                y_data = data_map[z_var][i][3]
-                ax0.plot(x_data, y_data, label=f"RG{i}")
-                if z_var == "z":
-                    ax1.plot(x_data[::10], y_data[::10], label=f"RG{i}")
-                else:
-                    ax1.scatter(x_data[::100], y_data[::100], label=f"RG{i}")
-        except IndexError:
-            print(f"Could not find data loaded for : {z_var}")
-        ax0.legend(loc="upper left")
-        ax1.legend(loc="upper left")
-        fig.savefig(z_filename, dpi=150)
-        plt.close(fig)
+        # print(data_map.keys())
+        for z_var in z_vars:
+            z_filename = f"{plots_dir}/{z_var}_histogram.png"
+            fig, (ax0, ax1) = plt.subplots(1, 2, num=f"{z_var}", figsize=(12, 6))
+            ax0.set_title(f"Histogram of {z_var}")
+            ax0.set_xlabel(f"{z_var}")
+            ax0.set_ylabel(f"Q({z_var})")
+            ax1.set_title(f"Clipped Histogram of {z_var}")
+            ax1.set_xlabel(f"{z_var}")
+            ax1.set_ylabel(f"Q({z_var})")
+            ax0.set_xlim((-25.0, 25.0))
+            ax1.set_xlim((-5.0, 5.0))
+            try:
+                for i in range(num_rg):
+                    x_data = data_map[z_var][i][2]
+                    y_data = data_map[z_var][i][3]
+                    ax0.plot(x_data, y_data, label=f"RG{i}")
+                    if z_var == "z":
+                        ax1.plot(x_data[::10], y_data[::10], label=f"RG{i}")
+                    else:
+                        ax1.scatter(x_data[::100], y_data[::100], label=f"RG{i}")
+            except IndexError:
+                print(f"Could not find data loaded for : {z_var}")
+            ax0.legend(loc="upper left")
+            ax1.legend(loc="upper left")
+            fig.savefig(z_filename, dpi=150)
+            plt.close(fig)
 
     # zf_filename = f"{hist_dir}/zf/zf_hist"
     # zf_plot = f"{plots_dir}/3d_plot.png"
