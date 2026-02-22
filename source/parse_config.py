@@ -72,14 +72,17 @@ def validate_input(input_args) -> dict:
         args_dict["out"] = None
     # Check and validate type input
     rg_type = str(input_args.type).strip().upper()
-    if rg_type not in ("FP", "EXP"):
-        raise ValueError(f"Invalid RG type {rg_type} entered, expected 'FP' or 'EXP'.")
+    if rg_type not in ("FP", "EXP", "QP"):
+        raise ValueError(
+            f"Invalid RG type {rg_type} entered, expected 'FP, 'EXP' or 'QP'."
+        )
     args_dict["type"] = rg_type
     return args_dict
 
 
 if __name__ == "__main__":
     parser = build_parser()
+    parser.add_argument("--type", default="FP", help="The type of RG flow")
     args = parser.parse_args()
     args_dict = validate_input(args)
     config = handle_config(args_dict["config"], args.override)
