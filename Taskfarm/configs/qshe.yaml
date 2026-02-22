@@ -1,0 +1,39 @@
+main:
+  version: "rg_qshe"
+  id: "hpc"
+  type: "fp"
+  output_folder: ""
+
+engine:
+  model: "qshe"
+  method: "numerical"
+  resample: "i"
+  expr: "shreyas"
+  symmetrise: 0
+
+rg_settings:
+  seed: 1234
+  steps: 9
+  samples: 1000000
+  matrix_batch_size: 100000
+  metric: "all"
+  fixed: 0
+
+data_settings:
+  inputs: [1.0, 0.0, 0.0, 0.0]
+  outputs: ["t", "f"]
+
+parameter_settings:
+  vars: ["r", "t", "tau", "f", "g", "surv", "z", "mix", "p"] # For local runs
+  q:
+    min: 0.0
+    max: 0.5
+    num: 501
+  p:
+    min: 0.001
+    max: 0.999
+    num: 999
+
+convergence:
+  msd_tol: 1.0e-3
+  std_tol: 5.0e-4
