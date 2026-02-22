@@ -5,7 +5,7 @@ Loads yaml and sets up configuration
 import os
 import yaml
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Literal, Union
 from dataclasses import dataclass
 from functools import lru_cache
 
@@ -34,26 +34,44 @@ def _check_lowercase_keys(data: dict, parent: str = "") -> None:
             _check_lowercase_keys(val, parent=f"{parent}{key}.")
 
 
-# ---------- RG Config dataclass ---------- #
+# ---------- RG Config dataclasses ---------- #
+
+
 @dataclass
-class RGConfig:
+class BaseConfig:
+    # Main params
     version: str
     id: str
     type: str
     output_folder: str
-    model: str
+
+    # Engine params
+    model: Literal["iqhe", "qshe"]
     method: str
-    resample: str
     expr: str
-    symmetrise: int
+
+    # rg flow settings
     seed: int
     steps: int
     samples: int
     matrix_batch_size: int
-    inputs: list
-    outputs: list
-    shifts: list
-    vars: list
+
+    # Basic data settings
+    inputs: list[float]
+    msd_tol: float
+    std_tol: float
+
+
+@dataclass
+class IQHEConfig(BaseConfig):
+    # IQHE-specific engine and rg flow settings
+    model: Literal["iqhe"]
+    resample: str
+    symmetrise: int
+    shifts: list[float]
+    outputs: list[int]
+
+    # IQHE-specific var settings
     z_bins: int
     z_range: tuple
     z_min: float
@@ -62,8 +80,29 @@ class RGConfig:
     t_range: tuple
     t_min: float
     t_max: float
-    msd_tol: float
-    std_tol: float
+
+
+@dataclass
+class QSHEConfig(BaseConfig):
+    # QSHE-specific engine params
+    model: Literal["qshe"]
+    metric: Literal["mean", "median", "all"]
+    fixed: Literal[0, 1]
+
+    # QSHE-specific parameter settings
+    vars: list[str]
+    outputs: list[str]
+    q_range: tuple
+    q_min: float
+    q_max: float
+    q_num: int
+    p_range: tuple
+    p_min: float
+    p_max: float
+    p_num: int
+
+
+RGConfig = Union[IQHEConfig, QSHEConfig]
 
 
 def build_config(config: dict) -> RGConfig:
@@ -87,15 +126,14 @@ def build_config(config: dict) -> RGConfig:
     ValueError
         If type conversion fails for any field.
     """
+    # Base config params
     version = str(check_required_info(config, "main.version")).strip().lower()
     id = check_required_info(config, "main.id")
     type = check_required_info(config, "main.type")
     output_folder = check_required_info(config, "main.output_folder")
     model = str(check_required_info(config, "engine.model")).strip().lower()
     method = str(check_required_info(config, "engine.method")).strip().lower()
-    resample = str(check_required_info(config, "engine.resample")).strip().lower()
     expr = str(check_required_info(config, "engine.expr")).strip().lower()
-    symmetrise = int(get_nested_data(config, "engine.symmetrise", 1))
     seed = int(check_required_info(config, "rg_settings.seed"))
     steps = int(check_required_info(config, "rg_settings.steps"))
     samples = int(check_required_info(config, "rg_settings.samples"))
@@ -103,55 +141,99 @@ def build_config(config: dict) -> RGConfig:
         check_required_info(config, "rg_settings.matrix_batch_size")
     )
     inputs = check_required_info(config, "data_settings.inputs")
-    outputs = check_required_info(config, "data_settings.outputs")
-    shift_config = get_nested_data(
-        config, "data_settings.shifts", [0.003, 0.005, 0.007, 0.009]
-    )
-    shifts = [float(str(shift).strip()) for shift in shift_config]
-    vars = get_nested_data(config, "parameter_settings.vars")
-
-    z_bins = int(get_nested_data(config, "parameter_settings.z.bins", 200))
-    z_range = tuple(get_nested_data(config, "parameter_settings.z.range", [0.0, 1.0]))
-    z_min = float(z_range[0])
-    z_max = float(z_range[1])
-    t_bins = int(get_nested_data(config, "parameter_settings.tprime.bins", 200))
-    t_range = tuple(
-        get_nested_data(config, "parameter_settings.tprime.range", [0.0, 1.0])
-    )
-    t_min = float(t_range[0])
-    t_max = float(t_range[1])
     msd_tol = float(get_nested_data(config, "convergence.msd_tol", 1.0e-3))
     std_tol = float(get_nested_data(config, "convergence.std_tol", 5.0e-4))
 
-    return RGConfig(
-        version=version,
-        id=id,
-        type=type,
-        output_folder=output_folder,
-        model=model,
-        method=method,
-        resample=resample,
-        expr=expr,
-        symmetrise=symmetrise,
-        seed=seed,
-        steps=steps,
-        samples=samples,
-        matrix_batch_size=matrix_batch_size,
-        inputs=inputs,
-        outputs=outputs,
-        shifts=shifts,
-        vars=vars,
-        z_bins=z_bins,
-        z_range=z_range,
-        z_min=z_min,
-        z_max=z_max,
-        t_bins=t_bins,
-        t_range=t_range,
-        t_min=t_min,
-        t_max=t_max,
-        msd_tol=msd_tol,
-        std_tol=std_tol,
-    )
+    if model == "iqhe":
+        shift_config = get_nested_data(
+            config, "data_settings.shifts", [0.003, 0.005, 0.007, 0.009]
+        )
+        z_range = tuple(
+            get_nested_data(config, "parameter_settings.z.range", [0.0, 1.0])
+        )
+        t_range = tuple(
+            get_nested_data(config, "parameter_settings.tprime.range", [0.0, 1.0])
+        )
+        return IQHEConfig(
+            version=version,
+            id=id,
+            type=type,
+            output_folder=output_folder,
+            model=model,
+            method=method,
+            expr=expr,
+            seed=seed,
+            steps=steps,
+            samples=samples,
+            matrix_batch_size=matrix_batch_size,
+            inputs=inputs,
+            msd_tol=msd_tol,
+            std_tol=std_tol,
+            resample=str(check_required_info(config, "engine.resample"))
+            .strip()
+            .lower(),
+            symmetrise=int(get_nested_data(config, "engine.symmetrise", 1)),
+            shifts=[float(str(shift).strip()) for shift in shift_config],
+            outputs=check_required_info(config, "data_settings.outputs"),
+            z_bins=int(get_nested_data(config, "parameter_settings.z.bins", 200)),
+            z_range=z_range,
+            z_min=float(z_range[0]),
+            z_max=float(z_range[1]),
+            t_bins=int(get_nested_data(config, "parameter_settings.tprime.bins", 200)),
+            t_range=t_range,
+            t_min=float(t_range[0]),
+            t_max=float(t_range[1]),
+        )
+    elif model == "qshe":
+        metric = str(check_required_info(config, "rg_settings.metric"))
+        if metric not in ("mean", "median", "all"):
+            raise ValueError(
+                f"Metric : {metric} invalid. Must be 'mean', 'median' or 'all'"
+            )
+        fixed = int(check_required_info(config, "rg_settings.fixed"))
+        if fixed not in (0, 1):
+            raise ValueError(f"fixed : {fixed} invalid. Must be 0 or 1.")
+        outputs = check_required_info(config, "data_settings.outputs")
+        vars = check_required_info(config, "parameter_settings.vars")
+        q_min = float(get_nested_data(config, "parameter_settings.q.min", 0.0))
+        q_max = float(get_nested_data(config, "parameter_settings.q.max", 0.5))
+        p_min = float(get_nested_data(config, "parameter_settings.p.min", 0.001))
+        p_max = float(get_nested_data(config, "parameter_settings.p.max", 0.999))
+        q_num = int(get_nested_data(config, "parameter_settings.q.num", 1000))
+        p_num = int(get_nested_data(config, "parameter_settings.p.num", 999))
+        q_range = (q_min, q_max)
+        p_range = (p_min, p_max)
+
+        return QSHEConfig(
+            version=version,
+            id=id,
+            type=type,
+            output_folder=output_folder,
+            model=model,
+            method=method,
+            expr=expr,
+            seed=seed,
+            steps=steps,
+            samples=samples,
+            matrix_batch_size=matrix_batch_size,
+            inputs=inputs,
+            msd_tol=msd_tol,
+            std_tol=std_tol,
+            metric=metric,
+            fixed=fixed,
+            vars=vars,
+            outputs=outputs,
+            q_range=q_range,
+            q_min=q_min,
+            q_max=q_max,
+            q_num=q_num,
+            p_range=p_range,
+            p_min=p_min,
+            p_max=p_max,
+            p_num=p_num,
+        )
+    else:
+        raise ValueError(f"Model {model} invalid. Must be 'iqhe' or 'qshe'.")
 
 
 @lru_cache(maxsize=1)
