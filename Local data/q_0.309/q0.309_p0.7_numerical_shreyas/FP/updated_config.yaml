@@ -1,0 +1,58 @@
+main:
+  version: q0.309_p0.7
+  id: local
+  type: fp
+  output_folder: Local data
+engine:
+  model: qshe
+  method: numerical
+  resample: i
+  expr: shreyas
+  symmetrise: 0
+rg_settings:
+  seed: 1234
+  steps: 9
+  samples: 100000
+  matrix_batch_size: 100000
+data_settings:
+  inputs:
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
+  outputs:
+  - 2
+  - 9
+  - 10
+  - 17
+  shifts:
+  - 0.0
+  - 0.003
+  - 0.005
+  - 0.007
+  - 0.009
+parameter_settings:
+  vars:
+  - r
+  - t
+  - tau
+  - f
+  - g
+  - surv
+  - z
+  - mix
+  - p
+  z:
+    bins: 50000
+    range:
+    - -25.0
+    - 25.0
+  tprime:
+    bins: 1000
+    range:
+    - 0.0
+    - 1.0
+  f: 0.01
+convergence:
+  msd_tol: 0.001
+  std_tol: 0.0005
