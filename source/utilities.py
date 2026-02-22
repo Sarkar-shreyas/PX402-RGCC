@@ -8,12 +8,35 @@ histogram I/O and common statistical measures used by the RG pipeline.
 # the line-length rule for this file to keep the formulas readable.
 # flake8: noqa: E501
 
+# from collections import defaultdict
 import numpy as np
-from constants import T_DICT, PHI_DICT
+from typing import Optional
 from numpy.typing import ArrayLike
+import json
 
 # from time import time
 from datetime import datetime, timezone
+
+T_DICT = {"0": "random", "1": 0.0, "2": 0.5, "3": float(1 / np.sqrt(2)), "4": 1.0}
+PHI_DICT = {
+    "0": "random",
+    "1": 0.0,
+    "2": float(np.pi / 4),
+    "3": float(np.pi / 2),
+    "4": float(np.pi),
+    "5": float(np.pi * 2),
+}
+THETA_DICT = {
+    "0": "random",
+    "1": 0.0,
+    "2": float(np.pi / 8),
+    "3": float(3 * np.pi / 16),
+    "4": float(np.pi / 4),
+    "5": float(3 * np.pi / 8),
+    "6": float(np.pi / 2),
+    "7": float(0.1),
+    "8": float(7 * np.pi / 32),
+}
 
 
 # ---------- Misc. utility ---------- #
@@ -62,6 +85,121 @@ def get_current_date(format: str = "full") -> str:
         return datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M")
     else:
         return datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def save_metric_json(data: dict, filename: str):
+    """Save input data into a json file"""
+    with open(filename, "w") as f:
+        json.dump(data, f, indent=2)
+
+
+def collapse_data(data_dict: dict):
+    """Collapse nested dictionaries into a json saveable format"""
+    if isinstance(data_dict, dict):
+        return {
+            collapse_data(key): collapse_data(value) for key, value in data_dict.items()
+        }
+    elif isinstance(data_dict, np.ndarray):
+        return data_dict.tolist()
+    else:
+        return data_dict
+
+
+def build_state_dict(
+    qvals: np.ndarray,
+    gvals: np.ndarray,
+    nsamples: int,
+    steps: int,
+    metric: str,
+    fix: int = 1,
+    seed: int = 1234,
+):
+    """Build a state dict containing the relevant config params"""
+    state = {}
+    num_qs = int(qvals.size)
+    num_gs = int(gvals.size)
+    min_q = float(min(qvals))
+    max_q = float(max(qvals))
+    min_g = float(min(gvals))
+    max_g = float(max(gvals))
+    trimmed_qs = [round(float(q), 3) for q in qvals]
+    trimmed_gs = [round(float(g), 3) for g in gvals]
+    state.update(
+        {
+            "q": {
+                "Num": num_qs,
+                "Max": round(max_q, 3),
+                "Min": round(min_q, 3),
+                "Init": trimmed_qs,
+            }
+        }
+    )
+    state.update(
+        {
+            "p": {
+                "Num": num_gs,
+                "Max": round(max_g, 3),
+                "Min": round(min_g, 3),
+                "Init": trimmed_gs,
+            }
+        }
+    )
+    state.update(
+        {
+            "data": {
+                "type": metric,
+                "samples": nsamples,
+                "steps": steps,
+                "fixed": fix,
+                "seed": seed,
+            }
+        }
+    )
+    return state
+
+
+def get_meds(
+    step_a: int,
+    step_b: int,
+    data_dict: dict,
+    qarray: np.ndarray,
+    garray: np.ndarray,
+    var: str = "p",
+    fromjson: bool = False,
+):
+    """Extract mean and medians for 2 RG steps from existing or loaded data"""
+    medgs_a = {}
+    medgs_b = {}
+    meangs_a = {}
+    meangs_b = {}
+    for q in qarray[:]:
+        # Other data extraction method if we load the json data instead
+        if fromjson:
+            gs = data_dict[f"{q}"][var]
+            step_a_meds = gs[f"{step_a}"]["Median"]
+            step_b_meds = gs[f"{step_b}"]["Median"]
+            step_a_means = gs[f"{step_a}"]["Mean"]
+            step_b_means = gs[f"{step_b}"]["Mean"]
+        else:
+            # Otherwise, we want to generate arrays of the mean/median for all ginits, for two consecutive RG steps.
+            gs = data_dict[q]
+            step_a_meds = []
+            step_b_meds = []
+            step_a_means = []
+            step_b_means = []
+            for ginit in garray:
+                meang_a, medg_a = gs[ginit][step_a][0]
+                meang_b, medg_b = gs[ginit][step_b][0]
+                step_a_meds.append(medg_a)
+                step_b_meds.append(medg_b)
+                step_a_means.append(meang_a)
+                step_b_means.append(meang_b)
+
+        medgs_a.update({q: np.array(step_a_meds)})
+        medgs_b.update({q: np.array(step_b_meds)})
+        meangs_a.update({q: np.array(step_a_means)})
+        meangs_b.update({q: np.array(step_b_means)})
+    return medgs_a, medgs_b, meangs_a, meangs_b
 
 
 # ---------- Data generators ---------- #
@@ -322,9 +460,9 @@ def solve_qshe_matrix(
     fs: np.ndarray,
     phis: np.ndarray,
     batch_size: int,
-    output_index: int,
+    output_indexes: list,
     inputs: ArrayLike,
-) -> np.ndarray:
+) -> dict:
     """Build the 20x20 matrix equation and solve Mx = b"""
     t1, t2, t3, t4, t5 = ts.T
     f1, f2, f3, f4, f5 = fs.T
@@ -500,10 +638,12 @@ def solve_qshe_matrix(
     b[:, 19, 0] = -t5 * I10_down
 
     x = np.linalg.solve(M, b)
-
+    sol = {}
     # Outputs are index 2, 9, 10 and 17 in order of O3_up, O10_up, O1_down and O8_down
     # return x
-    return x[:, output_index]
+    for output in output_indexes:
+        sol.update({output: x[:, output]})
+    return sol
 
     # return ts
 
@@ -704,33 +844,152 @@ def qshe_numerical_solver(
     fs: np.ndarray,
     phis: np.ndarray,
     N: int,
-    output_index: int,
+    output_indexes: list,
     inputs: ArrayLike,
     batch_size: int,
-) -> np.ndarray:
+) -> dict:
     """Solve the matrix equation Mx=b for N samples using batching"""
+    if batch_size > N:
+        batch_size = N
     num_batches = N // batch_size
-    output = np.empty(shape=(N, 1), dtype=np.float64)
-    print(
-        f"Beginning numerical solver for index {output_index} on {get_current_date()}"
-    )
-    print(f"Computing {num_batches} batches of size {batch_size}")
-    # get_memory_usage("Memory usage before computation")
-    for i in range(num_batches):
-        indexes = slice(i * batch_size, (i + 1) * batch_size)
-        output[indexes] = np.abs(
-            solve_qshe_matrix(
+    out_dict = {}
+    for index in output_indexes:
+        output = np.empty(shape=(N, 1), dtype=np.float64)
+        for i in range(num_batches):
+            indexes = slice(i * batch_size, (i + 1) * batch_size)
+            output_dict = solve_qshe_matrix(
                 ts[indexes],
                 fs[indexes],
                 phis[indexes],
                 batch_size,
-                output_index,
+                output_indexes,
                 inputs,
             )
+            output[indexes] = np.abs(output_dict[index])
+        out_dict.update({index: output[:]})
+    return out_dict
+
+
+def qp_trials(
+    q: np.ndarray | float,
+    pval: np.ndarray | float,
+    nsamples: int,
+    nsteps: int,
+    phis: np.ndarray,
+    rng: np.random.Generator,
+    metric: str = "all",
+    fixed: int = 1,
+    output_vars: list = ["t", "f"],
+    input_vals: list = [1.0, 0.0, 0.0, 0.0],
+    batch_size: int = 10000,
+) -> tuple:
+    """Run RG iterations for a given q_init and p_init value, computing the mean and median per RG step"""
+    if metric != "all":
+        metdim = 1
+    else:
+        metdim = 2
+    pmets = np.empty(shape=(nsteps, metdim))
+    qmets = np.empty(shape=(nsteps, metdim))
+    var_index_map = {"t": 2, "r": 9, "tau": 10, "f": 17}
+    output_indexes = [var_index_map[var] for var in output_vars]
+
+    t_init = rng.uniform(np.sqrt(pval - 1e-6), np.sqrt(pval + 1e-6), nsamples)
+    f_init = np.sqrt(q * (1 - t_init**2))
+    # print(f"Performing {nsteps} RG iterations for initial q = {q}, p = {pval}")
+    # print(f"Means: t = {np.mean(t_init)}, f = {np.mean(f_init)}")
+    indices = rng.integers(0, nsamples, (nsamples, 5))
+    for step in range(nsteps):
+        ts = np.take(t_init, indices)
+        fs = np.take(f_init, indices)
+        outs = qshe_numerical_solver(
+            ts, fs, phis, nsamples, output_indexes, input_vals, batch_size
         )
-    print(f"Computation for all {num_batches} batches of index {output_index} done")
-    print("-" * 100)
-    return np.abs(output)
+        # print(outs.keys())
+        tp = outs[2]
+        tp = np.clip(tp, 1e-9, 1 - 1e-9)
+        p = tp**2
+        if fixed == 1:
+            qmed = q
+            qmean = q
+            f2 = (1 - p) * q
+            fp = np.sqrt(f2)
+        else:
+            fp = outs[17]
+            f2 = fp**2
+            qmed = np.median(f2 / (1 - p))
+            qmean = np.mean(f2 / (1 - p))
+        # g = p + f2
+        fp = np.clip(fp, 1e-9, 1 - 1e-9)
+        pmed = np.median(p)
+        pmean = np.mean(p)
+        if metric == "median":
+            pmets[step, 0] = pmed
+            qmets[step, 0] = qmed
+        elif metric == "mean":
+            pmets[step, 0] = pmean
+            qmets[step, 0] = qmean
+        else:
+            pmets[step, 0] = pmean
+            pmets[step, 1] = pmed
+            qmets[step, 0] = qmean
+            qmets[step, 1] = qmed
+        t_init = tp
+        f_init = fp
+
+    return pmets, qmets
+
+
+def run_qp_trials(
+    qvals: np.ndarray,
+    pvals: np.ndarray,
+    nsamples: int,
+    nsteps: int,
+    rng: np.random.Generator,
+    metric: str = "all",
+    fixed: int = 1,
+    output_vars: Optional[list] = None,
+    input_vals: Optional[list] = None,
+    batch_size: int = 10000,
+) -> tuple:
+    """
+    Perform q-p trials for input q and p values, and store data as a 4D numpy array
+    Dimensions of the output array are : [len(qvals), len(pvals), nsteps, 2-4]
+    Final dimension stores [pmean, pmedian, qmean, qmedian], or whichever metrics are chosen
+    """
+    if output_vars is None:
+        output_vars = ["t", "f"]
+    if input_vals is None:
+        input_vals = [1.0, 0.0, 0.0, 0.0]
+    if metric != "all":
+        met_dim = 1
+    else:
+        met_dim = 2
+    plen = pvals.size
+    qlen = qvals.size
+    p_trial_data = np.empty(shape=(qlen, plen, nsteps, met_dim), dtype=np.float64)
+    q_trial_data = np.empty(shape=(qlen, plen, nsteps, met_dim), dtype=np.float64)
+    for q in range(qlen):
+        phis = generate_random_phases(nsamples, rng, 16)
+        for p in range(plen):
+            # Trial output is tuple of lists, with elements in the order of RG steps.
+            a, b = qp_trials(
+                qvals[q],
+                pvals[p],
+                nsamples,
+                nsteps,
+                phis,
+                rng,
+                metric,
+                fixed,
+                output_vars,
+                input_vals,
+                batch_size,
+            )
+            p_trial_data[q, p, :, :] = a
+            q_trial_data[q, p, :, :] = b
+        if q % 10 == 0:
+            print(f"Trial for {q}th q value completed.")
+    return p_trial_data, q_trial_data
 
 
 # ---------- Variable conversion helpers ---------- #
@@ -838,6 +1097,25 @@ def convert_geff_to_t(g_eff: np.ndarray, f: np.ndarray) -> np.ndarray:
 def convert_zeff_to_t(z_eff: np.ndarray, loss: np.ndarray) -> np.ndarray:
     t2 = (1 - loss.ravel()) / (1 + np.exp(z_eff.ravel()))
     return np.sqrt(t2)
+
+
+def convert_z_to_x(z):
+    return np.arcsinh(np.exp(z / 2))
+
+
+def convert_g_to_x(g, theta=0.0):
+    z = np.log((1 - g) / g)
+    return convert_z_to_x(z)
+
+
+def convert_x_to_z(x):
+    return np.log(np.sinh(x) ** 2)
+
+
+def convert_x_to_g(x):
+    z = convert_x_to_z(x)
+    g = 1 / (1 + np.exp(z))
+    return g
 
 
 # ---------- Sampling helpers decoupled from P_D ---------- #
