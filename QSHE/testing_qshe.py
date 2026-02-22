@@ -52,14 +52,14 @@ def numerical_solver(
     fs: np.ndarray,
     phis: np.ndarray,
     N: int,
-    output_index: int,
+    output_indexes: list,
     inputs: ArrayLike,
     batch_size: int,
 ) -> np.ndarray:
     """Solve the matrix equation Mx=b for N samples using batching"""
-    start = time()
+    # start = time()
     num_batches = N // batch_size
-    output = np.empty(shape=(N, 1), dtype=np.float64)
+    output = np.empty(shape=(N, len(output_indexes)), dtype=np.float64)
     # print(
     #     f"Beginning numerical solver for index {output_index} on {get_current_date()}"
     # )
@@ -67,24 +67,19 @@ def numerical_solver(
     # get_memory_usage("Memory usage before computation")
     for i in range(num_batches):
         indexes = slice(i * batch_size, (i + 1) * batch_size)
-        output[indexes] = np.abs(
-            solve_qshe_matrix(
-                ts[indexes],
-                fs[indexes],
-                phis[indexes],
-                batch_size,
-                output_index,
-                inputs,
-            )
+        output_dict = solve_qshe_matrix(
+            ts[indexes],
+            fs[indexes],
+            phis[indexes],
+            batch_size,
+            output_indexes,
+            inputs,
         )
-        # if (i + 1) in {10, 50, 100, num_batches}:
-        # get_memory_usage(f"Memory usage after batch {i + 1}")
-        # print(f"Batch {i + 1} done in {time() - start:.3f} seconds")
-    # print(
-    #     f"Computation for all {num_batches} batches of index {output_index} done after {time() - start:.3f} seconds"
-    # )
+        for index in output_indexes:
+            output[indexes, index] = np.abs(output_dict[index])
+    # print(f"Computation for all {num_batches} batches of index {output_index} done")
     # print("-" * 100)
-    return np.abs(output)
+    return output
 
 
 def check_single_node():
@@ -145,10 +140,10 @@ def append_parser(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
         help="Enter a constant value for the phi array. 1: phi=0, 2: phi=pi/4, 3: phi=pi/2, 4: phi=pi, 5: phi=2pi",
     )
     parser.add_argument(
-        "--th",
-        type=int,
-        default=0,
-        help="Enter a constant value for spin-mixing theta. 1: theta=0, 2: theta=pi/8, 3: theta=3pi/16, 4: theta=pi/4, 5: theta=3pi/8, 6: theta=pi/2",
+        "--q",
+        type=float,
+        default=0.0,
+        help="Enter a constant value for spin-mixing q.",
     )
     parser.add_argument(
         "--all",
@@ -163,7 +158,7 @@ def gen_initial_data(
     samples: int,
     t_val: int,
     phi_val: int,
-    th_val: int,
+    th_val: float,
     rng: np.random.Generator,
     fp_file: Optional[str] = None,
     shift: Optional[float] = None,
@@ -173,37 +168,13 @@ def gen_initial_data(
     n = samples
     if fp_file is None:
         # Then we're doing generating data from scratch
-        g_array = np.full(shape=(samples, 5), fill_value=gval)
-        if th_val != 0:
-            theta = THETA_DICT[f"{th_val}"]
-            costheta = np.full(shape=(samples, 5), fill_value=np.cos(theta))
-            t_array = np.sqrt((costheta**2) * g_array)
-            f_array = np.sqrt((1 - costheta**2) * g_array)
-            try:
-                dist = np.abs(t_array**2 + f_array**2 - g_array)
-                assert np.allclose(dist, 1e-12)
-            except AssertionError:
-                print(
-                    f"The distance from g is too large : Min = {np.min(dist)}, Max = {np.max(dist)}"
-                )
-        else:
-            costheta = rng.uniform(0, 1, (samples, 5))
-            if t_val == 0:
-                # t_sample = generate_initial_t_distribution(n, rng, split[0, 0])
-                # t_array = extract_t_samples(t_sample, n, rng)
-                # t_array = generate_constant_array(samples, np.sqrt(split[0, 0]), 5)
-                t_array = np.sqrt((costheta**2) * g_array)
-                f_array = np.sqrt((1 - costheta**2) * g_array)
-                try:
-                    dist = np.abs(t_array**2 + f_array**2 - g_array)
-                    assert np.allclose(dist, 1e-12)
-                except AssertionError:
-                    print(
-                        f"The distance from g is too large : Min = {np.min(dist)}, Max = {np.max(dist)}"
-                    )
-            else:
-                t_array = generate_constant_array(n, T_DICT[f"{t_val}"], 5)
-                f_array = np.sqrt(g_array - t_array**2)
+        p_array = np.full(shape=(samples, 5), fill_value=gval)
+        t_array = np.sqrt(p_array)
+        f_array = np.sqrt(th_val * (1 - p_array))
+        init_z = convert_g_to_z(p_array + (1 - p_array) * th_val)
+        print(
+            f" Initial means : t = {np.mean(t_array)}, f = {np.mean(f_array)}, p = {np.mean(p_array)}, z = {np.mean(init_z)}"
+        )
     else:
         fp_data = np.load(fp_file)
         z_sample = inverse_cdf_sampler(n, fp_data["histval"], fp_data["binedges"], rng)
@@ -245,7 +216,7 @@ def gen_initial_data(
         phi_array = generate_random_phases(n, rng, 16)
     else:
         phi_array = generate_constant_array(n, PHI_DICT[f"{phi_val}"], 16)
-    data_dict = {"t": t_array, "f": f_array, "phi": phi_array, "theta": costheta}
+    data_dict = {"t": t_array, "f": f_array, "phi": phi_array, "q": th_val}
     return data_dict
 
 

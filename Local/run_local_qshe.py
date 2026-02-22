@@ -79,7 +79,7 @@ def build_default_output_dir(config: dict, theta_num: Optional[int] = None) -> P
 
     root = get_project_root(1)
     if theta_num is not None:
-        return root / "Local data" / f"theta_{theta_num}" / version_str
+        return root / "Local data" / f"q_{theta_num}" / version_str
     else:
         return root / "Local data" / version_str
 
@@ -118,7 +118,7 @@ def build_hist(data: np.ndarray, bins: int, range: tuple) -> dict:
     }
 
 
-def print_config(config: RGConfig, theta: int = 0) -> None:
+def print_config(config: RGConfig, theta: float = 0.0) -> None:
     """Print a compact, human-readable summary of the main run settings.
 
     Parameters
@@ -144,7 +144,7 @@ def print_config(config: RGConfig, theta: int = 0) -> None:
     p("Seed", config.seed)
     p("Symmetrising", bool(config.symmetrise))
     p("Type", getattr(config, "type", ""))
-    p("Initial mixing angle", THETA_DICT[str(theta)])
+    p("Initial mixing angle", theta)
     if config.type.strip().upper() == "EXP":
         shifts = config.shifts
         shifts_str = ", ".join(str(s) for s in shifts)
@@ -194,12 +194,9 @@ def qshe_rg_workflow(
         ts = initial_data["t"]
         fs = initial_data["f"]
         phases = initial_data["phi"]
-        costheta = initial_data["theta"][0, 0]
-        sintheta = np.sqrt(1 - costheta**2)
-        print(f"Cos = {costheta}, Sin = {sintheta}")
-        costheta_vals = []
+        q = starting_th
+        print(f"Performing RG workflow for q = {q}")
         for step in range(steps):
-            costheta_vals.append(costheta)
             data = single_qshe_rg_step(config, ts, fs, phases, outputs, eff)
             data_hists = construct_all_hists(config, data, two_dim, sym, y_var)
             for key, val in output_folders.items():
@@ -215,23 +212,33 @@ def qshe_rg_workflow(
                     rng,
                 )
             else:
-                z_sample = data["z"]
-            g_sample = convert_z_to_g(z_sample)
-            t_sample = np.sqrt((costheta**2) * g_sample)
-            f_sample = np.sqrt((sintheta**2) * g_sample)
-            try:
-                dist = np.abs(t_sample**2 + f_sample**2 - g_sample)
-                assert np.allclose(dist, 1e-12)
-            except AssertionError:
+                # z_sample = data["z"]
+                # g_sample = convert_z_to_g(z_sample)
+                # g_sample = data["g"]
+                # t_sample = np.sqrt(g_sample)
+                # p_sample = data["p"]
+                # f_sample_conv = np.sqrt(q * (1 - p_sample))
+                # t_sample = data["t"]
+                # f_sample = data["f"]
+                p_sample = data["p"]
+                # f_sample = np.sqrt(q * (1 - p_sample))
+                f_sample = data["f"]
+                t_sample = np.sqrt(p_sample)
+                q_dist = (f_sample**2) / (1 - p_sample)
                 print(
-                    f"The distance from g is too large : Min = {np.min(dist)}, Max = {np.max(dist)}"
+                    f"Stats of q after RG step {step}; Mean : {np.mean(q_dist):.3f}, Median : {np.median(q_dist):.3f}, Min : {np.min(q_dist):.7f}, Max : {np.max(q_dist):.3f}"
                 )
-
+            # try:
+            #     dist = np.abs(f_sample**2 - data["f"] ** 2)
+            #     assert np.allclose(dist, 1e-12)
+            # except AssertionError:
+            #     print(
+            #         f"The distance of q(1-p) to f'^2 is too large : Min = {np.min(dist)}, Max = {np.max(dist)}"
+            #     )
             indexes = rng.integers(0, samples, size=(samples, 5))
             ts = np.take(t_sample, indexes)
             fs = np.take(f_sample, indexes)
             print(f"RG step {step} completed after {time() - start:.3f} seconds.")
-        print(f"Costheta array : {costheta_vals}")
     else:
         shifts = config.shifts
         for shift in shifts:
@@ -326,11 +333,17 @@ def single_qshe_rg_step(
             f"The sum of outputs deviates from 1. Min : {np.min(abs_err)}, Max : {np.max(abs_err)}"
         )
 
-    g = np.abs(tprime) ** 2 + np.abs(fprime) ** 2
+    g = tprime**2 + fprime**2
+    p = tprime**2
     surv = np.abs(rprime) ** 2 + np.abs(tauprime) ** 2
     z = convert_g_to_z(g)
-    mix = np.sqrt(tprime**2 / g)
+    # z = np.log(surv / g)
+    # mix = np.sqrt(surv)
+    mix = (fprime**2) / (1 - p)
     # assert np.allclose(mix, np.arcsin(np.sqrt(fprime**2 / g)), 1e-10)
+    assert np.allclose(g, convert_z_to_g(z), 1e-10)
+    assert np.allclose(g + surv, 1.0, 1e-10)
+    output_data.update({"p": p})
     output_data.update({"mix": mix})
     output_data.update({"g": g, "z": z})
     output_data.update({"surv": surv})
@@ -479,7 +492,7 @@ if __name__ == "__main__":
 
     # Make output folder and save config
     if args.out is None:
-        base_output_dir = build_default_output_dir(config, args.th)
+        base_output_dir = build_default_output_dir(config, args.q)
     else:
         base_output_dir = Path(args.out)
     output_dir = base_output_dir / args_dict["type"]
@@ -501,14 +514,14 @@ if __name__ == "__main__":
     sys.stderr = error_file
 
     # Create children output folders for this workflow
-    print_config(rg_config, args.th)
+    print_config(rg_config, args.q)
 
     # print(f" Output folders: {json.dumps(output_folders, indent=2)} ")
     # print("-" * 100)
     # Run RG workflow
     starting_t = args.t
     starting_phi = args.phi
-    starting_th = args.th
+    starting_th = args.q
     # fp_data_file = f"{base_output_dir}/FP/hist/zf/zf_hist_RG7.npz"
     if args.fpversion is None or args.fpstep is None:
         if rg_config.type.lower() == "fp":

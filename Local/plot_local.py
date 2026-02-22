@@ -15,7 +15,7 @@ from analysis.data_plotting import (
 
 if __name__ == "__main__":
     parser = build_plot_parser()
-    parser.add_argument("--th", type=int, default=None)
+    parser.add_argument("--th", type=float, default=None)
     args = parser.parse_args()
     if os.path.exists(args.loc):
         config_path = build_config_path(args.loc, args.version, args.mode, args.th)
@@ -37,7 +37,7 @@ if __name__ == "__main__":
     if args.th is None:
         ths = ""
     else:
-        ths = f"theta_{args.th}/"
+        ths = f"q_{args.th}/"
     if rg_config.symmetrise:
         var_names.append("sym_z")
     hist_dir = f"{data_folder}/{ths}{version}/{rg_config.type}/hist"
