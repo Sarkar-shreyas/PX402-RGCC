@@ -85,7 +85,7 @@ def build_config_path(
     rg_mode = rg_mode.strip().upper()
     if th_num is not None:
         config_location = (
-            f"{data_folder}/theta_{th_num}/{version}/{rg_mode}/updated_config.yaml"
+            f"{data_folder}/q_{th_num}/{version}/{rg_mode}/updated_config.yaml"
         )
     else:
         config_location = f"{data_folder}/{version}/{rg_mode}/updated_config.yaml"
