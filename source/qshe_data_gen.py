@@ -1,127 +1,108 @@
-import os
-import sys
-import numpy as np
-from Local.run_local_qshe import build_hist
-from QSHE.testing_qshe import gen_initial_data, numerical_solver
-from source.utilities import (
-    generate_random_phases,
-    build_rng,
-    convert_t_to_geff,
-    convert_g_to_z,
-    build_2d_hist,
-)
-from source.config import get_rg_config
+"""
+This file performs the q-p trials for an input array of q and p values
+"""
 
+import numpy as np
+from pathlib import Path
+import shutil
+import sys
+import os
+from source.config import get_rg_config
+from source.utilities import build_rng, qp_trials, generate_random_phases
+from time import time
 
 if __name__ == "__main__":
-    # Load input params, checking if we're starting RG steps or continuing from an input sample
-    if len(sys.argv) == 7:
-        array_size = int(sys.argv[1].strip())
-        output_dir = sys.argv[2].strip()
-        initial = int(sys.argv[3].strip())
-        rg_step = int(sys.argv[4].strip())
-        seed = int(sys.argv[5].strip())
-        f_val = float(sys.argv[6].strip())
-        existing_t_file = "None"
-    elif len(sys.argv) == 8:
-        array_size = int(sys.argv[1].strip())
-        output_dir = sys.argv[2].strip()
-        initial = int(sys.argv[3].strip())
-        rg_step = int(sys.argv[4].strip())
-        seed = int(sys.argv[5].strip())
-        existing_f_file = sys.argv[6].strip()
-        existing_t_file = sys.argv[7].strip()
+    # Load input params
+    if len(sys.argv) == 8:
+        num_samples = int(sys.argv[1].strip())
+        num_steps = int(sys.argv[2].strip())
+        q_block = int(sys.argv[3].strip())
+        q_block_size = int(sys.argv[4].strip())
+        phi_seed = int(sys.argv[5].strip())
+        gen_seed = int(sys.argv[6].strip())
+        output_dir = sys.argv[7].strip()
     else:
         raise SystemExit(
-            "Usage: data_generation.py ARRAY_SIZE OUTPUT_DIR INITIAL RG_STEP SEED F_VAL|F_FILE [EXISTING_T_FILE]"
+            "Usage: qshe_data_gen.py NUM_SAMPLES NUM_STEPS Q_BLOCK Q_BLOCK_SIZE PHI_SEED GEN_SEED OUTPUT_DIR"
         )
+
+    # Load config and set up default params
+    phi_rng = build_rng(phi_seed)
+    gen_rng = build_rng(gen_seed)
+    rg_config = get_rg_config()
+    if rg_config.model != "qshe":
+        raise SystemExit(f"Invalid model {rg_config.model}.")
+
+    batch_size = rg_config.matrix_batch_size
+    if batch_size > num_samples:
+        batch_size = num_samples
+    # p_vals = np.linspace(rg_config.p_min, rg_config.p_max, rg_config.p_num)
+    if rg_config.metric == "all":
+        met_dim = 2
+    else:
+        met_dim = 1
+
+    # Setup temp and shared output folders
+    temp_dir = Path(os.environ.get("SLURM_TMPDIR", "/tmp"))
+    local_block_dir = temp_dir / f"q{q_block}"
+    shared_block_dir = Path(output_dir) / f"q{q_block}"
+
+    # In case there's an old existing dir from failed runs
+    if local_block_dir.exists():
+        shutil.rmtree(local_block_dir)
+    local_block_dir.mkdir(parents=True, exist_ok=False)
+
+    if shared_block_dir.exists():
+        raise RuntimeError(f"{shared_block_dir} folder already exists")
 
     print("-" * 100)
-    print(f"Beginning data generation for RG step {rg_step}")
-    rng = build_rng(seed)
-    rg_config = get_rg_config()
-    inputs = rg_config.inputs
-    batch_size = rg_config.matrix_batch_size
-    t_bins = rg_config.t_bins
-    t_range = rg_config.t_range
-    z_bins = rg_config.z_bins
-    z_range = rg_config.z_range
-    z_2d_bins = z_bins // 10
-    t_2d_bins = t_bins // 10
-    if initial == 1:
-        starting_t = 0
-        starting_phi = 0
-        initial_data = gen_initial_data(
-            array_size, starting_t, starting_phi, f_val, rng
-        )
-        t = initial_data["t"]
-        f = initial_data["f"]
-        phases = initial_data["phi"]
-        print("Generated initial distributions")
-    else:
-        print(f"Using t and f data from {existing_t_file}")
-        t = np.load(existing_t_file)
-        loss = np.load(existing_f_file)
-        f = np.sqrt(loss)
-        phases = generate_random_phases(array_size, rng, 16)
-    indexes = rng.integers(0, array_size, size=(array_size, 5))
-    ts = np.take(t, indexes)
-    fs = np.take(f, indexes)
-    tprime = numerical_solver(ts, fs, phases, array_size, 2, inputs, batch_size)
-    rprime = numerical_solver(ts, fs, phases, array_size, 9, inputs, batch_size)
-    tauprime = numerical_solver(ts, fs, phases, array_size, 10, inputs, batch_size)
-    fprime = numerical_solver(ts, fs, phases, array_size, 17, inputs, batch_size)
-    g_eff = convert_t_to_geff(tprime, rprime)
-    z = convert_g_to_z(g_eff)
-    loss = (
-        np.abs(np.reshape(tauprime, shape=array_size)) ** 2
-        + np.abs(np.reshape(fprime, shape=array_size)) ** 2
+    print(f"Beginning q-p trials for q = {q_block}")
+    start = time()
+    q_start = q_block * q_block_size
+    q_end = min((q_block + 1) * q_block_size, rg_config.q_num)
+    qs = [q * 0.001 for q in range(q_start, q_end)]
+    ps = [0.001 * p for p in range(1, rg_config.p_num + 1)]
+    p_trial_data = np.empty(
+        shape=(len(qs), rg_config.p_num, num_steps, met_dim), dtype=np.float64
     )
-    t_data = build_hist(tprime, t_bins, t_range)
-    r_data = build_hist(rprime, t_bins, t_range)
-    tau_data = build_hist(tauprime, t_bins, t_range)
-    f_data = build_hist(fprime, t_bins, t_range)
-    loss_data = build_hist(loss, t_bins, t_range)
-    z_data = build_hist(z, z_bins, z_range)
-    os.makedirs(output_dir, exist_ok=True)
-    if rg_config.symmetrise == 1:
-        hist_dict = build_2d_hist(z, loss, z_2d_bins, t_2d_bins, z_range, t_range, True)
-    else:
-        hist_dict = build_2d_hist(z, loss, z_2d_bins, t_2d_bins, z_range, t_range)
-
-    output_file = os.path.join(output_dir, f"data_hist_RG{rg_step}.npz")
-    np.savez_compressed(
-        output_file,
-        zfcounts=hist_dict["zf"]["counts"],
-        zfdensities=hist_dict["zf"]["densities"],
-        rcounts=r_data["counts"],
-        tcounts=t_data["counts"],
-        taucounts=tau_data["counts"],
-        fcounts=f_data["counts"],
-        losscounts=loss_data["counts"],
-        zcounts=z_data["counts"],
-        redges=r_data["edges"],
-        tedges=t_data["edges"],
-        tauedges=tau_data["edges"],
-        fedges=f_data["edges"],
-        lossedges=loss_data["edges"],
-        zedges=z_data["edges"],
-        rcenters=r_data["centers"],
-        tcenters=t_data["centers"],
-        taucenters=tau_data["centers"],
-        fcenters=f_data["centers"],
-        losscenters=loss_data["centers"],
-        zcenters=z_data["centers"],
-        rdensities=r_data["densities"],
-        tdensities=t_data["densities"],
-        taudensities=tau_data["densities"],
-        fdensities=f_data["densities"],
-        lossdensities=loss_data["densities"],
-        zdensities=z_data["densities"],
+    q_trial_data = np.empty(
+        shape=(len(qs), rg_config.p_num, num_steps, met_dim), dtype=np.float64
     )
 
-    print(f"Parameter hists generated for RG step {rg_step} and saved to {output_file}")
-    # if existing_t_file is not None and os.path.exists(existing_t_file):
-    #     # Delete old files once done to prevent buildup
-    #     os.remove(existing_t_file)
+    phis = generate_random_phases(num_samples, phi_rng, 16)
+    assert len(qs) <= q_block_size
+    for i, q in enumerate(qs):
+        for j, p in enumerate(ps):
+            a, b = qp_trials(
+                q,
+                p,
+                num_samples,
+                num_steps,
+                phis,
+                gen_rng,
+                rg_config.metric,
+                rg_config.fixed,
+                rg_config.outputs,
+                rg_config.inputs,
+                batch_size,
+            )
+            p_trial_data[i, j, :, :] = a
+            q_trial_data[i, j, :, :] = b
+            if j % 250 == 0:
+                print(f"Trial no. {j} completed in {time() - start:.3f} seconds.")
+
+    p_filename = f"p_data_q{q_block}_{num_samples}_samples.npy"
+    q_filename = f"q_data_q{q_block}_{num_samples}_samples.npy"
+    np.save(local_block_dir / p_filename, p_trial_data)
+    np.save(local_block_dir / q_filename, q_trial_data)
+
+    # Add a flag to check if the job was successful
+    (local_block_dir / "DONE").touch()
+
+    # Move data from temp folder back to shared FS
+    shutil.move(str(local_block_dir), str(shared_block_dir))
+
+    print(
+        f"q-p trial for q = {q_block} completed and saved to {output_dir} after {time() - start:.3f} seconds"
+    )
     print("-" * 100)
