@@ -1,5 +1,4 @@
 /venv
-/plots
 /test_plots
 .env
 *.pyc
@@ -9,7 +8,6 @@ archived/
 *.out
 *.err
 *.json
-*.png
 *.txt
 *.pdf
 *.html
