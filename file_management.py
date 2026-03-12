@@ -30,6 +30,7 @@ from constants import (
     taskfarm_dir,
     root_dir,
 )
+from source.config import build_config, load_yaml
 
 
 # ---------- Utilities ---------- #
@@ -67,10 +68,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--sys", default="windows", help="The operating system being used"
     )
     parser.add_argument("--step", default=None, help="Which RG step to pull from")
+    parser.add_argument(
+        "--shift", default=None, help="Which shift to pull, if pulling from EXP"
+    )
     return parser
 
 
-def create_local_folders(version: str) -> list:
+def create_local_folders(version: str, mode: str = "iqhe") -> list:
     """Ensure local destination folders exist for a given version.
 
     Parameters
@@ -87,12 +91,20 @@ def create_local_folders(version: str) -> list:
         A list with three paths: `[version_folder, fp_folder, exp_folder]`.
     """
     version_folder = f"{data_dir}/{version}"
-    fp_folder = f"{version_folder}/FP"
-    exp_folder = f"{version_folder}/EXP"
     os.makedirs(version_folder, exist_ok=True)
-    os.makedirs(fp_folder, exist_ok=True)
-    os.makedirs(exp_folder, exist_ok=True)
-    return [version_folder, fp_folder, exp_folder]
+    folders = [version_folder]
+    if mode == "iqhe":
+        fp_folder = f"{version_folder}/FP"
+        exp_folder = f"{version_folder}/EXP"
+        folders.append(fp_folder)
+        folders.append(exp_folder)
+        os.makedirs(fp_folder, exist_ok=True)
+        os.makedirs(exp_folder, exist_ok=True)
+    elif mode == "qshe":
+        qp_folder = f"{version_folder}/QP"
+        os.makedirs(qp_folder, exist_ok=True)
+        folders.append(qp_folder)
+    return folders
 
 
 # ---------- SSH connection and command execution ---------- #
@@ -140,8 +152,11 @@ def transfer_files(args) -> None:
         version = str(args.version).strip().lower()
     else:
         version = CURRENT_VERSION
-
-    folders = create_local_folders(version)
+    folder_type = str(args.type).strip().upper()
+    if folder_type == "QP":
+        folders = create_local_folders(version, "qshe")
+    else:
+        folders = create_local_folders(version)
     commands = []
     if str(args.sys).strip().lower() == "windows":
         commands = ["scp", "-r"]
@@ -150,11 +165,13 @@ def transfer_files(args) -> None:
     else:
         raise ValueError(f"Invalid os name entered: {args.sys}")
 
-    folder_type = str(args.type).strip().upper()
     if folder_type == "FP":
         local = folders[1]
     elif folder_type == "EXP":
-        local = folders[2]
+        local = f"{folders[2]}/shift{args.shift}"
+        # local = folders[2]
+    elif folder_type == "QP":
+        local = folders[1]
     else:
         raise ValueError(f"Invalid RG type entered: {folder_type}")
 
@@ -182,7 +199,13 @@ def transfer_files(args) -> None:
                     f"{host}:{remote_dir}/job_outputs/{version}/{folder_type}/{dir}"
                 )
             else:
-                remote = f"{host}:{remote_dir}/job_outputs/{version}/{folder_type}/data/{rgs}/{dir}"
+                if folder_type == "QP":
+                    remote = f"{host}:{remote_dir}/job_outputs/{version}/{folder_type}"
+                elif folder_type == "FP":
+                    remote = f"{host}:{remote_dir}/job_outputs/{version}/{folder_type}/data/{rgs}/{dir}"
+                    # local = f"{data_dir}"
+                else:
+                    remote = f"{host}:{remote_dir}/job_outputs/{version}/{folder_type}/shift_{args.shift}/data/{rgs}/{dir}"
             current_commands.extend([remote, local])
             run_commands(current_commands)
         else:

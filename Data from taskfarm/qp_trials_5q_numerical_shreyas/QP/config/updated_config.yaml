@@ -1,0 +1,49 @@
+main:
+  version: qp_trials_5q
+  id: hpc
+  type: fp
+  output_folder: ''
+engine:
+  model: qshe
+  method: numerical
+  resample: i
+  expr: shreyas
+  symmetrise: 0
+rg_settings:
+  seed: 1234
+  steps: 9
+  samples: 100000
+  matrix_batch_size: 100000
+  metric: all
+  fixed: 0
+data_settings:
+  inputs:
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
+  outputs:
+  - t
+  - f
+parameter_settings:
+  vars:
+  - r
+  - t
+  - tau
+  - f
+  - g
+  - surv
+  - z
+  - mix
+  - p
+  q:
+    min: 0.0
+    max: 0.5
+    num: 50
+  p:
+    min: 0.001
+    max: 0.999
+    num: 500
+convergence:
+  msd_tol: 0.001
+  std_tol: 0.0005

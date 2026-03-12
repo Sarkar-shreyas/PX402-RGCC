@@ -81,14 +81,16 @@ def build_config_path(
             f"Invalid data location {data_location} entered. Expected 'remote' or 'local'."
         )
     version = version_name.strip().lower()
-    version = f"{version[:-1]}{version[-1].upper()}"
+    # version = f"{version[:-1]}{version[-1].upper()}"
     rg_mode = rg_mode.strip().upper()
     if th_num is not None:
         config_location = (
             f"{data_folder}/q_{th_num}/{version}/{rg_mode}/updated_config.yaml"
         )
     else:
-        config_location = f"{data_folder}/{version}/{rg_mode}/updated_config.yaml"
+        config_location = (
+            f"{data_folder}/{version}/{rg_mode}/config/updated_config.yaml"
+        )
 
     return config_location
 

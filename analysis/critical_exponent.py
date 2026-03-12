@@ -92,8 +92,9 @@ def main():
     """
     parser = build_plot_parser()
     args = parser.parse_args()
-    if os.path.exists(args.loc):
+    if args.loc is not None:
         config_path = build_config_path(args.loc, args.version, args.mode)
+        print(config_path)
     else:
         config_path = str(config_file)
     config = load_yaml(config_path)
@@ -101,6 +102,7 @@ def main():
     seed = rg_config.seed
     rng = build_rng(seed)
     sampler = rg_config.resample
+    runtype = rg_config.type.upper()
     version = str(args.version)
     num_rg = int(args.steps)
     rg = num_rg + 1
@@ -109,16 +111,21 @@ def main():
     else:
         data_folder = data_dir
     main_dir = f"{data_folder}/{version}"
-    stats_dir = f"{data_folder}/{version}/{TYPE}/stats"
-    plots_dir = f"{data_folder}/{version}/{TYPE}/plots"
+    stats_dir = f"{data_folder}/{version}/{runtype}/stats"
+    plots_dir = f"{data_folder}/{version}/{runtype}/plots"
     os.makedirs(stats_dir, exist_ok=True)
     os.makedirs(plots_dir, exist_ok=True)
     data_map = defaultdict(dict)
-    vars = rg_config.vars
+    if rg_config.model == "qshe":
+        vars = rg_config.vars
+    else:
+        vars = ["t", "z", "input_t"]
     print(f"Performing peak estimation for {version}")
     print("=" * 100)
     # Load the FP distribution
-    fp_file = f"{data_folder}/{version}/FP/hist/z/z_hist_RG{5}.npz"
+    fp_file = (
+        f"{data_folder}/{version}/FP/hist/sym_z/sym_z_hist_RG{rg_config.steps - 1}.npz"
+    )
     fp_counts, fp_bins, fp_centers = load_hist_data(fp_file)
     fp_density = get_density(fp_counts, fp_bins)
     shifts = np.array([shift for shift in rg_config.shifts if shift >= 0.0])
@@ -127,7 +134,7 @@ def main():
     for shift in shifts:
         for var in vars:
             data_map[shift][var] = []
-            shift_dir = f"{data_folder}/{version}/{TYPE}/hist/{shift}/{var}"
+            shift_dir = f"{data_folder}/{version}/{runtype}/shift{shift}/hist/{var}"
             shift_plot_dir = f"{plots_dir}/{shift}"
             shift_stats_dir = f"{stats_dir}/{shift}"
             os.makedirs(shift_plot_dir, exist_ok=True)
@@ -138,14 +145,14 @@ def main():
                 )
             for i in range(1, rg):
                 if var == "z":
-                    filename = f"{shift_dir}/{var}_hist_RG{i - 1}.npz"
+                    filename = f"{shift_dir}/{var}_hist_unsym_RG{i - 1}.npz"
                 else:
                     filename = f"{shift_dir}/{var}_hist_RG{i - 1}.npz"
                 counts, bins, centers = load_hist_data(filename)
                 densities = get_density(counts, bins)
                 data_map[shift][var].append([counts, bins, centers, densities])
             filename = f"{shift_plot_dir}/{var}_hist_{shift}.png"
-            plot_data(var, filename, data_map[shift][var], TYPE, num_rg)
+            plot_data(var, filename, data_map[shift][var], runtype, num_rg)
         construct_moments_dict(
             shift_stats_dir, shift_plot_dir, vars, data_map[shift], num_rg
         )

@@ -86,7 +86,7 @@ class IQHEConfig(BaseConfig):
 class QSHEConfig(BaseConfig):
     # QSHE-specific engine params
     model: Literal["qshe"]
-    metric: Literal["mean", "median", "all"]
+    metric: Literal["mean", "median", "std", "all"]
     fixed: Literal[0, 1]
 
     # QSHE-specific parameter settings

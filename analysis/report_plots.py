@@ -26,9 +26,9 @@ from scipy.stats import norm
 markers = ["*", "+", "d", "v", "s", "p"]
 
 
-def plot_z_fp():
+def plot_z_fp(ddir=data_dir):
     # Load FP z data from v1.90S
-    z_fp = np.load(f"{data_dir}/v1.90S/FP/hist/sym_z/sym_z_hist_RG8.npz")
+    z_fp = np.load(f"{ddir}/v1.90S/FP/hist/sym_z/sym_z_hist_RG8.npz")
     z_bins = z_fp["bincenters"]
     z_vals = z_fp["histval"]
     z_binedges = z_fp["binedges"]
@@ -56,8 +56,8 @@ def plot_z_fp():
     )
     plt.plot(z_bins, z_densities, color="g", alpha=0.8)
     plt.scatter(
-        z_bins[::200],
-        z_densities[::200],
+        z_bins[::50],
+        z_densities[::50],
         color="g",
         label="n = 9",
         marker="o",
@@ -72,9 +72,9 @@ def plot_z_fp():
     plt.close("fp")
 
 
-def plot_z_peaks():
+def plot_z_peaks(ddir=data_dir):
     # Load z peaks from v1.90S
-    peaks_data = json.load(open(f"{data_dir}/v1.90S/peaks.json", "r"))
+    peaks_data = json.load(open(f"{ddir}/v1.90S/peaks.json", "r"))
     num_rg = 12
     peaks = {}
     errors = {}
@@ -102,16 +102,18 @@ def plot_z_peaks():
         err = []
         for shift in shifts[1:]:
             y.append(peaks[f"{shift}"][i - 1] - peaks["0.0"][i - 1])
+            # y.append(peaks[f"{shift}"][i-1])
             err.append(errors[f"{shift}"][i - 1])
-        e = plt.errorbar(
-            shifts[1:],
-            y,
-            yerr=err,
-            marker="o",
-            linestyle="none",
-            capsize=2.5,
-        )
-        c = e[0].get_color()
+        if i in (2, 4, 7, 9):
+            e = plt.errorbar(
+                shifts[1:],
+                y,
+                yerr=err,
+                marker="o",
+                linestyle="none",
+                capsize=2.5,
+            )
+            c = e[0].get_color()
         slope, r2 = fit_z_peaks(np.array(shifts), peaks_data[f"RG{i}"]["Peaks"])
         min_slope, min_r2 = fit_z_peaks(
             np.array(shifts), peaks_data[f"RG{i}"]["Min Peaks"]
@@ -124,10 +126,19 @@ def plot_z_peaks():
         max_nus.append(calculate_nu(max_slope, i))
         nu_errs.append(abs(max_nus[i - 1] - min_nus[i - 1]))
         # print(f"{i} : {r2}")
-        plt.plot(shifts, shifts * slope, alpha=0.8, linestyle="--", color=c)
+        if i in (2, 4, 7, 9):
+            plt.plot(
+                shifts,
+                shifts * slope,
+                alpha=0.8,
+                linestyle="--",
+                color=c,
+                label=f"RG {i}",
+            )
     plt.xlabel(r"$z_0$")
     plt.ylabel(r"$z_{peak}$")
-    # plt.savefig("./report/zpeaks.pdf")
+    plt.legend(loc="upper right", bbox_to_anchor=(1.3, 1.0))
+    plt.savefig("./report/zpeakstest.pdf", bbox_inches="tight")
     plt.close("peaks")
 
     plt.figure("nus")
@@ -150,11 +161,13 @@ def plot_z_peaks():
         2.593, linestyle="--", color="b", alpha=0.5, label="Slevin & Ohtsuki 2009"
     )
     plt.axhline(2.51, linestyle="--", color="r", alpha=0.5, label="Roemer & Shaw 2025")
+    # plt.xscale("log", base=2)
     plt.xticks([2, 8, 16, 32, 64, 128, 256])
-    plt.xlabel(r"$2^n$")
+    plt.yticks([2.0, 2.2, 2.4, 2.511, 2.593, 2.8, 3.0, 3.2])
+    plt.xlabel(r"$2^k$")
     plt.ylabel(r"$\nu$")
     plt.legend()
-    # plt.savefig("./report/nu.pdf")
+    plt.savefig("./report/nu.pdf")
     plt.close("nus")
 
 
@@ -277,19 +290,20 @@ if __name__ == "__main__":
     # Load constants
     version = str(args.version)
     num_rg = int(args.steps)
-    fp_plot_dir = f"{data_dir}/{version}/FP/hist"
-    exp_plot_dir = f"{data_dir}/{version}/EXP"
+    ddir = f"{data_dir}/archived"
+    fp_plot_dir = f"{ddir}/{version}/FP/hist"
+    exp_plot_dir = f"{ddir}/{version}/EXP"
     t_fp_plot_dir = f"{fp_plot_dir}/input_t"
     z_fp_plot_dir = f"{fp_plot_dir}/sym_z"
-    output_dir = "../report"
-    os.makedirs(output_dir, exist_ok=True)
+    # output_dir = "../report"
+    # os.makedirs(output_dir, exist_ok=True)
     start = 0
     end = num_rg
-    plot_t(t_fp_plot_dir, output_dir, start, end, version)
-    plot_z(z_fp_plot_dir, output_dir, start, end, True, version)
-    for shift in SHIFTS:
-        z_dir = f"{exp_plot_dir}/shift_{shift}/hist/z"
-        plot_z(z_dir, output_dir, start, end, False, version, float(shift))
+    # plot_t(t_fp_plot_dir, output_dir, start, end, version)
+    # plot_z(z_fp_plot_dir, output_dir, start, end, True, version)
+    # for shift in SHIFTS:
+    #     z_dir = f"{exp_plot_dir}/shift_{shift}/hist/z"
+    #     plot_z(z_dir, output_dir, start, end, False, version, float(shift))
 
-    plot_z_fp()
-    # plot_z_peaks()
+    plot_z_fp(ddir)
+    # plot_z_peaks(ddir)

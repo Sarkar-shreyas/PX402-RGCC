@@ -38,7 +38,7 @@ if __name__ == "__main__":
         batch_size = num_samples
     # p_vals = np.linspace(rg_config.p_min, rg_config.p_max, rg_config.p_num)
     if rg_config.metric == "all":
-        met_dim = 2
+        met_dim = 3
     else:
         met_dim = 1
 
@@ -58,10 +58,11 @@ if __name__ == "__main__":
     print("-" * 100)
     print(f"Beginning q-p trials for q = {q_block}")
     start = time()
-    q_start = q_block * q_block_size
+    q_start = rg_config.q_min + q_block * q_block_size
     q_end = min((q_block + 1) * q_block_size, rg_config.q_num)
-    qs = [q * 0.001 for q in range(q_start, q_end)]
-    ps = [0.001 * p for p in range(1, rg_config.p_num + 1)]
+    qsep = 0.5 / (rg_config.q_num - 1)
+    qs = np.linspace(q_start * qsep, q_end * qsep, q_block_size)
+    ps = np.linspace(rg_config.p_min, rg_config.p_max, rg_config.p_num)
     p_trial_data = np.empty(
         shape=(len(qs), rg_config.p_num, num_steps, met_dim), dtype=np.float64
     )
@@ -71,8 +72,8 @@ if __name__ == "__main__":
 
     phis = generate_random_phases(num_samples, phi_rng, 16)
     assert len(qs) <= q_block_size
-    for i, q in enumerate(qs):
-        for j, p in enumerate(ps):
+    for i, q in np.ndenumerate(qs):
+        for j, p in np.ndenumerate(ps):
             a, b = qp_trials(
                 q,
                 p,
@@ -86,10 +87,10 @@ if __name__ == "__main__":
                 rg_config.inputs,
                 batch_size,
             )
-            p_trial_data[i, j, :, :] = a
-            q_trial_data[i, j, :, :] = b
-            if j % 250 == 0:
-                print(f"Trial no. {j} completed in {time() - start:.3f} seconds.")
+            p_trial_data[i[0], j[0], :, :] = a
+            q_trial_data[i[0], j[0], :, :] = b
+            if j[0] % 100 == 0:
+                print(f"Trial no. {j[0]} completed in {time() - start:.3f} seconds.")
 
     p_filename = f"p_data_q{q_block}_{num_samples}_samples.npy"
     q_filename = f"q_data_q{q_block}_{num_samples}_samples.npy"

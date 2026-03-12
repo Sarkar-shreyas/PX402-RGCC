@@ -70,20 +70,21 @@ PREV_GEN_JOB="" # Placeholder var for holding previous job ID when setting up de
 Q_BLOCKS=$(( (Q_NUM + Q_BLOCK_SIZE - 1) / Q_BLOCK_SIZE )) # No. of array jobs
 MAX_ARRAY_VAL=$((Q_BLOCKS - 1))
 # MAX_PARALLEL=$((MAX_ARRAY_VAL / 10))
-MAX_PARALLEL=10
+MAX_PARALLEL=30
 ARRAY_STR="0-${MAX_ARRAY_VAL}%${MAX_PARALLEL}" # Array str for sbatch command
 
 
 
 # Set up folders
 joboutdir="$basedir/job_outputs/${VERSIONSTR}/$TYPE" # Where the output files will go
+txtoutdir="$joboutdir/output"
 datadir="$joboutdir/data" # Where the data will live
 codedir="$basedir/code" # Where the code lives
 scriptsdir="$basedir/scripts" # Where all shell scripts live
 logsdir="$basedir/job_logs/${VERSIONSTR}/$TYPE" # Where log files will go
-mkdir -p "$logsdir" "$joboutdir" "$datadir" # Make them in case they aren't already there
+mkdir -p "$logsdir" "$joboutdir" "$datadir" "$txtoutdir" # Make them in case they aren't already there
 
-out_file="$joboutdir/${SLURM_JOB_NAME}_JOB${SLURM_JOB_ID}.out"
+out_file="$txtoutdir/${SLURM_JOB_NAME}_JOB${SLURM_JOB_ID}.out"
 err_file="$logsdir/${SLURM_JOB_NAME}_JOB${SLURM_JOB_ID}.err"
 exec >"$out_file" # Redirect outputs to be within their own folders, together with the data they produce
 exec 2>"$err_file" # Redirect error logs to be within their own folders for easy grouping
@@ -134,7 +135,7 @@ AGG_SCRIPT="$SRC_DIR/qshe_data_agg.py"
 gen_job=$(sbatch --parsable \
     --job-name="qp_gen" \
     --array="$ARRAY_STR" \
-    --output="$joboutdir/qp_gen_%A_%a.out" \
+    --output="$txtoutdir/qp_gen_%A_%a.out" \
     --error="$logsdir/qp_gen_%A_%a.err" \
     --export=ALL,GEN_SCRIPT="$GEN_SCRIPT",UPDATED_CONFIG="$UPDATED_CONFIG",NUM_SAMPLES="$N",NUM_STEPS="$NUM_RG_ITERS",Q_BLOCK_SIZE="$Q_BLOCK_SIZE",SEED="$SEED",OUTPUT_DIR="$datadir" \
     << 'GEN_EOF'
@@ -178,45 +179,12 @@ GEN_EOF
 
 # Send agg job dependent on gen job completing
 agg_job=$(sbatch --parsable \
-    --job-name="qp-agg" \
+    --job-name="qp_agg" \
     --dependency=afterok:"$gen_job" \
-    --output="$joboutdir/qp_agg_%A.out" \
+    --output="$txtoutdir/qp_agg_%A.out" \
     --error="$logsdir/qp_agg_%A.err" \
-    --export=ALL,AGG_SCRIPT="$AGG_SCRIPT",UPDATED_CONFIG="$UPDATED_CONFIG",NUM_SAMPLES="$N",NUM_STEPS="$NUM_RG_ITERS",Q_BLOCK_SIZE="$Q_BLOCK_SIZE",OUTPUT_DIR="$datadir",VARS="$VARS" \
-    << 'AGG_EOF'
-#!/bin/bash
-#SBATCH --nodes=1
-#SBATCH --ntasks-per-node=1
-#SBATCH --mem-per-cpu=3988
-#SBATCH --cpus-per-task=1
-#SBATCH --time=05:00:00
-#SBATCH --signal=B:TERM@60
-#SBATCH --kill-on-invalid-dep=yes
-
-basedir="$(cd "$SLURM_SUBMIT_DIR/.."&&pwd)" # Our root directory
-codedir="$basedir/code" # Where the code lives
-
-# Libraries needed
-module purge
-module load GCC/13.3.0 SciPy-bundle/2024.05
-
-# Make sure the system recognises the python path to ensure relative imports proceed without issue
-export PYTHONPATH="$codedir:$PYTHONPATH"
-cd "$codedir"
-source "$basedir/.venv/bin/activate"
-SRC_DIR="$codedir/source" # This is where the actual code lives
-
-set -euo pipefail
-export RG_CONFIG="$UPDATED_CONFIG"
-
-python "$AGG_SCRIPT" \
-    "$NUM_SAMPLES" \
-    "$NUM_STEPS" \
-    "$Q_BLOCK_SIZE" \
-    "$OUTPUT_DIR" \
-    "$VARS"
-AGG_EOF
-)
+    "$scriptsdir/temp_agg.sh" \
+    "$UPDATED_CONFIG" "$N" "$NUM_RG_ITERS" "$Q_BLOCK_SIZE" "$VERSIONSTR" "$VARS")
 
 echo " [$(date '+%Y-%m-%d %H:%M:%S')]: Submitted qp_gen array $gen_job "
 echo " [$(date '+%Y-%m-%d %H:%M:%S')]: Submitted qp_agg job $agg_job "

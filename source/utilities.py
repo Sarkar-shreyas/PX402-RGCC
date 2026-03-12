@@ -887,7 +887,7 @@ def qp_trials(
     if metric != "all":
         metdim = 1
     else:
-        metdim = 2
+        metdim = 3
     pmets = np.empty(shape=(nsteps, metdim))
     qmets = np.empty(shape=(nsteps, metdim))
     var_index_map = {"t": 2, "r": 9, "tau": 10, "f": 17}
@@ -913,26 +913,36 @@ def qp_trials(
             qmean = q
             f2 = (1 - p) * q
             fp = np.sqrt(f2)
+            qstd = 0.0
         else:
             fp = outs[17]
             f2 = fp**2
-            qmed = np.median(f2 / (1 - p))
-            qmean = np.mean(f2 / (1 - p))
+            qprime = f2 / (1 - p)
+            qmed = np.median(qprime)
+            qmean = np.mean(qprime)
+            qstd = np.std(qprime)
         # g = p + f2
         fp = np.clip(fp, 1e-9, 1 - 1e-9)
         pmed = np.median(p)
         pmean = np.mean(p)
+        pstd = np.std(p)
         if metric == "median":
             pmets[step, 0] = pmed
             qmets[step, 0] = qmed
         elif metric == "mean":
             pmets[step, 0] = pmean
             qmets[step, 0] = qmean
+        elif metric == "std":
+            pmets[step, 0] = pstd
+            qmets[step, 0] = qstd
         else:
             pmets[step, 0] = pmean
             pmets[step, 1] = pmed
+            pmets[step, 2] = pstd
             qmets[step, 0] = qmean
             qmets[step, 1] = qmed
+            qmets[step, 2] = qstd
+
         t_init = tp
         f_init = fp
 
@@ -963,7 +973,7 @@ def run_qp_trials(
     if metric != "all":
         met_dim = 1
     else:
-        met_dim = 2
+        met_dim = 3
     plen = pvals.size
     qlen = qvals.size
     p_trial_data = np.empty(shape=(qlen, plen, nsteps, met_dim), dtype=np.float64)
