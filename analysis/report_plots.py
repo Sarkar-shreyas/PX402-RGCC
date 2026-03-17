@@ -39,22 +39,38 @@ def plot_z_fp(ddir=data_dir):
 
     mask = np.logical_and(z_binedges <= 5.0, z_binedges >= -5.0)
     mask2 = np.logical_and(z_bins <= 5.0, z_bins >= -5.0)
-    counts = z_vals[mask2]
-    bins = z_binedges[mask]
-
+    mask3 = np.argwhere(z_vals >= np.percentile(z_vals, 89.6)).ravel()
+    print(mask3[0], mask3[-1])
+    print(mask3.shape)
+    missing = []
+    for i in range(mask3[0], mask3[-1] + 1):
+        if i not in mask3:
+            # print(i)
+            missing.append(i)
+    missing = np.array(missing)
+    indices = np.array(range(mask3[0], mask3[-1] + 1))
+    indices = indices[~np.isin(indices, missing)]
+    indices = np.concatenate([indices, [mask3[0] + 1]])
+    print(indices.size)
+    # print(indices)
+    zbins = z_bins[mask3]
+    counts = z_vals[mask3]
+    bins = z_binedges[indices]
+    print(counts.shape, bins.shape)
+    print(zbins[0], zbins[-1])
     # mean = z_moments["RG_8"]["mean"]
     # std = z_moments["RG_8"]["std"]
     mean, std = hist_moments(counts, bins)
-    plt.figure("fp")
+    plt.figure("fp", figsize=(10, 8))
     plt.plot(
-        z_bins,
-        norm.pdf(z_bins, loc=mean, scale=std),
+        zbins,
+        norm.pdf(zbins, loc=mean, scale=std),
         linestyle="--",
         color="b",
-        alpha=0.6,
+        alpha=1.0,
         label="Gaussian",
     )
-    plt.plot(z_bins, z_densities, color="g", alpha=0.8)
+    # plt.plot(z_bins, z_densities, color="g", alpha=0.8)
     plt.scatter(
         z_bins[::50],
         z_densities[::50],
@@ -62,13 +78,23 @@ def plot_z_fp(ddir=data_dir):
         label="n = 9",
         marker="o",
         facecolor="none",
+        alpha=0.7,
     )
-    plt.xlim((-5.0, 5.0))
-    plt.xlabel(r"$z$")
-    plt.ylabel(r"$P(z)$")
-    # plt.ylim((0, 0.22))
-    plt.legend()
-    plt.savefig("./report/z_FP.pdf")
+    plt.xlim((-4.0, 4.0))
+    plt.xlabel(
+        r"$z$",
+        fontsize=12,
+    )
+    plt.ylabel(
+        r"$P(z)$",
+        fontsize=12,
+    )
+    # plt.ylim((0.15, 0.25))
+    plt.legend(
+        fontsize=12,
+    )
+    plt.tight_layout()
+    plt.savefig("./report/z_FP.pdf", dpi=150)
     plt.close("fp")
 
 
@@ -242,7 +268,7 @@ def plot_z(
         None. Side effects: writes plot to output_dir.
     """
     if sym:
-        output_filename = f"{output_dir}/sym_z_distribution_{version}.png"
+        output_filename = f"{output_dir}/sym_z_distribution_{version}.pdf"
         z_files = f"{z_folder}/sym_z_hist"
         title = "Distribution of Q(z)"
         y_bounds = (0.0, 0.25)
@@ -253,26 +279,73 @@ def plot_z(
         title = f"Distribution of Q(z - {shift})"
         y_bounds = (0.0, 0.25)
         x_bounds = (-5.0 + shift, 5.0 + shift)
-    fig, ax = plt.subplots(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=(10, 8))
+    print(f"Plotting to {output_filename}")
     ax.set_title(title)
-    ax.set_xlabel("z")
-    ax.set_ylabel("Q(z)")
+    ax.set_xlabel(r"$z$")
+    ax.set_ylabel(r"$Q(z)$")
     ax.set_xlim(x_bounds)
     ax.set_ylim(y_bounds)
-    ax1 = inset_locator.inset_axes(ax, width="30%", height="30%", loc="upper right")
+    ax1 = inset_locator.inset_axes(
+        ax, width="30%", height="30%", loc="upper right", borderpad=0.6
+    )
     ax1.set_xlim((-25.0, 25.0))
-    ax1.tick_params(labelright=True, labelleft=False)
-    for i in range(start_step, end_step):
+    ax1.tick_params(labelright=False, labelleft=True)
+    markers = ["o", ">", "^", "s", "*"]
+    colors = ["b", "r", "g", "m", "k", "y"]
+    j = 0
+    for i in (start_step, 4, end_step):
         z_file = f"{z_files}_RG{i}.npz"
         data = np.load(z_file)
         hist = data["histval"]
         bins = data["binedges"]
         centers = data["bincenters"]
         density = get_density(hist, bins)
-        if i % 2 == 0:
-            ax.scatter(centers[::100], density[::100], label=f"RG step {i}")
-            ax1.plot(centers, density)
-    ax.legend(loc="upper left")
+        # if i % 2 == 0:
+        ax1.plot(centers, density)
+        ax.scatter(
+            centers[::200],
+            density[::200],
+            label=f"RG step {i}",
+            facecolor="none",
+            edgecolors=colors[j],
+            marker=markers[j],
+        )
+        j += 1
+    yticks = np.round(np.linspace(0.0, 0.25, 6), 2)
+    ax1.set_yticks(
+        list(yticks),
+        ["0.0", "0.05", "0.10", "0.15", "0.20", "0.25"],
+        fontsize=12,
+    )
+    ax1.set_xticks(
+        np.round(np.linspace(-25.0, 25.0, 6), 2),
+        [str(x)[:-2] for x in np.round(np.linspace(-25.0, 25.0, 6), 2)],
+        fontsize=12,
+    )
+    ax1.set_ylabel(
+        r"$Q(z)$",
+        fontsize=12,
+    )
+    ax1.set_xlabel(
+        r"$z$",
+        fontsize=12,
+    )
+    ax.minorticks_on()
+    ax1.minorticks_on()
+    ax.set_xticks(
+        np.round(np.linspace(-5.0, 5.0, 11), 2),
+        [str(x)[:-2] for x in np.round(np.linspace(-5.0, 5.0, 11), 2)],
+        fontsize=12,
+    )
+    ax.set_yticks(
+        np.round(np.linspace(0.0, 0.25, 6), 2),
+        ["0.0", "0.05", "0.10", "0.15", "0.20", "0.25"],
+        fontsize=12,
+    )
+    # ax.tight_layout()
+    # ax.legend(loc="upper left")
+    plt.tight_layout()
     plt.savefig(output_filename, dpi=150)
     plt.close(fig)
 
@@ -295,12 +368,12 @@ if __name__ == "__main__":
     exp_plot_dir = f"{ddir}/{version}/EXP"
     t_fp_plot_dir = f"{fp_plot_dir}/input_t"
     z_fp_plot_dir = f"{fp_plot_dir}/sym_z"
-    # output_dir = "../report"
+    output_dir = "./report"
     # os.makedirs(output_dir, exist_ok=True)
     start = 0
     end = num_rg
     # plot_t(t_fp_plot_dir, output_dir, start, end, version)
-    # plot_z(z_fp_plot_dir, output_dir, start, end, True, version)
+    plot_z(z_fp_plot_dir, output_dir, start, end, True, version)
     # for shift in SHIFTS:
     #     z_dir = f"{exp_plot_dir}/shift_{shift}/hist/z"
     #     plot_z(z_dir, output_dir, start, end, False, version, float(shift))
