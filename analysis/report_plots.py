@@ -69,6 +69,7 @@ def plot_z_fp(ddir=data_dir):
         color="b",
         alpha=1.0,
         label="Gaussian",
+        linewidth=4,
     )
     # plt.plot(z_bins, z_densities, color="g", alpha=0.8)
     plt.scatter(
@@ -78,23 +79,28 @@ def plot_z_fp(ddir=data_dir):
         label="n = 9",
         marker="o",
         facecolor="none",
-        alpha=0.7,
+        alpha=1.0,
+        s=300,
     )
     plt.xlim((-4.0, 4.0))
+    plt.xticks(fontsize=16)
+    plt.yticks(fontsize=16)
     plt.xlabel(
         r"$z$",
-        fontsize=12,
+        fontsize=20,
     )
     plt.ylabel(
         r"$P(z)$",
-        fontsize=12,
+        fontsize=20,
     )
     # plt.ylim((0.15, 0.25))
     plt.legend(
-        fontsize=12,
+        fontsize=20,
     )
+    plt.minorticks_on()
+    plt.grid(alpha=0.5)
     plt.tight_layout()
-    plt.savefig("./report/z_FP.pdf", dpi=150)
+    plt.savefig("./report/z_FP.pdf", dpi=150, bbox_inches="tight")
     plt.close("fp")
 
 
@@ -122,7 +128,7 @@ def plot_z_peaks(ddir=data_dir):
     min_nus = []
     max_nus = []
     nu_errs = []
-    plt.figure("peaks")
+    plt.figure("peaks", figsize=(10, 8))
     for i in range(1, 10):
         y = []
         err = []
@@ -130,16 +136,16 @@ def plot_z_peaks(ddir=data_dir):
             y.append(peaks[f"{shift}"][i - 1] - peaks["0.0"][i - 1])
             # y.append(peaks[f"{shift}"][i-1])
             err.append(errors[f"{shift}"][i - 1])
-        if i in (2, 4, 7, 9):
-            e = plt.errorbar(
-                shifts[1:],
-                y,
-                yerr=err,
-                marker="o",
-                linestyle="none",
-                capsize=2.5,
-            )
-            c = e[0].get_color()
+        # if i in (2, 4, 7, 9):
+        e = plt.errorbar(
+            shifts[1:],
+            y,
+            yerr=err,
+            marker="o",
+            linestyle="none",
+            capsize=5,
+        )
+        c = e[0].get_color()
         slope, r2 = fit_z_peaks(np.array(shifts), peaks_data[f"RG{i}"]["Peaks"])
         min_slope, min_r2 = fit_z_peaks(
             np.array(shifts), peaks_data[f"RG{i}"]["Min Peaks"]
@@ -152,22 +158,24 @@ def plot_z_peaks(ddir=data_dir):
         max_nus.append(calculate_nu(max_slope, i))
         nu_errs.append(abs(max_nus[i - 1] - min_nus[i - 1]))
         # print(f"{i} : {r2}")
-        if i in (2, 4, 7, 9):
-            plt.plot(
-                shifts,
-                shifts * slope,
-                alpha=0.8,
-                linestyle="--",
-                color=c,
-                label=f"RG {i}",
-            )
-    plt.xlabel(r"$z_0$")
-    plt.ylabel(r"$z_{peak}$")
-    plt.legend(loc="upper right", bbox_to_anchor=(1.3, 1.0))
+        # if i in (2, 4, 7, 9):
+        plt.plot(
+            shifts,
+            shifts * slope,
+            alpha=0.8,
+            linestyle="--",
+            color=c,
+            label=f"RG {i}",
+        )
+    plt.xlabel(r"$z_0$", fontsize=20)
+    plt.xticks(fontsize=16)
+    plt.yticks(fontsize=16)
+    plt.ylabel(r"$z_{\mathrm{max}}$", fontsize=20)
+    # plt.legend(loc="upper right", bbox_to_anchor=(1.3, 1.0))
     plt.savefig("./report/zpeakstest.pdf", bbox_inches="tight")
     plt.close("peaks")
 
-    plt.figure("nus")
+    plt.figure("nus", figsize=(10, 8))
     system_sizes = np.array([2**n for n in range(1, 9)])
     plt.errorbar(
         system_sizes,
@@ -175,7 +183,7 @@ def plot_z_peaks(ddir=data_dir):
         yerr=nu_errs[:-1],
         marker="o",
         linestyle="none",
-        capsize=2.5,
+        capsize=5,
         color="m",
         alpha=0.9,
         label="Current work",
@@ -186,14 +194,20 @@ def plot_z_peaks(ddir=data_dir):
     plt.axhline(
         2.593, linestyle="--", color="b", alpha=0.5, label="Slevin & Ohtsuki 2009"
     )
-    plt.axhline(2.51, linestyle="--", color="r", alpha=0.5, label="Roemer & Shaw 2025")
+    plt.axhline(
+        2.51,
+        linestyle="--",
+        color="r",
+        alpha=0.5,
+        label=r"R$\mathrm{\ddot{o}}$mer & Shaw 2025",
+    )
     # plt.xscale("log", base=2)
-    plt.xticks([2, 8, 16, 32, 64, 128, 256])
-    plt.yticks([2.0, 2.2, 2.4, 2.511, 2.593, 2.8, 3.0, 3.2])
-    plt.xlabel(r"$2^k$")
-    plt.ylabel(r"$\nu$")
-    plt.legend()
-    plt.savefig("./report/nu.pdf")
+    plt.xticks([2, 8, 16, 32, 64, 128, 256], fontsize=16)
+    plt.yticks([2.0, 2.2, 2.4, 2.511, 2.593, 2.8, 3.0, 3.2], fontsize=16)
+    plt.xlabel(r"$2^k$", fontsize=20)
+    plt.ylabel(r"$\nu$", fontsize=20)
+    plt.legend(fontsize=20)
+    plt.savefig("./report/nu.pdf", dpi=150, bbox_inches="tight")
     plt.close("nus")
 
 
@@ -281,9 +295,9 @@ def plot_z(
         x_bounds = (-5.0 + shift, 5.0 + shift)
     fig, ax = plt.subplots(figsize=(10, 8))
     print(f"Plotting to {output_filename}")
-    ax.set_title(title)
-    ax.set_xlabel(r"$z$")
-    ax.set_ylabel(r"$Q(z)$")
+    # ax.set_title(title)
+    ax.set_xlabel(r"$z$", fontsize=20)
+    ax.set_ylabel(r"$Q(z)$", fontsize=20)
     ax.set_xlim(x_bounds)
     ax.set_ylim(y_bounds)
     ax1 = inset_locator.inset_axes(
@@ -294,7 +308,7 @@ def plot_z(
     markers = ["o", ">", "^", "s", "*"]
     colors = ["b", "r", "g", "m", "k", "y"]
     j = 0
-    for i in (start_step, 4, end_step):
+    for i in range(start_step, end_step + 1):
         z_file = f"{z_files}_RG{i}.npz"
         data = np.load(z_file)
         hist = data["histval"]
@@ -303,50 +317,52 @@ def plot_z(
         density = get_density(hist, bins)
         # if i % 2 == 0:
         ax1.plot(centers, density)
-        ax.scatter(
-            centers[::200],
-            density[::200],
-            label=f"RG step {i}",
-            facecolor="none",
-            edgecolors=colors[j],
-            marker=markers[j],
-        )
-        j += 1
+        if i in (start_step, 4, end_step):
+            ax.scatter(
+                centers[::200],
+                density[::200],
+                label=f"RG step {i}",
+                facecolor="none",
+                edgecolors=colors[j],
+                marker=markers[j],
+                s=100,
+            )
+            j += 1
     yticks = np.round(np.linspace(0.0, 0.25, 6), 2)
     ax1.set_yticks(
         list(yticks),
         ["0.0", "0.05", "0.10", "0.15", "0.20", "0.25"],
-        fontsize=12,
+        fontsize=16,
     )
     ax1.set_xticks(
         np.round(np.linspace(-25.0, 25.0, 6), 2),
         [str(x)[:-2] for x in np.round(np.linspace(-25.0, 25.0, 6), 2)],
-        fontsize=12,
+        fontsize=16,
     )
     ax1.set_ylabel(
         r"$Q(z)$",
-        fontsize=12,
+        fontsize=16,
     )
     ax1.set_xlabel(
         r"$z$",
-        fontsize=12,
+        fontsize=16,
     )
     ax.minorticks_on()
     ax1.minorticks_on()
     ax.set_xticks(
         np.round(np.linspace(-5.0, 5.0, 11), 2),
         [str(x)[:-2] for x in np.round(np.linspace(-5.0, 5.0, 11), 2)],
-        fontsize=12,
+        fontsize=16,
     )
     ax.set_yticks(
         np.round(np.linspace(0.0, 0.25, 6), 2),
         ["0.0", "0.05", "0.10", "0.15", "0.20", "0.25"],
-        fontsize=12,
+        fontsize=16,
     )
     # ax.tight_layout()
     # ax.legend(loc="upper left")
     plt.tight_layout()
-    plt.savefig(output_filename, dpi=150)
+    plt.savefig(output_filename, dpi=150, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -379,4 +395,4 @@ if __name__ == "__main__":
     #     plot_z(z_dir, output_dir, start, end, False, version, float(shift))
 
     plot_z_fp(ddir)
-    # plot_z_peaks(ddir)
+    plot_z_peaks(ddir)
