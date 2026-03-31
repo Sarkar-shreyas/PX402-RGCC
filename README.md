@@ -10,6 +10,30 @@ The Integer Quantum Hall Effect (IQHE) describes two-dimensional electron system
 
 ---
 
+## Methodology
+
+The IQHE pipeline implements the real-space renormalisation group (RSRG) approach
+to the Chalker-Coddington (CC) network model described in:
+
+> S. Shaw and R. A. Römer, "Real-space renormalisation approach to the
+> Chalker-Coddington model revisited: improved statistics,"
+> *Physica E*, 2024. [arXiv:2404.00660](https://arxiv.org/abs/2404.00660)
+
+The goal is an independent reproduction of their ν extraction pipeline at
+comparable sample counts, using the analytic and numerical RG unit variants described therein.
+
+The QSHE pipeline seeks to apply the RSRG approach to the ℤ₂ network model
+and adopts the (p, q) parametrisation of scattering parameters described in:
+
+> K. Kobayashi, T. Ohtsuki, H. Obuse, and K. Slevin,
+> "Conductance distributions in disordered quantum spin-Hall systems,"
+> *Phys. Rev. B* 82, 165301 (2010). arXiv:[1007.4073](https://arxiv.org/abs/1007.4073)
+
+An estimate of ν is obtained using a finite-size scaling (FSS) analysis of the RG flow 
+for the constructed ℤ₂ RG cell.
+    
+---
+
 ## Repository Structure
 
 ```
@@ -146,6 +170,7 @@ Run configuration follows a three-level hierarchy: a **YAML config file** (e.g. 
 - [docs/Troubleshooting.md](docs/Troubleshooting.md) — common issues and fixes
 
 A general README.md exists inside the `source/`, `Taskfarm/` and `analysis/` folders for further detail of each section.
+
 ---
 
 ## License / Academic Use
