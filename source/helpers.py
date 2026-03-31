@@ -9,16 +9,43 @@ command-line interface for batch scripts and job arrays.
 Supported PROCESS values (first CLI argument):
 
 0 - Launder from z-histogram and convert to t
-    Inputs: ARRAY_SIZE INPUT_FILE OUTPUT_FILE
+    Input:  NPZ z-histogram (histval, binedges, bincenters)
+    Output: raw 1-D float64 ``.npy`` array of t amplitude samples
+    Operation: draws ARRAY_SIZE samples via inverse-CDF or rejection
+    sampling from the z-histogram, then maps each z value to a t
+    amplitude via ``t = sqrt(1 / (1 + exp(z)))``.
 
 1 - Symmetrise z-histogram
-    Inputs: ARRAY_SIZE INPUT_FILE OUTPUT_FILE
+    Input:  NPZ z-histogram (histval, binedges, bincenters)
+    Output: NPZ z-histogram with the same schema
+    Operation: folds the z-distribution about zero — averages each bin
+    with its mirror-image bin — to enforce the particle-hole symmetry
+    expected at the RG fixed point.
 
 2 - Launder from t-histogram
-    Inputs: ARRAY_SIZE INPUT_FILE OUTPUT_FILE
+    Input:  NPZ t-histogram (histval, binedges, bincenters)
+    Output: raw 1-D float64 ``.npy`` array of t amplitude samples
+    Operation: draws ARRAY_SIZE samples directly from the t-histogram
+    without a z→t conversion step (used for runs that track t only).
 
 3 - Convert t array to z array
-    Inputs: ARRAY_SIZE INPUT_FILE OUTPUT_FILE
+    Input:  raw 1-D float64 ``.npy`` array of t amplitude samples
+    Output: raw 1-D float64 ``.npy`` array of z values
+    Operation: applies ``z = ln((1 − t²) / t²)`` element-wise.
+
+NPZ histogram schema
+---------------------
+All histogram NPZ files consumed and produced by this module share the
+following array keys:
+
+- ``histval``    — float64 array of shape ``(n_bins,)``: normalised histogram
+  counts (probability density, not raw counts).
+- ``binedges``   — float64 array of shape ``(n_bins + 1,)``: left/right edges
+  of every bin.
+- ``bincenters`` — float64 array of shape ``(n_bins,)``: midpoint of each bin,
+  equal to ``0.5 * (binedges[:-1] + binedges[1:])``.
+
+Load with ``np.load(file, allow_pickle=False)``.
 
 The script is designed for use within higher-level shell job scripts that
 orchestrate the RG pipeline. Errors raise SystemExit with a usage message so

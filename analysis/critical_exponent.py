@@ -1,29 +1,53 @@
-"""
-Critical exponent (ν) extraction and peak analysis for RG simulation outputs.
+"""Critical exponent (ν) extraction and peak analysis for RG simulation outputs.
 
-This script post-processes simulation data to estimate the critical exponent ν.
-It supports both new-format (config-based) and legacy (no config) data, detecting
-and adapting to the available metadata. Outputs include ν estimates and diagnostic
-plots, written to the appropriate stats/ and plots/ subfolders.
+Post-processes FP and EXP histogram NPZ files produced by the RG Monte Carlo
+pipeline to estimate the critical exponent ν that characterises the divergence of
+the correlation length at the quantum phase transition (ξ ~ |δ|^{−ν}).
 
-- New-format: Reads config YAML for run parameters.
-- Old-format: Falls back to heuristics and folder/filename parsing.
+CLI usage
+---------
+::
 
-Assumption: Data layout and file naming follow conventions described in the repo docs.
+    python -m analysis.critical_exponent \\
+        --version VERSION --mode EXP --steps N [--loc local|taskfarm]
+
+Expected input layout
+---------------------
+::
+
+    {data_folder}/{version}/
+    ├── FP/hist/sym_z/sym_z_hist_RG{steps-1}.npz   # symmetrised FP z-distribution
+    └── EXP/shift{s}/hist/
+        ├── z/z_hist_unsym_RG{i}.npz                # unsymmetrised EXP z-histograms
+        └── {var}/{var}_hist_RG{i}.npz              # other variable histograms
+
+Outputs written to disk
+-----------------------
+::
+
+    {data_folder}/{version}/
+    ├── peaks.json               — per-(RG step, shift) Gaussian peak estimates
+    ├── overall_stats.json       — per-RG-step ν, slope, R² from peak and mean fits
+    ├── z_peaks.png              — scatter/line plot of peak displacement vs shift
+    ├── Nu_{N}_shifts.png        — ν vs system size (2^n) with error bars
+    └── EXP/
+        ├── stats/{shift}/       — per-shift moment statistics
+        └── plots/{shift}/       — per-shift histogram PNG files
+
+Stdout prints progress messages for each shift, wall-clock timing, and the final
+paths of every file written.
 """
 
 from collections import defaultdict
 import matplotlib.pyplot as plt
 import numpy as np
-from source.utilities import calculate_nu, get_density, hist_moments, launder, build_rng
+from source.utilities import calculate_nu, get_density, hist_moments, build_rng
 from source.config import load_yaml, build_config
-from scipy.stats import norm
 from source.fitters import estimate_z_peak, fit_z_peaks
 from analysis.data_plotting import (
     load_hist_data,
     construct_moments_dict,
     plot_data,
-    calculate_average_nu,
     build_plot_parser,
     build_config_path,
 )
@@ -42,18 +66,27 @@ def slice_middle(
     densities: np.ndarray,
     shift: float,
 ) -> tuple:
-    """
-    Extract the central region of a Gaussian-like histogram, bounded by [-25+shift, 25+shift].
+    """Extract the central region of a histogram within the window [-25+shift, 25+shift].
+
+    Selects all bins whose centres fall inside the half-open interval
+    ``[-25 + shift, 25 + shift]`` and returns consistent sub-arrays for
+    counts, edges, centres, and densities so all four remain aligned.
 
     Args:
-        counts (np.ndarray): Histogram bin counts.
-        bins (np.ndarray): Histogram bin edges.
-        centers (np.ndarray): Bin centers.
-        densities (np.ndarray): Histogram densities.
-        shift (float): Value to shift the window.
+        counts: Raw histogram bin counts.  Shape ``(n_bins,)``.
+        bins: Bin edge array.  Shape ``(n_bins + 1,)``; the returned slice
+            includes one extra trailing edge so edges remain consistent with
+            the returned ``centers``.
+        centers: Centre of each bin.  Shape ``(n_bins,)``.
+        densities: Normalised probability density for each bin (counts divided
+            by bin width and total area).  Shape ``(n_bins,)``.
+        shift: Scalar value that translates the extraction window; typically
+            the EXP perturbation shift applied to the FP distribution.
 
     Returns:
-        tuple: (counts, bins, centers, densities) arrays for the sliced region.
+        A 4-tuple ``(counts, bins, centers, densities)`` containing only the
+        elements that fall within ``[-25 + shift, 25 + shift]``.  The
+        ``bins`` array has one more element than the other three arrays.
     """
     mask = np.logical_and((centers >= -25.0 + shift), (centers <= 25.0 + shift))
     indexes = np.where(mask)[0]
@@ -68,27 +101,68 @@ def slice_middle(
 
 
 def main():
-    """
-    Main entry point for critical exponent (ν) extraction and plotting.
+    """Extract ν from FP and EXP histogram files and write results to disk.
 
-    This script detects whether a config file is present (new-format run) or not (legacy run).
-    - If config is present, it parses run parameters from the config YAML.
-    - If config is absent, it falls back to legacy heuristics (parsing version/steps from folder names or filenames).
-    - Loads RG run parameters and data, performs peak estimation, and produces ν estimates and diagnostic plots.
+    Order of operations:
+
+    1. **Parse CLI args** — resolve ``--version``, ``--mode``, ``--steps``,
+       and ``--loc`` (local vs taskfarm data folder).
+    2. **Load config** — read the run YAML and build a typed
+       :class:`~source.config.IQHEConfig` or :class:`~source.config.QSHEConfig`.
+    3. **Load FP z-histogram** — read the symmetrised fixed-point distribution
+       ``sym_z_hist_RG{steps-1}.npz`` which serves as the reference (shift = 0)
+       for all peak-displacement measurements.
+    4. **Load EXP histograms** — for each positive shift value and each
+       observable variable, read all ``steps`` RG-step histogram files;
+       generate histogram overlay plots and per-shift moment statistics.
+    5. **Peak estimation** — for each (shift, RG step) pair, slice the z
+       histogram to the central window via :func:`slice_middle` and call
+       :func:`~source.fitters.estimate_z_peak` to obtain bootstrapped
+       Gaussian mean estimates ``(min_peak, max_peak, overall_peak)``.
+    6. **ν calculation** — for each RG step, subtract the shift=0 baseline
+       from each peak array, call :func:`~source.fitters.fit_z_peaks` to
+       obtain the linear slope of (shift, displacement), then pass the slope
+       to :func:`~source.utilities.calculate_nu` to compute ν.
+    7. **Write outputs** — serialise peak data and ν statistics to JSON and
+       save diagnostic plots.
 
     Args:
-        None. Uses CLI arguments (see build_plot_parser for options).
+        None.  Reads ``sys.argv`` via :func:`~analysis.data_plotting.build_plot_parser`.
 
     Returns:
-        None. Side effects: writes plots and stats to output folders.
+        None.
 
-    Raises:
-        SystemExit: On usage error or missing data.
+    Side effects:
+        Writes the following files (relative to ``{data_folder}/{version}/``):
 
-    Notes:
-        - If config is missing, uses folder/filename parsing for legacy runs.
-        - Output files are written to stats/ and plots/ subfolders.
-        - Assumption: old-format data uses legacy naming conventions.
+        - ``peaks.json`` — per-(RG step, shift) Gaussian peak estimates::
+
+            {
+              "RG{i}": {
+                "Peaks":       [float, ...],  // overall Gaussian means, one per shift
+                "Min Peaks":   [float, ...],  // bootstrap lower bounds
+                "Max Peaks":   [float, ...],  // bootstrap upper bounds
+                "Peak Errors": [float, ...]   // max_peak - min_peak per shift
+              }
+            }
+
+        - ``overall_stats.json`` — per-RG-step ν, slopes, and R²::
+
+            {
+              "RG{i}": {
+                "Peak Nu":    float,  // ν from Gaussian-peak displacements
+                "Mean Nu":    float,  // ν from histogram-moment means
+                "Peak Slope": float,  // linear slope feeding into Peak Nu
+                "Mean Slope": float,  // linear slope feeding into Mean Nu
+                "Peak R2":    float,
+                "Mean R2":    float
+              }
+            }
+
+        - ``z_peaks.png`` — scatter and line-fit plot of peak displacement vs shift.
+        - ``Nu_{N}_shifts.png`` — ν vs system size (2^n) with error bars.
+        - ``EXP/plots/{shift}/{var}_hist_{shift}.png`` — histogram overlays per shift.
+        - ``EXP/stats/{shift}/`` — moment statistics per shift.
     """
     parser = build_plot_parser()
     args = parser.parse_args()
@@ -124,6 +198,7 @@ def main():
     print("=" * 100)
     # Load the FP distribution
     fp_file = (
+        # symmetrised FP z-histogram at the last completed RG step
         f"{data_folder}/{version}/FP/hist/sym_z/sym_z_hist_RG{rg_config.steps - 1}.npz"
     )
     fp_counts, fp_bins, fp_centers = load_hist_data(fp_file)
@@ -134,6 +209,7 @@ def main():
     for shift in shifts:
         for var in vars:
             data_map[shift][var] = []
+            # EXP histogram directory: one subdirectory per shift value, per variable
             shift_dir = f"{data_folder}/{version}/{runtype}/shift{shift}/hist/{var}"
             shift_plot_dir = f"{plots_dir}/{shift}"
             shift_stats_dir = f"{stats_dir}/{shift}"
@@ -145,8 +221,10 @@ def main():
                 )
             for i in range(1, rg):
                 if var == "z":
+                    # unsymmetrised z: symmetrisation is applied later during peak estimation
                     filename = f"{shift_dir}/{var}_hist_unsym_RG{i - 1}.npz"
                 else:
+                    # all other variables use the standard (unmodified) histogram files
                     filename = f"{shift_dir}/{var}_hist_RG{i - 1}.npz"
                 counts, bins, centers = load_hist_data(filename)
                 densities = get_density(counts, bins)
@@ -220,8 +298,8 @@ def main():
     # print(z_moments)
     overall_stats = defaultdict(dict)
     peak_data = defaultdict(dict)
-    peak_data_file = f"{main_dir}/peaks.json"
-    overall_stats_file = f"{main_dir}/overall_stats.json"
+    peak_data_file = f"{main_dir}/peaks.json"          # per-(RG step, shift) peak estimates for downstream inspection
+    overall_stats_file = f"{main_dir}/overall_stats.json"  # primary output: ν estimates, slopes, and R² for every RG step
     x = np.array(shifts).astype(float)
     nus = []
     other_nus = []
@@ -321,7 +399,7 @@ def main():
     print(f"Overall stats for z saved to {overall_stats_file}")
     print(f"Peak data saved to {peak_data_file}")
     print(f"z peaks data plotted and saved to {z_peaks_plot}")
-    system_size = [2**i for i in range(starting_index, rg)]
+    system_size = [2**i for i in range(starting_index, rg)]  # system size grows as 2^n with each RG step
     fig, (ax_2, ax_3) = plt.subplots(1, 2, figsize=(10, 4))
     # ax_2.set_xlim([0, 0.01])
     # ax_2.set_ylim([2.3, 2.8])

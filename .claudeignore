@@ -1,0 +1,56 @@
+# .claudeignore — exclude from Claude context
+
+# Large binary data (NPZ histograms, NPY sample arrays)
+*.npz
+*.npy
+
+# HPC output data (large, not source code)
+Data from taskfarm/
+Local data/
+
+# Thesis report (not relevant to code tasks)
+report/
+
+# Jupyter notebooks excluded — cell outputs make them large and noisy.
+# For QSHE analysis tasks, export first:
+#   jupyter nbconvert --to script notebook.ipynb
+# then feed the .py output directly to Claude Code.
+*.ipynb
+*.ipynb
+
+# Environment / secrets
+.env
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+.venv/
+
+# Slurm job output files
+*.out
+*.err
+
+# Plot output images
+*.png
+*.pdf
+*.svg
+
+# Generated HTML
+*.html
+
+# JSON outputs (stats, manifests — generated artefacts)
+# Note: source-tracked JSON configs should be read as YAML equivalents
+*.json
+
+# Log files
+*.log
+*.txt
+!requirements.txt
+
+# macOS metadata
+.DS_Store

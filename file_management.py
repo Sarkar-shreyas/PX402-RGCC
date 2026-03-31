@@ -1,22 +1,53 @@
 """Utilities to transfer code, scripts and job outputs between local repo and remote cluster.
 
-This module implements the canonical staging workflow used by the project. It is
-intentionally thin: it constructs and runs either `scp` (Windows) or `rsync`
-(Linux/Mac) commands to push local folders (code, scripts, configs) to the
-remote host and to pull job outputs back into local storage. The exact remote
-paths and the repo->remote mapping are implemented here and relied upon by the
-documentation (README/docs).
+Purpose
+-------
+This module implements the canonical staging workflow for the RG Monte Carlo pipeline.
+It constructs and executes either ``scp`` (Windows) or ``rsync`` (Linux/Mac) commands
+to synchronise files between the local workstation and the HPC cluster (vulcan2).
 
-Important behaviour (implemented in this module):
-- Local `source/` is pushed to `<REMOTE_ROOT>/code/` (so remote runtime lives at
-    `<REMOTE_ROOT>/code/source/`).
-- Local `Taskfarm/scripts/*.sh` and `Taskfarm/configs/*` are pushed to
-    `<REMOTE_ROOT>/scripts/`.
-- Pulling artifacts retrieves data from `<REMOTE_ROOT>/job_outputs/{version}/{FP|EXP}/...`.
+Actions
+-------
+push
+    Uploads local artefacts to the remote host.  Three targets are supported:
 
-The module reads configuration values from `constants.py` (env-based). Do not
-change runtime behaviour in this file without updating the docs which treat it
-as the source of truth.
+    - ``code``    — local ``source/`` → ``<REMOTE_DIR>/code/``
+                    (the remote runtime therefore lives at ``<REMOTE_DIR>/code/source/``)
+    - ``scripts`` — local ``Taskfarm/scripts/*.sh`` → ``<REMOTE_DIR>/scripts/``
+    - ``config``  — local ``Taskfarm/configs/`` → ``<REMOTE_DIR>/scripts/``
+
+pull
+    Retrieves job outputs from the remote host.  Two targets are supported:
+
+    - ``hist``   — pulls histogram directories from
+                   ``<REMOTE_DIR>/job_outputs/<version>/<type>/data/<RG*>/<dir>``
+                   (FP runs) or the ``shift_<shift>`` subtree (EXP runs).
+    - ``config`` — pulls the updated config from
+                   ``<REMOTE_DIR>/job_outputs/<version>/<type>/config``.
+
+Authentication
+--------------
+All remote operations use SSH under the hood (via ``scp`` or ``rsync``).
+**SSH key-based authentication to vulcan2 must be configured** — the commands
+are executed non-interactively and will hang or fail if a password prompt appears.
+Ensure your public key is present in ``~/.ssh/authorized_keys`` on the cluster and
+that ``~/.ssh/config`` resolves ``vulcan2`` to the correct hostname.
+
+Environment variables (read from ``.env`` via ``constants.py``)
+--------------------------------------------------------------
+HOST
+    Alias for the HPC cluster, e.g. ``vulcan2``.  Used as the ``user@host`` prefix
+    in every remote path.
+REMOTE_DIR
+    Absolute path to the project root on the cluster,
+    e.g. ``/storage/physics/phuhjf/fyp``.
+DATA_DIR
+    Local directory where pulled artefacts are written,
+    e.g. ``...\\Data from taskfarm``.
+
+The exact remote paths and the repo→remote mapping are implemented here and relied upon
+by the documentation (README/docs). Do not change runtime behaviour in this file without
+updating the docs which treat it as the source of truth.
 """
 
 import os
@@ -37,12 +68,35 @@ from source.config import build_config, load_yaml
 def build_parser() -> argparse.ArgumentParser:
     """Build an argument parser for the transfer CLI.
 
-    Returns
-    -------
-    argparse.ArgumentParser
-        Parser configured with the CLI options used by the project's transfer
-        helper. Options include `--push`, `--pull`, `--version`, `--type`, and
-        `--sys` (controls whether `scp` or `rsync` is used).
+    Returns:
+        argparse.ArgumentParser: Parser configured with the CLI options used by
+            the project's transfer helper.  Options:
+
+            --version (str):
+                Version identifier that labels the remote output directory,
+                e.g. ``fp_iqhe_numerical_shaw``.  Defaults to
+                ``constants.CURRENT_VERSION``.
+            --action (str):
+                Top-level action: ``"push"`` (local → remote) or
+                ``"pull"`` (remote → local).  Default: ``"push"``.
+            --push (list[str]):
+                Repeatable flag; each value names a push target
+                (``"code"``, ``"scripts"``, ``"config"``).
+            --pull (list[str]):
+                Repeatable flag; each value names a pull target
+                (``"hist"``, ``"config"``).
+            --type (str):
+                Run mode that selects the remote subdirectory:
+                ``"FP"``, ``"EXP"``, or ``"QP"``.  Default: ``"FP"``.
+            --sys (str):
+                Operating system of the *local* machine; controls whether
+                ``scp`` (``"windows"``) or ``rsync`` (``"linux"``/``"mac"``)
+                is used.  Default: ``"windows"``.
+            --step (str | None):
+                Specific RG step to pull (e.g. ``"3"``).  When ``None``,
+                the glob ``RG*`` is used so all steps are retrieved.
+            --shift (str | None):
+                Shift label used when pulling from an EXP run, e.g. ``"0.003"``.
     """
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -77,19 +131,26 @@ def build_parser() -> argparse.ArgumentParser:
 def create_local_folders(version: str, mode: str = "iqhe") -> list:
     """Ensure local destination folders exist for a given version.
 
-    Parameters
-    ----------
-    version : str
-        Version identifier (e.g. `fp_iqhe_numerical_shaw`). The function will
-        create `<DATA_DIR>/<version>/`, `<DATA_DIR>/<version>/FP/` and
-        `<DATA_DIR>/<version>/EXP/` where `DATA_DIR` is taken from
-        `constants.data_dir`.
+    Creates the top-level version directory and the run-mode-specific
+    subdirectories under ``constants.data_dir`` so that subsequent ``scp``/
+    ``rsync`` pulls have a valid target.
 
-    Returns
-    -------
-    list
-        A list with three paths: `[version_folder, fp_folder, exp_folder]`.
+    Args:
+        version (str): Version identifier, e.g. ``"fp_iqhe_numerical_shaw"``.
+            A directory ``<DATA_DIR>/<version>/`` is created (or left intact
+            if it already exists).
+        mode (str): Pipeline mode.
+
+            - ``"iqhe"`` (default) — creates ``FP/`` and ``EXP/`` subdirs.
+            - ``"qshe"`` — creates a ``QP/`` subdir instead.
+
+    Returns:
+        list[str]: Ordered list of created (or verified) paths:
+
+            - IQHE: ``[version_folder, fp_folder, exp_folder]``
+            - QSHE: ``[version_folder, qp_folder]``
     """
+    # Build the top-level versioned output directory under DATA_DIR.
     version_folder = f"{data_dir}/{version}"
     os.makedirs(version_folder, exist_ok=True)
     folders = [version_folder]
@@ -111,15 +172,23 @@ def create_local_folders(version: str, mode: str = "iqhe") -> list:
 def run_commands(commands: list) -> None:
     """Execute a shell command list and raise on non-zero exit.
 
-    Parameters
-    ----------
-    commands : list
-        The command and arguments to execute (same shape as passed to
-        `subprocess.run`). This function prints the command before executing
-        it. It will raise `subprocess.CalledProcessError` if the command
-        returns a non-zero exit code.
+    Prints the assembled command to stdout before execution so the operator
+    can see exactly what ``scp``/``rsync`` invocation is being run, then
+    delegates to :func:`subprocess.run` with ``check=True``.
+
+    Args:
+        commands (list[str]): The command and its arguments as a flat list,
+            in the same format accepted by :func:`subprocess.run`.
+            Example: ``["scp", "-r", "user@host:/remote/path", "/local/path"]``.
+
+    Raises:
+        subprocess.CalledProcessError: If the command exits with a non-zero
+            return code (i.e. ``scp``/``rsync`` reported an error).
     """
     print("Running: ", " ".join(commands))
+    # Execute the transfer command; check=True propagates any non-zero exit as
+    # CalledProcessError so failures are visible immediately rather than silently
+    # producing an incomplete local copy.
     subprocess.run(commands, check=True)
 
 
@@ -127,25 +196,51 @@ def run_commands(commands: list) -> None:
 def transfer_files(args) -> None:
     """Perform push or pull actions according to CLI args.
 
-    The function supports two high-level actions controlled by `--action`:
+    Dispatches to either a push (local → remote) or pull (remote → local)
+    transfer for each target listed in ``args.push`` / ``args.pull``.
 
-    - `push`: upload local artifacts to the remote host. Supported push
-        targets: `code`, `scripts`, `config`.
-    - `pull`: retrieve remote job outputs. Supported pull targets include
-        `hist` and `config` (the latter pulls `job_outputs/{version}/{type}/config`).
+    Path mappings — push
+    --------------------
+    +------------+---------------------------------------------+------------------------------------------+
+    | target     | local source                                | remote destination                       |
+    +============+=============================================+==========================================+
+    | ``code``   | ``<ROOT_DIR>/source``                       | ``<REMOTE_DIR>/code``                    |
+    +------------+---------------------------------------------+------------------------------------------+
+    | ``scripts``| ``<TASKFARM_DIR>/scripts/*.sh``             | ``<REMOTE_DIR>/scripts``                 |
+    +------------+---------------------------------------------+------------------------------------------+
+    | ``config`` | ``<TASKFARM_DIR>/configs``                  | ``<REMOTE_DIR>/scripts``                 |
+    +------------+---------------------------------------------+------------------------------------------+
 
-    Parameters
-    ----------
-    args : argparse.Namespace
-            Parsed arguments returned by :func:`build_parser`. Expected attributes
-            include `version`, `action`, `push`, `pull`, `type`, `sys`, and
-            optionally `step`.
+    Path mappings — pull
+    --------------------
+    +------------+-----------+---------------------------------------------------------------+
+    | target     | type      | remote source                                                 |
+    +============+===========+===============================================================+
+    | ``config`` | any       | ``<REMOTE_DIR>/job_outputs/<version>/<type>/config``          |
+    +------------+-----------+---------------------------------------------------------------+
+    | ``hist``   | ``QP``    | ``<REMOTE_DIR>/job_outputs/<version>/QP``                     |
+    +------------+-----------+---------------------------------------------------------------+
+    | ``hist``   | ``FP``    | ``<REMOTE_DIR>/job_outputs/<version>/FP/data/<RG*>/hist``     |
+    +------------+-----------+---------------------------------------------------------------+
+    | ``hist``   | ``EXP``   | ``<REMOTE_DIR>/job_outputs/<version>/EXP/shift_<shift>/data/<RG*>/hist`` |
+    +------------+-----------+---------------------------------------------------------------+
 
-    Raises
-    ------
-    ValueError
-            If an unknown `--sys`, `--type`, `--action`, or push/pull target is
-            provided.
+    On Windows ``scp -r`` is used; on Linux/Mac ``rsync -avz --partial --progress``
+    is used instead (better resumption and progress reporting for large transfers).
+
+    If the remote path does not exist, ``scp`` will exit with a non-zero code and
+    :func:`run_commands` will raise :class:`subprocess.CalledProcessError`.
+
+    Args:
+        args (argparse.Namespace): Parsed arguments returned by :func:`build_parser`.
+            Expected attributes: ``version``, ``action``, ``push``, ``pull``,
+            ``type``, ``sys``, ``step``, ``shift``.
+
+    Raises:
+        ValueError: If an unknown value is supplied for ``--sys``, ``--type``,
+            ``--action``, or an individual push/pull target.
+        subprocess.CalledProcessError: Propagated from :func:`run_commands` if
+            the underlying ``scp``/``rsync`` call fails.
     """
 
     if args.version is not None:
@@ -153,10 +248,16 @@ def transfer_files(args) -> None:
     else:
         version = CURRENT_VERSION
     folder_type = str(args.type).strip().upper()
+
+    # Create local directories so the pull destination always exists.
     if folder_type == "QP":
         folders = create_local_folders(version, "qshe")
     else:
         folders = create_local_folders(version)
+
+    # Select the transfer command set based on the local OS.
+    # scp is used on Windows (no native rsync); rsync is preferred elsewhere
+    # because it supports partial transfers and incremental synchronisation.
     commands = []
     if str(args.sys).strip().lower() == "windows":
         commands = ["scp", "-r"]
@@ -165,9 +266,12 @@ def transfer_files(args) -> None:
     else:
         raise ValueError(f"Invalid os name entered: {args.sys}")
 
+    # Resolve the local destination directory from the folder list returned by
+    # create_local_folders.  Index 1 = FP/QP subdirectory; index 2 = EXP subdir.
     if folder_type == "FP":
         local = folders[1]
     elif folder_type == "EXP":
+        # Append the shift label so each perturbation lands in its own directory.
         local = f"{folders[2]}/shift{args.shift}"
         # local = folders[2]
     elif folder_type == "QP":
@@ -175,6 +279,7 @@ def transfer_files(args) -> None:
     else:
         raise ValueError(f"Invalid RG type entered: {folder_type}")
 
+    # Build the RG-step glob.  None means "all steps"; a digit selects one step.
     if args.step is None:
         rgs = "RG*"
     elif str(args.step).isdigit:
@@ -195,33 +300,45 @@ def transfer_files(args) -> None:
         dir = str(dir).strip().lower()
         if action == "pull":
             if dir == "config":
+                # Config lives directly under the run-type directory, not inside data/.
                 remote = (
                     f"{host}:{remote_dir}/job_outputs/{version}/{folder_type}/{dir}"
                 )
             else:
                 if folder_type == "QP":
+                    # QP outputs are stored flat under the QP directory.
                     remote = f"{host}:{remote_dir}/job_outputs/{version}/{folder_type}"
                 elif folder_type == "FP":
+                    # FP: navigate into data/<RG*>/<dir> (e.g. data/RG*/hist).
                     remote = f"{host}:{remote_dir}/job_outputs/{version}/{folder_type}/data/{rgs}/{dir}"
                     # local = f"{data_dir}"
                 else:
+                    # EXP: outputs are partitioned by shift value under shift_<shift>/data/.
                     remote = f"{host}:{remote_dir}/job_outputs/{version}/{folder_type}/shift_{args.shift}/data/{rgs}/{dir}"
+            # Append remote source then local destination to complete the command.
             current_commands.extend([remote, local])
             run_commands(current_commands)
         else:
             if dir == "code":
+                # Push the source/ package to the cluster's code/ directory.
                 remote = f"{host}:{remote_dir}/{dir}"
                 local = f"{root_dir}/source"
             elif dir == "config":
+                # Config files go into the remote scripts/ directory alongside the
+                # shell scripts so the Slurm jobs can find them by relative path.
                 remote = f"{host}:{remote_dir}/scripts"
                 local = f"{taskfarm_dir}/configs"
             elif dir == "scripts":
+                # Push Slurm shell scripts; the *.sh glob is expanded by the shell.
                 remote = f"{host}:{remote_dir}/{dir}"
                 local = f"{taskfarm_dir}/scripts/*.sh"
             else:
                 raise ValueError(f"Invalid push dir entered: {dir}")
+            # Append local source then remote destination to complete the command.
             current_commands.extend([local, remote])
             run_commands(current_commands)
+        # Reset to scp for the next iteration; rsync state must not bleed across
+        # separate transfer targets.
         commands = ["scp", "-r"]
 
 

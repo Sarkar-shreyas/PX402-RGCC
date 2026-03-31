@@ -1,8 +1,31 @@
-"""Utilities for RG analysis: sampling, conversions, I/O and statistics.
+"""Authoritative RG engine: MC sampling, transformations, histograms, and statistics.
 
-This module contains helpers for random-phase generation, initial
-distributions, value transformations between t/g/z parametrizations,
-histogram I/O and common statistical measures used by the RG pipeline.
+This module implements the core mathematics of the Renormalization Group (RG) pipeline.
+It is the single source of truth for all sample generation, RG transformation logic,
+variable conversions, and convergence statistics.  Do not modify physics logic or
+algorithm implementations in this file.
+
+RG transformation variants
+---------------------------
+Two computation paths are supported:
+
+- **Analytic** (``method[0] == 'a'``): closed-form 4-phase expressions for t'.
+  Four formula variants are available: ``"jack"``, ``"cain"``, ``"shaw"`` (default),
+  and ``"t"`` (Shaw's second matrix, Eq 2.13).  Selected via ``generate_t_prime``.
+- **Numerical** (``method[0] == 'n'``): solves a 10×10 (IQHE) or 20×20 (QSHE)
+  complex linear system Ax = b per sample, processed in memory-bounded batches.
+  Entry points: ``solve_matrix_eq`` / ``numerical_t_prime`` (IQHE) and
+  ``solve_qshe_matrix`` / ``qshe_numerical_solver`` (QSHE).
+
+Key physics variables
+----------------------
+- ``t`` — transmission amplitude, real-valued, domain [0, 1].
+- ``r`` — complementary amplitude, ``r = √(1 − t²)``, domain [0, 1].
+- ``g`` — squared amplitude, ``g = |t|²``, domain [0, 1].
+- ``z`` — RG flow parameter (log-ratio), ``z = ln((1−g)/g)``, domain ℝ.
+  At the critical fixed point the z-distribution is symmetric about z = 0.
+- ``f`` — loss amplitude (QSHE only), subject to ``t² + f² ≤ 1``.
+- ``ν``  — critical exponent extracted from EXP-run scaling; see ``calculate_nu``.
 """
 # Some mathematical expressions in this file are long by necessity; disable
 # the line-length rule for this file to keep the formulas readable.
@@ -45,16 +68,18 @@ def save_data(
 ) -> None:
     """Save histogram arrays to a compressed .npz file.
 
-    Parameters
-    ----------
-    hist_vals : numpy.ndarray
-        Histogram counts (or densities) stored as `histval` in the archive.
-    bin_edges : numpy.ndarray
-        Bin edges array stored as `binedges` in the archive.
-    bin_centers : numpy.ndarray
-        Bin centers array stored as `bincenters` in the archive.
-    filename : str
-        Destination filename (will be written as a compressed `.npz`).
+    Writes the three standard histogram arrays under the fixed keys
+    ``histval``, ``binedges``, and ``bincenters`` that the rest of the
+    pipeline expects when loading ``.npz`` histogram files.
+
+    Args:
+        hist_vals: Histogram counts (or densities) stored as ``histval`` in
+            the archive.
+        bin_edges: Bin edge array of length ``n_bins + 1``, stored as
+            ``binedges``.
+        bin_centers: Bin centre array of length ``n_bins``, stored as
+            ``bincenters``.
+        filename: Destination path; numpy appends ``.npz`` if not present.
     """
     np.savez_compressed(
         filename,
@@ -65,16 +90,15 @@ def save_data(
 
 
 def get_current_date(format: str = "full") -> str:
-    """Return current UTC date/time formatted as a string.
+    """Return the current UTC date/time as a formatted string.
 
-    Parameters
-    ----------
-    format : str, optional
-        One of ``"day"``, ``"hour"``, ``"min"`` or ``"full"`` (default).
+    Args:
+        format: Resolution of the timestamp.  One of ``"day"``
+            (``YYYY-MM-DD``), ``"hour"`` (``YYYY-MM-DD HH``),
+            ``"min"`` (``YYYY-MM-DD HH:MM``), or ``"full"``
+            (``YYYY-MM-DD HH:MM:SS``, default).
 
-    Returns
-    -------
-    str
+    Returns:
         Formatted UTC date/time string.
     """
     if format == "day":
@@ -88,13 +112,32 @@ def get_current_date(format: str = "full") -> str:
 
 
 def save_metric_json(data: dict, filename: str):
-    """Save input data into a json file"""
+    """Serialise a dictionary to a JSON file with 2-space indentation.
+
+    Args:
+        data: Dictionary to serialise.  Values must be JSON-serialisable;
+            use ``collapse_data`` first if the dict contains numpy arrays.
+        filename: Destination file path (created or overwritten).
+    """
     with open(filename, "w") as f:
         json.dump(data, f, indent=2)
 
 
 def collapse_data(data_dict: dict):
-    """Collapse nested dictionaries into a json saveable format"""
+    """Recursively convert a nested structure into a JSON-serialisable form.
+
+    Traverses the input recursively: dictionaries are rebuilt with converted
+    keys and values; numpy arrays are converted to Python lists via
+    ``.tolist()``; all other objects are returned unchanged.
+
+    Args:
+        data_dict: Nested dictionary (possibly containing numpy arrays) to
+            convert.
+
+    Returns:
+        A JSON-serialisable copy of ``data_dict`` with numpy arrays replaced
+        by plain Python lists.
+    """
     if isinstance(data_dict, dict):
         return {
             collapse_data(key): collapse_data(value) for key, value in data_dict.items()
@@ -114,7 +157,27 @@ def build_state_dict(
     fix: int = 1,
     seed: int = 1234,
 ):
-    """Build a state dict containing the relevant config params"""
+    """Build a state dictionary recording sweep parameters and run metadata.
+
+    Summarises the q and p (g) sweep grids together with the run
+    configuration so that output files are self-describing.
+
+    Args:
+        qvals: 1-D array of q initial values used in the sweep.
+        gvals: 1-D array of p (g) initial values used in the sweep.
+        nsamples: Number of MC samples per trial.
+        steps: Number of RG iterations per trial.
+        metric: Aggregation statistic used (``"mean"``, ``"median"``,
+            ``"std"``, or ``"all"``).
+        fix: Whether q is held fixed during RG iteration (``1``) or evolved
+            (``0``).  Default: ``1``.
+        seed: RNG seed used for reproducibility.  Default: ``1234``.
+
+    Returns:
+        A nested dictionary with keys ``"q"``, ``"p"``, and ``"data"``,
+        each containing summary statistics and configuration values for
+        the respective axis or run settings.
+    """
     state = {}
     num_qs = int(qvals.size)
     num_gs = int(gvals.size)
@@ -167,7 +230,30 @@ def get_meds(
     var: str = "p",
     fromjson: bool = False,
 ):
-    """Extract mean and medians for 2 RG steps from existing or loaded data"""
+    """Extract per-q mean and median values for two RG steps.
+
+    Iterates over all q values in ``qarray`` and collects the median and
+    mean of the observable ``var`` at two specified RG steps, supporting
+    both live data dicts and pre-loaded JSON structures.
+
+    Args:
+        step_a: Index of the first RG step to extract.
+        step_b: Index of the second RG step to extract.
+        data_dict: Nested data dictionary keyed by q value (and then by g
+            value if ``fromjson=False``).
+        qarray: 1-D array of q values to iterate over.
+        garray: 1-D array of g (p) initial values to iterate over.
+        var: Observable name to extract when ``fromjson=True``.
+            Default: ``"p"``.
+        fromjson: If ``True``, read from a pre-loaded JSON structure where
+            medians/means are stored under string step keys.  If ``False``,
+            read from live trial-output arrays.  Default: ``False``.
+
+    Returns:
+        A 4-tuple ``(medgs_a, medgs_b, meangs_a, meangs_b)`` where each
+        element is a dict mapping q → np.ndarray of values across ``garray``
+        for that step.
+    """
     medgs_a = {}
     medgs_b = {}
     meangs_a = {}
@@ -204,38 +290,30 @@ def get_meds(
 
 # ---------- Data generators ---------- #
 def build_rng(seed: int) -> np.random.Generator:
-    """Create and return a NumPy random Generator seeded with `seed`.
+    """Create a reproducible NumPy PCG64 random generator.
 
-    Parameters
-    ----------
-    seed : int
-        Integer seed for the RNG.
+    Args:
+        seed: Integer seed.  Use the same value across runs to reproduce
+            identical MC sequences.
 
-    Returns
-    -------
-    numpy.random.Generator
-        A PCG64-based generator instance.
+    Returns:
+        A ``numpy.random.Generator`` backed by the PCG64 bit generator.
     """
     return np.random.default_rng(seed=seed)
 
 
 def generate_constant_array(N: int, value: float, M: int = 1) -> np.ndarray:
-    """Generate a constant-valued array.
+    """Generate a constant-valued float64 array.
 
-    Parameters
-    ----------
-    N : int
-        Number of rows/samples.
-    value : float
-        Value to fill the array with.
-    M : int, optional
-        Number of columns. If ``M==1`` a 1-D array of length ``N`` is
-        returned; otherwise a 2-D array of shape ``(N, M)`` is returned.
+    Args:
+        N: Number of rows (samples).
+        value: Fill value for every element.
+        M: Number of columns.  When ``M == 1`` a 1-D array of shape
+            ``(N,)`` is returned; otherwise a 2-D array of shape
+            ``(N, M)`` is returned.  Default: ``1``.
 
-    Returns
-    -------
-    numpy.ndarray
-        Array filled with `value`.
+    Returns:
+        Float64 array filled with ``value``.
     """
     if M == 1:
         return np.full(N, value, dtype=np.float64)
@@ -248,20 +326,18 @@ def generate_random_phases(
     rng: np.random.Generator,
     i: int = 4,
 ) -> np.ndarray:
-    """Generate random phase angles for RG transformation.
+    """Generate uniformly distributed random phase angles for the RG step.
 
-    Creates an array of uniformly distributed random phases in [0, 2π]
-    used in the RG transformation step.
+    Args:
+        N: Number of phase sets (rows) to generate.
+        rng: Random number generator used to draw uniform variates.
+        i: Number of independent phase values per sample (columns).
+            Use ``4`` for the analytic IQHE path, ``8`` for the numerical
+            IQHE path, and ``16`` for the QSHE path.  Default: ``4``.
 
-    Parameters
-    ----------
-    N : int
-        Number of phase sets to generate.
-
-    Returns
-    -------
-    numpy.ndarray
-        Array of shape (N, i) containing random phases in [0, 2π].
+    Returns:
+        Array of shape ``(N, i)`` with phases drawn uniformly from
+        ``[0, 2π)``.
     """
     phi_sample = rng.uniform(0, 2 * np.pi, (N, i))
     return phi_sample
@@ -270,21 +346,21 @@ def generate_random_phases(
 def generate_initial_t_distribution(
     N: int, rng: np.random.Generator, upper_bound: float = 1.0
 ) -> np.ndarray:
-    """Generate initial amplitude distribution P(t).
+    """Generate an initial flat distribution of transmission amplitudes.
 
-    Creates an initial distribution of amplitudes t with the property that
-    the squared amplitudes g = |t|² are uniformly distributed in [0,1].
-    This ensures P(t) is symmetric about t² = 0.5.
+    Draws squared amplitudes ``g ~ U[0, upper_bound]`` and returns
+    ``t = √g``.  With ``upper_bound=1`` this produces a distribution
+    symmetric about ``t² = 0.5``, suitable as an unbiased starting point.
 
-    Parameters
-    ----------
-    N : int
-        Number of samples to generate.
+    Args:
+        N: Number of amplitude samples to generate.
+        rng: Random number generator used to draw uniform variates.
+        upper_bound: Upper bound for the uniform draw of ``g``.
+            Useful when the QSHE unitarity constraint limits the
+            available range.  Default: ``1.0``.
 
-    Returns
-    -------
-    numpy.ndarray
-        Array of N amplitude values t = √g where g ~ U[0,1].
+    Returns:
+        1-D array of ``N`` amplitude values ``t ∈ [0, √upper_bound]``.
     """
     g_sample = rng.uniform(0.0, upper_bound, N)
     t_dist = np.sqrt(g_sample)
@@ -298,6 +374,32 @@ def generate_initial_qshe_data(
     f_val: float,
     rng: np.random.Generator,
 ) -> dict:
+    """Generate the initial data arrays for a QSHE RG run.
+
+    Constructs amplitude (``t``), loss (``f``), and phase (``phi``) arrays
+    for ``samples`` Monte Carlo particles.  The ``t_val`` and ``phi_val``
+    arguments select either a fixed value or a random draw via the
+    ``T_DICT`` / ``PHI_DICT`` lookup tables; ``f_val == 0`` selects a fixed
+    loss of zero.
+
+    Args:
+        samples: Number of MC samples to initialise.
+        t_val: Index into ``T_DICT`` selecting the initial t distribution.
+            ``0`` → random flat distribution; ``1–4`` → fixed values.
+        phi_val: Index into ``PHI_DICT`` selecting the initial phase.
+            ``0`` → random uniform; ``1–5`` → fixed values.
+        f_val: Initial loss amplitude f ∈ [0, 1].  Clamped to [0, 1].
+        rng: Random number generator used for random draws.
+
+    Returns:
+        Dictionary with keys:
+
+        - ``"t"``    : float array of shape ``(samples, 5)`` — amplitudes.
+        - ``"f"``    : float array of shape ``(samples, 5)`` — loss amplitudes.
+        - ``"phi"``  : float array of shape ``(samples, 16)`` — phases.
+        - ``"split"``: float array of shape ``(samples, 5)`` — available
+          amplitude budget ``1 − f²`` per particle.
+    """
     n = samples
     if f_val > 1.0:
         f_val = 1.0
@@ -335,28 +437,24 @@ def extract_t_samples(
     N: int,
     rng: np.random.Generator,
 ) -> np.ndarray:
-    """Sample amplitude values for RG transformation.
+    """Draw a ``(N, 5)`` matrix of amplitude samples by random index selection.
 
-    Given an array `t` representing the current sampled distribution, this
-    function draws integer indices with the provided RNG and constructs a
-    matrix of shape ``(N, 5)`` where each row contains five samples used by the
-    RG transform.
+    Each RG transformation step requires five independent amplitude samples
+    per particle.  This function constructs that matrix by sampling with
+    replacement from the current P(t) distribution.
 
-    Parameters
-    ----------
-    t : numpy.ndarray
-        1-D array containing samples from the P(t) distribution. Must have
-        length at least ``N``.
-    N : int
-        Number of rows/samples to produce.
-    rng : numpy.random.Generator
-        Random number generator used to draw indices.
+    Args:
+        t: 1-D array of ``N`` amplitude values representing the current
+            P(t) distribution.  Values should be in ``[0, 1]``.
+        N: Number of output rows (particles).
+        rng: Random number generator used to draw integer indices.
 
-    Returns
-    -------
-    numpy.ndarray
-        Array of shape ``(N, 5)`` of amplitude samples.
+    Returns:
+        Array of shape ``(N, 5)`` where each row contains five amplitude
+        values drawn independently from ``t``.
     """
+    # Fancy-index t with a (N, 5) integer array: draws 5 random amplitude
+    # samples per row by sampling with replacement from the N-element t array.
     t_sample = t[rng.integers(0, N, size=(N, 5))]
     return t_sample
 
@@ -365,28 +463,34 @@ def extract_t_samples(
 def solve_matrix_eq(
     ts: np.ndarray, phis: np.ndarray, batch_size: int = 100000, output_index: int = 8
 ) -> np.ndarray:
-    """Solve per-batch linear systems to compute matrix-based t' numerically.
+    """Solve the 10×10 batched linear system Ax = b for the IQHE numerical RG step.
 
-    Parameters
-    ----------
-    ts : numpy.ndarray
-        Array of shape (batch_size, 5) containing five amplitudes per row.
-    phis : numpy.ndarray
-        Array of shape (batch_size, 8) containing phase combinations used to
-        construct the linear system.
-    batch_size : int, optional
-        Number of rows in the batch (default 100000).
-    output_index : int, optional
-        Index of the solution vector to return for each batch row.
+    Constructs a complex 10×10 scattering matrix A for each sample in the
+    batch using the five transmission amplitudes and eight phase angles, then
+    solves Ax = b simultaneously for the whole batch via
+    ``numpy.linalg.solve``.  Returns the solution component at
+    ``output_index``, whose magnitude gives t'.
 
-    Returns
-    -------
-    numpy.ndarray
-        Array of shape (batch_size,) containing the selected solution entry
-        (typically corresponding to the complex amplitude whose magnitude is
-        used to compute t').
+    Notes:
+        Solves the 10×10 complex scattering system for the 5-site IQHE
+        network model (numerical 8-phase variant).
+
+    Args:
+        ts: Array of shape ``(batch_size, 5)`` — one row of five transmission
+            amplitudes ``t1…t5 ∈ [0, 1]`` per sample.
+        phis: Array of shape ``(batch_size, 8)`` — the eight inter-site phases
+            used to populate the off-diagonal elements of A.
+        batch_size: Number of samples in this batch.  Default: ``100000``.
+        output_index: Component of the solution vector x to return.
+            Index ``8`` corresponds to the outgoing complex amplitude whose
+            magnitude is t'.  Default: ``8``.
+
+    Returns:
+        Array of shape ``(batch_size, 1)`` containing the complex solution
+        component at ``output_index`` for each sample in the batch.
     """
-
+    # Column-wise unpack: ts has shape (batch_size, 5); .T gives (5, batch_size),
+    # so each variable is a 1-D array of length batch_size.
     t1, t2, t3, t4, t5 = ts.T
     r1 = np.sqrt(1 - t1 * t1)
     r2 = np.sqrt(1 - t2 * t2)
@@ -399,7 +503,8 @@ def solve_matrix_eq(
     A = np.zeros((batch_size, 10, 10), dtype=np.complex128)
     b = np.zeros((batch_size, 10, 1), dtype=np.complex128)
 
-    # Since it is initialised as a 3d array, we have to manually assign the values to indexes across every batch
+    # A has shape (batch_size, 10, 10): A[:, i, j] assigns element (i, j)
+    # across all batch_size matrices simultaneously (broadcast over axis 0).
     # Row 1
     A[:, 0, 0] = 1
     A[:, 0, 5] = -r1 * np.exp(1j * phi31)
@@ -463,7 +568,35 @@ def solve_qshe_matrix(
     output_indexes: list,
     inputs: ArrayLike,
 ) -> dict:
-    """Build the 20x20 matrix equation and solve Mx = b"""
+    """Solve the 20×20 batched scattering system Mx = b for the QSHE model.
+
+    Extends the IQHE matrix formulation to include the loss amplitude f and
+    spin-resolved channels, resulting in a 20×20 complex linear system.
+    Solves the full batch simultaneously and returns selected solution
+    components.
+
+    Notes:
+        Solves the 20×20 complex scattering system for the 5-site QSHE
+        network model including loss channels.
+
+    Args:
+        ts: Array of shape ``(batch_size, 5)`` — transmission amplitudes
+            ``t1…t5 ∈ [0, 1]``.
+        fs: Array of shape ``(batch_size, 5)`` — loss amplitudes
+            ``f1…f5``, subject to ``t_i² + f_i² ≤ 1``.
+        phis: Array of shape ``(batch_size, 16)`` — the sixteen inter-site
+            phases used to build M.
+        batch_size: Number of samples in this batch.
+        output_indexes: List of solution-vector indices to return (e.g.
+            ``[2, 9, 10, 17]`` for the standard QSHE observables).
+        inputs: 1-D array-like of four boundary condition amplitudes used
+            to populate the b vector.
+
+    Returns:
+        Dictionary mapping each index in ``output_indexes`` to a complex
+        array of shape ``(batch_size, 1)`` containing the corresponding
+        solution component.
+    """
     t1, t2, t3, t4, t5 = ts.T
     f1, f2, f3, f4, f5 = fs.T
     r1 = np.sqrt(1 - t1**2 - f1**2)
@@ -651,32 +784,35 @@ def solve_qshe_matrix(
 def generate_t_prime(
     t: np.ndarray, phi: np.ndarray, expression: str = "shaw"
 ) -> np.ndarray:
-    """Generate next-step amplitudes using the RG transformation.
+    """Apply an analytic RG map to compute next-step transmission amplitudes t'.
 
-    Implements the core RG transformation that maps five input amplitudes and
-    four phases to a new amplitude t'. The transformation preserves important
-    symmetries while capturing the essential physics of the model.
+    Implements the core analytic RG transformation for the IQHE model.
+    Each sample row supplies five amplitudes (t1…t5) and four phases
+    (φ1…φ4); their complementary amplitudes r_i = √(1 − t_i²) are derived
+    internally.  The chosen formula variant computes a complex ratio
+    (numerator / denominator) and returns its absolute value.
 
-    Parameters
-    ----------
-    t : numpy.ndarray
-        Array of shape (N, 5) containing five amplitude samples per row.
-        Values should be in range [0,1].
-    phi : numpy.ndarray
-        Array of shape (N, 4) containing four random phases per row.
-        Values should be in range [0,2π].
+    Notes:
+        Applies one of four analytic RG map variants: ``"jack"``, ``"cain"``,
+        ``"shaw"`` (Shaw 2023 thesis, default), or ``"t"`` (Shaw Eq 2.13).
 
-    Returns
-    -------
-    numpy.ndarray
-        Array of shape (N,) containing the transformed amplitudes t'.
-        Values are clipped to range [0,1-1e-15] for numerical stability.
+    Args:
+        t: Array of shape ``(N, 5)`` — five transmission amplitudes per row,
+            values in ``[0, 1]``.
+        phi: Array of shape ``(N, 4)`` — four random phases per row,
+            values in ``[0, 2π)``.
+        expression: Which analytic formula to use.  First character is
+            matched: ``"j"`` → jack, ``"c"`` → cain, ``"s"`` → shaw,
+            ``"t"`` → shaw second matrix.  Default: ``"shaw"``.
 
-    Notes
-    -----
-    The transformation includes safeguards against division by zero and
-    produces values strictly less than 1 to prevent numerical issues in
-    subsequent logarithmic transformations.
+    Returns:
+        1-D array of ``N`` transformed amplitudes t' ∈ ``[0, 1)``.
+        Values are not explicitly clipped here; the caller (``rg_data_workflow``)
+        is responsible for clipping if required.
+
+    Raises:
+        ValueError: If ``expression`` does not start with a recognised
+            character (``j``, ``c``, ``s``, or ``t``).
     """
     phi1, phi2, phi3, phi4 = phi.T
     t1, t2, t3, t4, t5 = t.T
@@ -767,24 +903,23 @@ def generate_t_prime(
 def numerical_t_prime(
     ts: np.ndarray, phis: np.ndarray, N: int, batch_size: int = 100000
 ) -> np.ndarray:
-    """Compute t' numerically by solving matrix equations in batches.
+    """Compute t' for all N samples by batching calls to ``solve_matrix_eq``.
 
-    Parameters
-    ----------
-    ts : numpy.ndarray
-        Array of shape (N, 5) of amplitude samples.
-    phis : numpy.ndarray
-        Array of shape (N, 8) of phase values used to build the matrices.
-    N : int
-        Total number of samples.
-    batch_size : int, optional
-        Batch size used for vectorised solves.
+    Divides the ``N`` samples into chunks of ``batch_size`` and solves the
+    10×10 IQHE linear system for each chunk, accumulating results into a
+    pre-allocated output array.  ``N`` must be exactly divisible by
+    ``batch_size`` (ensured by the caller).
 
-    Returns
-    -------
-    numpy.ndarray
-        Array of shape (N, 1) containing the absolute values of the solved
-        complex amplitudes (t').
+    Args:
+        ts: Array of shape ``(N, 5)`` — transmission amplitudes.
+        phis: Array of shape ``(N, 8)`` — phase values for matrix construction.
+        N: Total number of samples.
+        batch_size: Number of samples per matrix-solve call.  Default:
+            ``100000``.
+
+    Returns:
+        Array of shape ``(N, 1)`` containing ``|x[output_index]|`` for each
+        sample — the numerically computed t'.
     """
     num_batches = N // batch_size
     tprime = np.empty(shape=(N, 1))
@@ -805,29 +940,29 @@ def rg_data_workflow(
     expr: str,
     batch_size: int = 100000,
 ) -> np.ndarray:
-    """Compute t' according to the selected method.
+    """Dispatch the RG transformation to the analytic or numerical path.
 
-    Parameters
-    ----------
-    method : str
-        Either starts with 'a' for analytic (closed-form expression) or
-        'n' for numerical (matrix solve) computation.
-    ts : numpy.ndarray
-        Input amplitudes, shape (N, 5).
-    phis : numpy.ndarray
-        Input phases, shape (N, 4) or shape required by numerical routine.
-    N : int
-        Number of samples.
-    expr : str
-        Expression identifier passed to the analytic generator (e.g. 'shaw',
-        'jack', 'cain').
-    batch_size : int, optional
-        Batch size for numerical evaluation.
+    Routes the t' computation based on the first character of ``method``:
+    analytic (``'a'``) calls ``generate_t_prime``; numerical (``'n'``) calls
+    ``numerical_t_prime``.
 
-    Returns
-    -------
-    numpy.ndarray
-        Array of t' values, shape (N,) (analytic) or (N, 1) (numerical).
+    Args:
+        method: Method selector string.  First character ``'a'`` → analytic
+            closed-form; ``'n'`` → numerical batched matrix solve.
+        ts: Input amplitude array of shape ``(N, 5)``.
+        phis: Input phase array; shape ``(N, 4)`` for analytic or ``(N, 8)``
+            for numerical.
+        N: Total number of samples.
+        expr: Expression identifier forwarded to ``generate_t_prime`` (e.g.
+            ``"shaw"``, ``"jack"``, ``"cain"``).  Unused for numerical path.
+        batch_size: Batch size for the numerical path.  Default: ``100000``.
+
+    Returns:
+        Array of t' values; shape ``(N,)`` for the analytic path or
+        ``(N, 1)`` for the numerical path.
+
+    Raises:
+        ValueError: If ``method`` does not start with ``'a'`` or ``'n'``.
     """
     if method[0] == "a":  # Then we use the analytic form of tprime
         tprime = generate_t_prime(ts, phis, expr)
@@ -848,7 +983,26 @@ def qshe_numerical_solver(
     inputs: ArrayLike,
     batch_size: int,
 ) -> dict:
-    """Solve the matrix equation Mx=b for N samples using batching"""
+    """Solve the QSHE 20×20 scattering system for all N samples via batching.
+
+    Caps ``batch_size`` at ``N`` when ``N < batch_size``, then iterates
+    over batches and accumulates absolute solution components into
+    pre-allocated float64 arrays.
+
+    Args:
+        ts: Array of shape ``(N, 5)`` — transmission amplitudes.
+        fs: Array of shape ``(N, 5)`` — loss amplitudes.
+        phis: Array of shape ``(N, 16)`` — inter-site phases.
+        N: Total number of samples.
+        output_indexes: List of solution-vector indices to collect (e.g.
+            ``[2, 9, 10, 17]``).
+        inputs: Boundary condition amplitudes passed to ``solve_qshe_matrix``.
+        batch_size: Maximum samples per batch.
+
+    Returns:
+        Dictionary mapping each index in ``output_indexes`` to a float64
+        array of shape ``(N, 1)`` containing ``|x[index]|`` for all samples.
+    """
     if batch_size > N:
         batch_size = N
     num_batches = N // batch_size
@@ -883,7 +1037,40 @@ def qp_trials(
     input_vals: list = [1.0, 0.0, 0.0, 0.0],
     batch_size: int = 10000,
 ) -> tuple:
-    """Run RG iterations for a given q_init and p_init value, computing the mean and median per RG step"""
+    """Run QSHE RG iterations for a single (q_init, p_init) starting point.
+
+    Initialises ``nsamples`` particles near ``(q, pval)``, then iterates
+    the QSHE numerical RG transformation for ``nsteps`` steps, recording
+    summary statistics of p and q at each step.
+
+    Args:
+        q: Initial q value (spin-mixing parameter); held fixed when
+            ``fixed == 1``, or evolved when ``fixed == 0``.
+        pval: Initial p value (``p = |t|²``), used to seed the narrow
+            amplitude distribution.
+        nsamples: Number of MC particles per trial.
+        nsteps: Number of RG iterations to perform.
+        phis: Pre-generated phase array of shape ``(nsamples, 16)`` used
+            in the QSHE matrix solve.
+        rng: Random number generator.
+        metric: Which statistic to record per step.  ``"mean"`` → mean only;
+            ``"median"`` → median only; ``"std"`` → std only;
+            ``"all"`` → (mean, median, std).  Default: ``"all"``.
+        fixed: If ``1``, q is held fixed at its initial value throughout.
+            If ``0``, q is evolved via the RG transformation.  Default: ``1``.
+        output_vars: List of observable names to solve for; mapped to
+            solution-vector indices via ``{"t": 2, "r": 9, "tau": 10,
+            "f": 17}``.  Default: ``["t", "f"]``.
+        input_vals: Boundary condition amplitudes forwarded to
+            ``qshe_numerical_solver``.  Default: ``[1.0, 0.0, 0.0, 0.0]``.
+        batch_size: Samples per batch in the QSHE solver.  Default:
+            ``10000``.
+
+    Returns:
+        A 2-tuple ``(pmets, qmets)`` where each element is a float64 array
+        of shape ``(nsteps, metdim)``.  ``metdim`` is ``1`` for single-metric
+        modes or ``3`` for ``"all"`` (mean, median, std).
+    """
     if metric != "all":
         metdim = 1
     else:
@@ -961,10 +1148,34 @@ def run_qp_trials(
     input_vals: Optional[list] = None,
     batch_size: int = 10000,
 ) -> tuple:
-    """
-    Perform q-p trials for input q and p values, and store data as a 4D numpy array
-    Dimensions of the output array are : [len(qvals), len(pvals), nsteps, 2-4]
-    Final dimension stores [pmean, pmedian, qmean, qmedian], or whichever metrics are chosen
+    """Run QSHE q-p trials for all combinations in the (q, p) grid.
+
+    Iterates over every ``(qvals[i], pvals[j])`` pair, calls ``qp_trials``
+    for each, and stores the results in pre-allocated 4-D arrays.  A new
+    random phase array is generated once per q value to improve statistical
+    independence between q slices.
+
+    Args:
+        qvals: 1-D array of q initial values (grid axis 0).
+        pvals: 1-D array of p initial values (grid axis 1).
+        nsamples: Number of MC particles per trial.
+        nsteps: Number of RG iterations per trial.
+        rng: Random number generator.
+        metric: Aggregation statistic; forwarded to ``qp_trials``.
+            Default: ``"all"``.
+        fixed: Whether to hold q fixed; forwarded to ``qp_trials``.
+            Default: ``1``.
+        output_vars: Observable names; forwarded to ``qp_trials``.
+            Defaults to ``["t", "f"]`` if ``None``.
+        input_vals: Boundary amplitudes; forwarded to ``qp_trials``.
+            Defaults to ``[1.0, 0.0, 0.0, 0.0]`` if ``None``.
+        batch_size: Samples per batch; forwarded to ``qp_trials``.
+            Default: ``10000``.
+
+    Returns:
+        A 2-tuple ``(p_trial_data, q_trial_data)`` where each element is a
+        float64 array of shape ``(len(qvals), len(pvals), nsteps, metdim)``.
+        ``metdim`` is ``1`` for single-metric modes or ``3`` for ``"all"``.
     """
     if output_vars is None:
         output_vars = ["t", "f"]
@@ -1004,125 +1215,194 @@ def run_qp_trials(
 
 # ---------- Variable conversion helpers ---------- #
 def convert_t_to_g(t: np.ndarray) -> np.ndarray:
-    """Convert amplitude t to squared amplitude g.
+    """Convert transmission amplitude t to squared amplitude g = |t|².
 
-    Computes g = |t|² for an array of complex or real amplitudes t.
+    Args:
+        t: Array of transmission amplitude values.  Accepts real or complex
+            arrays; for real inputs this is simply t².
 
-    Parameters
-    ----------
-    t : numpy.ndarray
-        Array of amplitude values to be squared.
-
-    Returns
-    -------
-    numpy.ndarray
-        Array of squared amplitudes g, same shape as input.
+    Returns:
+        Array of squared amplitudes g = |t|², same shape as input,
+        values in ``[0, 1]``.
     """
     return np.abs(t) * np.abs(t)
 
 
 def convert_g_to_z(g: np.ndarray) -> np.ndarray:
-    """Convert squared amplitude g to RG flow parameter z.
+    """Convert squared amplitude g to RG flow parameter z = ln((1−g)/g).
 
-    Computes z = ln((1-g)/g) with numerical stability enforced by clipping
-    g values away from 0 and 1 to prevent divergences.
+    At the critical fixed point the z-distribution is symmetric about
+    z = 0; ``g = 0.5`` maps to ``z = 0``.
 
-    Parameters
-    ----------
-    g : numpy.ndarray
-        Array of squared amplitude values, should be in range [0,1].
+    Args:
+        g: Array of squared amplitude values.  Should be in ``(0, 1)``
+            strictly; values at the boundary diverge logarithmically.
 
-    Returns
-    -------
-    numpy.ndarray
-        Array of z values, same shape as input.
+    Returns:
+        Array of z values spanning ℝ, same shape as input.
 
-    Notes
-    -----
-    Input values are clipped to [1e-15, 1-1e-15] to ensure numerical stability
-    of the logarithm.
+    Notes:
+        Callers are responsible for clipping g away from 0 and 1 before
+        calling this function to avoid logarithmic divergences.
     """
     return np.log((1.0 - g) / g)
 
 
 def convert_z_to_g(z: np.ndarray) -> np.ndarray:
-    """Convert RG flow parameter z back to squared amplitude g.
+    """Convert RG flow parameter z to squared amplitude g = 1/(1 + exp(z)).
 
-    Computes g = 1/(1 + exp(z)), the inverse transformation of convert_g_to_z.
+    Inverse of ``convert_g_to_z``.
 
-    Parameters
-    ----------
-    z : numpy.ndarray
-        Array of z values from the RG flow analysis.
+    Args:
+        z: Array of z values (RG flow parameter), spanning ℝ.
 
-    Returns
-    -------
-    numpy.ndarray
-        Array of squared amplitudes g in range (0,1), same shape as input.
+    Returns:
+        Array of squared amplitudes g ∈ ``(0, 1)``, same shape as input.
     """
     return 1.0 / (1.0 + np.exp(z))
 
 
 def convert_z_to_t(z: np.ndarray) -> np.ndarray:
-    """Convert z data to t data directly.
+    """Convert RG flow parameter z directly to transmission amplitude t.
 
-    The conversion is t = sqrt(1/(1 + exp(z))). Values are suitable for
-    subsequent RG analysis; callers may clip `z` beforehand for numerical
-    stability if required.
+    Computes ``t = √(1 / (1 + exp(z)))``, combining the z → g and g → t
+    steps.
+
+    Args:
+        z: Array of z values spanning ℝ.
+
+    Returns:
+        Array of transmission amplitudes t ∈ ``(0, 1)``, same shape as input.
     """
     return np.sqrt(1.0 / (1.0 + np.exp(z)))
 
 
 def convert_t_to_z(t: np.ndarray) -> np.ndarray:
-    """Convert amplitude t directly to RG flow parameter z.
+    """Convert transmission amplitude t directly to RG flow parameter z.
 
-    Convenience function that combines convert_t_to_g and convert_g_to_z
-    to perform the full t → g → z transformation.
+    Computes ``z = ln(1/t² − 1)``, the composition of t → g and g → z.
 
-    Parameters
-    ----------
-    t : numpy.ndarray
-        Array of amplitude values to be converted.
+    Args:
+        t: Array of transmission amplitude values in ``(0, 1)``; values at
+            the boundary produce ±∞.
 
-    Returns
-    -------
-    numpy.ndarray
-        Array of z values, same shape as input.
+    Returns:
+        Array of z values spanning ℝ, same shape as input.
     """
     return np.log((1.0 / (t**2.0)) - 1.0)
 
 
 def convert_t_to_geff(t: np.ndarray, f: np.ndarray) -> np.ndarray:
+    """Compute the effective squared amplitude g_eff = |t|² + |f|² (QSHE).
+
+    In the QSHE model the total transmitted intensity includes both the
+    coherent amplitude t and the loss channel f.
+
+    Args:
+        t: Array of transmission amplitudes.
+        f: Array of loss amplitudes, subject to ``|t|² + |f|² ≤ 1``.
+
+    Returns:
+        Array of effective squared amplitudes g_eff, same shape as input.
+    """
     t2 = np.abs(t) ** 2
     f2 = np.abs(f) ** 2
     return t2 + f2
 
 
 def convert_geff_to_t(g_eff: np.ndarray, f: np.ndarray) -> np.ndarray:
+    """Recover transmission amplitude t from g_eff and loss amplitude f (QSHE).
+
+    Computes ``t = √(g_eff − |f|²)``, the inverse of the f-channel
+    contribution to the effective squared amplitude.
+
+    Args:
+        g_eff: Array of effective squared amplitudes ``|t|² + |f|²``.
+        f: Array of loss amplitudes whose squared contribution is subtracted.
+
+    Returns:
+        Array of transmission amplitudes t, same shape as input.
+    """
     f2 = np.abs(f) ** 2
     t2 = g_eff - f2
     return np.sqrt(t2)
 
 
 def convert_zeff_to_t(z_eff: np.ndarray, loss: np.ndarray) -> np.ndarray:
+    """Convert effective z parameter and loss to transmission amplitude t (QSHE).
+
+    Computes ``t = √((1 − loss) / (1 + exp(z_eff)))``.  Both input arrays
+    are ravelled to 1-D before arithmetic so the function handles
+    column-vector inputs from the 2-D sampler naturally.
+
+    Args:
+        z_eff: Array of effective z values.  Ravelled to 1-D internally.
+        loss: Array of loss values (|f|²) in ``[0, 1)``.  Ravelled to 1-D
+            internally.
+
+    Returns:
+        1-D array of transmission amplitudes t.
+    """
     t2 = (1 - loss.ravel()) / (1 + np.exp(z_eff.ravel()))
     return np.sqrt(t2)
 
 
 def convert_z_to_x(z):
+    """Convert RG flow parameter z to the alternative parametrisation x.
+
+    Computes ``x = arcsinh(exp(z/2))``.
+
+    Args:
+        z: Array of z values spanning ℝ.
+
+    Returns:
+        Array of x values, same shape as input.
+    """
     return np.arcsinh(np.exp(z / 2))
 
 
 def convert_g_to_x(g, theta=0.0):
+    """Convert squared amplitude g to x via the intermediate z parametrisation.
+
+    Composes g → z → x: first computes ``z = ln((1−g)/g)``, then
+    applies ``convert_z_to_x``.
+
+    Args:
+        g: Array of squared amplitude values in ``(0, 1)``.
+        theta: Unused angular parameter (reserved for future use).
+
+    Returns:
+        Array of x values, same shape as input.
+    """
     z = np.log((1 - g) / g)
     return convert_z_to_x(z)
 
 
 def convert_x_to_z(x):
+    """Convert alternative parametrisation x to RG flow parameter z.
+
+    Computes ``z = ln(sinh²(x))``.  Inverse of ``convert_z_to_x``.
+
+    Args:
+        x: Array of x values.
+
+    Returns:
+        Array of z values, same shape as input.
+    """
     return np.log(np.sinh(x) ** 2)
 
 
 def convert_x_to_g(x):
+    """Convert alternative parametrisation x to squared amplitude g.
+
+    Composes x → z → g: applies ``convert_x_to_z`` then ``g = 1/(1+exp(z))``.
+
+    Args:
+        x: Array of x values.
+
+    Returns:
+        Array of squared amplitudes g ∈ ``(0, 1)``, same shape as input.
+    """
     z = convert_x_to_z(x)
     g = 1 / (1 + np.exp(z))
     return g
@@ -1130,10 +1410,22 @@ def convert_x_to_g(x):
 
 # ---------- Sampling helpers decoupled from P_D ---------- #
 def normalise_samplers(sampler: str) -> str:
-    """Normalise a sampler name to the internal short key.
+    """Normalise a sampler name string to the internal short key.
 
-    Recognised inverse-CDF aliases map to ``'i'`` and rejection-sampler
-    aliases map to ``'r'``. A ``ValueError`` is raised for unknown values.
+    Accepts several common aliases for each sampling method and maps them
+    to a single canonical key used internally.
+
+    Args:
+        sampler: Input sampler name.  Recognised aliases:
+            inverse-CDF — ``"i"``, ``"inv"``, ``"cdf"``, ``"inverse"``;
+            rejection — ``"r"``, ``"rej"``, ``"reject"``, ``"rejection"``.
+            Matching is case-insensitive after stripping whitespace.
+
+    Returns:
+        ``"i"`` for inverse-CDF sampling or ``"r"`` for rejection sampling.
+
+    Raises:
+        ValueError: If ``sampler`` does not match any recognised alias.
     """
     if sampler.strip().lower() in ("i", "inv", "cdf", "inverse"):
         return "i"
@@ -1151,11 +1443,26 @@ def launder(
     rng: np.random.Generator,
     sampler_input: str = "i",
 ) -> np.ndarray:
-    """Perform laundering sampling decoupled from the ProbabilityDistribution class.
+    """Draw N continuous samples from a binned histogram distribution.
 
-    The function performs inverse-CDF sampling from the provided binned
-    histogram values to produce `N` continuous samples drawn from the
-    histogram's implied distribution.
+    Dispatches to either ``inverse_cdf_sampler`` or ``rejection_sampler``
+    based on the normalised sampler key.
+
+    Args:
+        N: Number of samples to draw.
+        hist_vals: Histogram bin counts.
+        bin_edges: Bin edge array of length ``len(hist_vals) + 1``.
+        bin_centers: Bin centre array (required by rejection sampler).
+        rng: Random number generator.
+        sampler_input: Sampler selector; passed through
+            ``normalise_samplers``.  Default: ``"i"`` (inverse-CDF).
+
+    Returns:
+        1-D array of ``N`` continuous samples drawn from the histogram's
+        implied probability distribution.
+
+    Raises:
+        KeyError: If the normalised sampler key is not ``"i"`` or ``"r"``.
     """
     sampler = normalise_samplers(sampler_input)
     if sampler.strip().lower() == "i":
@@ -1172,23 +1479,21 @@ def inverse_cdf_sampler(
     bin_edges: np.ndarray,
     rng: np.random.Generator,
 ) -> np.ndarray:
-    """Inverse-CDF sampling from a binned histogram.
+    """Draw N samples from a binned histogram using the inverse-CDF method.
 
-    Parameters
-    ----------
-    N : int
-        Number of samples to draw.
-    hist_vals : numpy.ndarray
-        Histogram counts per bin.
-    bin_edges : numpy.ndarray
-        Bin edge array of length ``len(hist_vals) + 1``.
-    rng : numpy.random.Generator
-        RNG instance used to draw uniform variates.
+    Builds the empirical CDF from bin densities and widths, maps N uniform
+    variates through the inverted CDF via binary search, then adds uniform
+    jitter within each selected bin to produce continuous samples.
 
-    Returns
-    -------
-    numpy.ndarray
-        Array of `N` continuous samples drawn from the histogram's implied PDF.
+    Args:
+        N: Number of samples to draw.
+        hist_vals: Histogram counts per bin.
+        bin_edges: Bin edge array of length ``len(hist_vals) + 1``.
+        rng: Random number generator used to draw uniform variates.
+
+    Returns:
+        1-D array of ``N`` continuous samples drawn from the histogram's
+        implied probability density function.
     """
     # Inverse CDF method
     u = rng.random(size=N)
@@ -1217,26 +1522,25 @@ def rejection_sampler(
     bin_centers: np.ndarray,
     rng: np.random.Generator,
 ) -> np.ndarray:
-    """Rejection-sampling-based launderer from binned histogram.
+    """Draw N samples from a binned histogram using vectorised rejection sampling.
 
-    Parameters
-    ----------
-    N : int
-        Number of samples to produce.
-    hist_vals : numpy.ndarray
-        Histogram counts per bin.
-    bin_edges : numpy.ndarray
-        Bin edge array.
-    bin_centers : numpy.ndarray
-        Bin centers (unused directly but provided for completeness).
-    rng : numpy.random.Generator
-        RNG instance used to draw uniform variates.
+    Proposes batches of candidate (x, y) pairs uniformly within the
+    histogram domain, accepts candidates where ``y ≤ normalised_density(x)``,
+    and accumulates accepted samples until exactly N are collected.  Batch
+    size adapts between ``min_batch_size`` (10 000) and
+    ``max_batch_size`` (1 000 000) based on remaining count.
 
-    Returns
-    -------
-    numpy.ndarray
-        Array of `N` continuous samples drawn from the histogram's implied PDF
-        via rejection sampling.
+    Args:
+        N: Number of samples to produce.
+        hist_vals: Histogram counts per bin.
+        bin_edges: Bin edge array of length ``len(hist_vals) + 1``.
+        bin_centers: Bin centre array (accepted for API compatibility;
+            not used directly in the algorithm).
+        rng: Random number generator used to draw uniform variates.
+
+    Returns:
+        1-D array of exactly ``N`` continuous samples drawn from the
+        histogram's implied probability density.
     """
     # Launder a.k.a rejection method
     bin_width = np.diff(bin_edges)[0]
@@ -1300,7 +1604,34 @@ def build_2d_hist(
     data2_range: tuple,
     sym: bool = False,
 ) -> dict:
-    """Constructs a 2D histogram from input data arrays"""
+    """Construct a 2-D histogram and derive marginal densities.
+
+    Builds a joint 2-D histogram for two variables, optionally symmetrises
+    the first axis about its mode, and computes properly normalised 2-D and
+    1-D probability densities.
+
+    Args:
+        vars: List of two variable name strings (e.g. ``["z", "f"]``) used
+            to label the returned dictionary keys.
+        data1: 1-D (or ravelled) array of samples for the first variable
+            (histogram x-axis, labelled ``vars[0]``).
+        data2: 1-D (or ravelled) array of samples for the second variable
+            (histogram y-axis, labelled ``vars[1]``).
+        data1_bins: Number of bins along the first axis.
+        data2_bins: Number of bins along the second axis.
+        data1_range: ``(min, max)`` range for the first axis.
+        data2_range: ``(min, max)`` range for the second axis.
+        sym: If ``True``, shift the first-axis distribution so its mode
+            aligns with the grid centre (symmetrisation step).
+            Default: ``False``.
+
+    Returns:
+        A dictionary with keys:
+
+        - ``"{var1}_{var2}"``: ``{"histval": 2-D count array, "densities": 2-D density array}``
+        - ``"{var1}"``: ``{"histval", "binedges", "bincenters", "densities"}`` — marginal along axis 0.
+        - ``"{var2}"``: ``{"histval", "binedges", "bincenters", "densities"}`` — marginal along axis 1.
+    """
     data1 = data1.ravel()
     data2 = data2.ravel()
     hist2d, z_edges, f_edges = np.histogram2d(
@@ -1329,6 +1660,9 @@ def build_2d_hist(
         hist2d = output
 
     # Compute probability densities
+    # [:, None] makes dz a column vector (shape: n_z_bins, 1);
+    # [None, :] makes df a row vector (shape: 1, n_f_bins).
+    # Broadcasting produces a (n_z_bins, n_f_bins) area matrix.
     dz = np.diff(z_edges)[:, None]
     df = np.diff(f_edges)[None, :]
     area = dz * df
@@ -1338,8 +1672,12 @@ def build_2d_hist(
     p_zf = hist2d / total / area
 
     # Obtain 1D densities and assert they are normalised
+    # Multiply p_zf (n_z, n_f) by df (1, n_f) then sum over the f-axis to
+    # marginalise over f and recover the z marginal density p(z).
     p_z = (p_zf * df).sum(axis=1)
     assert np.abs(np.sum(p_z * np.diff(z_edges)) - 1.0) <= 1e-12
+    # Multiply p_zf (n_z, n_f) by dz (n_z, 1) then sum over the z-axis to
+    # marginalise over z and recover the f marginal density p(f).
     p_f = (p_zf * dz).sum(axis=0)
     assert np.abs(np.sum(p_f * np.diff(f_edges)) - 1.0) <= 1e-12
 
@@ -1368,7 +1706,23 @@ def build_2d_hist(
 
 
 def rejection_sampler_2d(data_dict: dict, rng: np.random.Generator, N: int) -> tuple:
-    """Generate z and f sample arrays within the constraint by rejecting invalid inverse CDF samples"""
+    """Draw N valid (z, f) pairs from a 2-D histogram, rejecting unitarity violations.
+
+    Repeatedly calls ``inverse_cdf_2d`` in batches, then rejects any
+    sample where ``t² + f² > 1`` (unitarity constraint), until exactly
+    N accepted pairs are collected.
+
+    Args:
+        data_dict: Dictionary produced by ``build_2d_hist`` containing
+            2-D histogram counts and marginal bin edges under keys
+            ``"zf"``, ``"z"``, and ``"f"``.
+        rng: Random number generator.
+        N: Number of valid (z, f) pairs to produce.
+
+    Returns:
+        A 2-tuple ``(z_take, f_take)`` where each element is a float64
+        array of length ``N`` containing accepted sample values.
+    """
     # Initialise output arrays
     z_take = np.empty(N, dtype=np.float64)
     f_take = np.empty(N, dtype=np.float64)
@@ -1408,7 +1762,23 @@ def rejection_sampler_2d(data_dict: dict, rng: np.random.Generator, N: int) -> t
 
 
 def inverse_cdf_2d(data_dict: dict, rng: np.random.Generator, N: int) -> tuple:
-    """Perform inverse CDF sampling for a 2D histogram. Adapted from https://www.andreaamico.eu/data-analysis/2020/03/02/hist_sampling.html"""
+    """Draw N (z, f) pairs from a 2-D histogram using the inverse-CDF method.
+
+    Flattens the 2-D count array to 1-D, constructs a CDF, inverts it
+    with binary search to obtain flat 1-D indices, then unravels those
+    indices back to (z_bin, f_bin) pairs.  Samples are placed uniformly
+    within the selected rectangular cells.
+
+    Args:
+        data_dict: Dictionary with keys ``"zf"`` (2-D counts), ``"z"``
+            (bin edges), and ``"f"`` (bin edges).
+        rng: Random number generator.
+        N: Number of pairs to draw.
+
+    Returns:
+        A 2-tuple ``(z_sample, f_sample)`` of float64 arrays of length
+        ``N``.
+    """
     # Load 2D counts and respective axis bins
     zf_counts = data_dict["zf"]["counts"]
     z_edges = data_dict["z"]["binedges"]
@@ -1429,6 +1799,8 @@ def inverse_cdf_2d(data_dict: dict, rng: np.random.Generator, N: int) -> tuple:
 
     # Find z and f indexes
     z_size, f_size = zf_counts.shape
+    # Unravel the flat CDF index back to 2-D (z_bin, f_bin):
+    # integer division gives the row (z), modulo gives the column (f).
     z_indexes = flattened_indexes // f_size
     f_indexes = flattened_indexes % f_size
 
@@ -1451,12 +1823,26 @@ def conditional_2d_resampler(
     N: int,
     var2d: str,
 ) -> tuple:
-    """
-    Generate random z and f samples from their 2D histogram.
-        - Generates z bins from P(z), z marginal.
-        - Generates f bins from P(z | f), the conditional distribution to preserve row ordering
-        - Uniformly samples within the generated rectangle
-        - Rejects values that violate |t|^2 + |f|^2 <= 1.0
+    """Draw N valid (var1, var2) pairs using conditional 2-D histogram sampling.
+
+    Samples the first variable (var1) from its marginal P(var1), then for
+    each selected var1 bin samples var2 from the conditional P(var2 | var1)
+    using the corresponding histogram row.  Empty rows fall back to the
+    var2 marginal.  Rejects pairs where the unitarity constraint
+    ``t² + mix ≤ 1`` is violated.
+
+    Args:
+        data_dict: Dictionary produced by ``build_2d_hist`` containing the
+            2-D histogram and marginal arrays.  Keys are named after the
+            two variables, e.g. ``"z_mix"``, ``"z"``, ``"mix"``.
+        rng: Random number generator.
+        N: Number of valid pairs to produce.
+        var2d: Key for the joint histogram entry, formatted as
+            ``"{var1}_{var2}"`` (e.g. ``"z_mix"``).
+
+    Returns:
+        A 2-tuple ``(z_take, mix_take)`` of float64 arrays of length ``N``
+        containing accepted (var1, var2) sample values.
     """
     vars = var2d.split("_")
     var0 = vars[0]
@@ -1497,7 +1883,9 @@ def conditional_2d_resampler(
         # Generate empty f bins array
         mix_bins = np.empty(batch_size, dtype=np.int64)
 
-        # Get unique z bins to prevent resampling from same bin
+        # unique_z: sorted unique bin indices; inv_z: integer array the same
+        # length as z_bins where inv_z[k] is the position of z_bins[k] in
+        # unique_z, allowing vectorised per-bin conditional sampling below.
         unique_z, inv_z = np.unique(z_bins, return_inverse=True)
 
         # Loop until batch_size no. of f_bins is obtained
@@ -1569,19 +1957,18 @@ def conditional_2d_resampler(
 
 
 def get_density(hist_vals: np.ndarray, bin_edges: np.ndarray) -> np.ndarray:
-    """Convert histogram counts into a probability density function.
+    """Convert histogram bin counts into a normalised probability density.
 
-    Parameters
-    ----------
-    hist_vals : numpy.ndarray
-        Bin counts for the histogram.
-    bin_edges : numpy.ndarray
-        Bin edges array of length `len(hist_vals) + 1`.
+    Divides counts by the total count and by each bin width so that the
+    resulting array integrates to 1 over the bin support.
 
-    Returns
-    -------
-    numpy.ndarray
-        Probability density (values such that integral over bins = 1).
+    Args:
+        hist_vals: Bin counts array of length ``n_bins``.
+        bin_edges: Bin edge array of length ``n_bins + 1``.
+
+    Returns:
+        Array of probability densities of the same length as ``hist_vals``,
+        satisfying ``sum(density * bin_widths) = 1``.
     """
     bin_counts = hist_vals.astype(float)
     bin_widths = np.diff(bin_edges)
@@ -1592,22 +1979,21 @@ def get_density(hist_vals: np.ndarray, bin_edges: np.ndarray) -> np.ndarray:
 
 # ---------- Moments helpers ---------- #
 def l2_distance(old_hist_val, new_hist_val, old_bins, new_bins) -> float:
-    """Calculate L2 distance between this distribution and another.
+    """Compute the L2 distance between two histogram distributions.
 
-    Computes the integrated squared difference between two normalized
-    histograms: δ = √∫(Q_{k+1}(z)² - Q_k(z)²)dz.
+    Evaluates ``δ = √∫(Q_{k+1}(z) − Q_k(z))² dz`` by numerical
+    integration over the shared bin grid.
 
-    Parameters
-    ----------
-    other_histogram_values : numpy.ndarray
-        Normalized values from other histogram, shape (bins,).
-    other_histogram_bin_edges : numpy.ndarray
-        Bin edges from other histogram, shape (bins+1,).
+    Args:
+        old_hist_val: Bin counts for the reference (previous-step)
+            histogram.
+        new_hist_val: Bin counts for the new (current-step) histogram.
+        old_bins: Bin edge array for the reference histogram.
+        new_bins: Bin edge array for the new histogram (must be the same
+            grid as ``old_bins``).
 
-    Returns
-    -------
-    float
-        L2 distance between the distributions.
+    Returns:
+        Scalar L2 distance between the two normalised density functions.
     """
     # L2 distance between 2 histograms
     old_density = get_density(old_hist_val, old_bins)
@@ -1619,22 +2005,21 @@ def l2_distance(old_hist_val, new_hist_val, old_bins, new_bins) -> float:
 
 
 def mean_squared_distance(old_hist_val, new_hist_val, old_bins, new_bins) -> float:
-    """Compute Shaw's mean-squared distance between two histograms.
+    """Compute Shaw's mean-squared distance (MSD) between two histograms.
 
-    The measure used in Shaw's workflow computes the mean over bins of the
-    square-root of the positive part of (new_density^2 - old_density^2).
+    Evaluates ``MSD = mean_over_bins(√max(Q_{k+1}² − Q_k², 0))``.
+    Negative differences (which can arise when a large shift is applied)
+    are clipped to zero before taking the square root.
 
-    Parameters
-    ----------
-    old_hist_val, new_hist_val : array-like
-        Histogram counts for the old and new distributions respectively.
-    old_bins, new_bins : array-like
-        Corresponding bin-edge arrays.
+    Args:
+        old_hist_val: Bin counts for the reference (previous-step)
+            histogram.
+        new_hist_val: Bin counts for the new (current-step) histogram.
+        old_bins: Bin edge array for the reference histogram.
+        new_bins: Bin edge array for the new histogram.
 
-    Returns
-    -------
-    float
-        The computed mean squared (Shaw) distance.
+    Returns:
+        Scalar Shaw MSD value; used as a convergence metric in RG runs.
     """
     # Shaw's MSD
     old_density = get_density(old_hist_val, old_bins)
@@ -1646,15 +2031,17 @@ def mean_squared_distance(old_hist_val, new_hist_val, old_bins, new_bins) -> flo
 
 
 def hist_moments(hist_vals: np.ndarray, bins: np.ndarray) -> tuple:
-    """Calculate mean and standard deviation of the distribution.
+    """Compute the mean and standard deviation of a binned distribution.
 
-    Uses the normalized histogram values to compute first and second
-    moments of the distribution.
+    Computes the first and second moments by numerical integration over
+    the bin centres weighted by the normalised probability density.
 
-    Returns
-    -------
-    tuple
-        (mean, standard_deviation) of the distribution.
+    Args:
+        hist_vals: Bin counts array of length ``n_bins``.
+        bins: Bin edge array of length ``n_bins + 1``.
+
+    Returns:
+        A 2-tuple ``(mean, standard_deviation)`` as Python floats.
     """
     dz = np.diff(bins)
     centers = 0.5 * (bins[:-1] + bins[1:])
@@ -1669,41 +2056,43 @@ def hist_moments(hist_vals: np.ndarray, bins: np.ndarray) -> tuple:
 def center_z_distribution(
     z_hist: np.ndarray, z_bins: np.ndarray | None = None
 ) -> np.ndarray:
-    """Symmetrise a binned z-histogram array about zero.
+    """Symmetrise a binned z-histogram about z = 0 by averaging mirror bins.
 
-    Parameters
-    ----------
-    z_hist : numpy.ndarray
-        1-D array of histogram counts (or densities) over z bins.
-    z_bins : numpy.ndarray, optional
-        Corresponding bin edges. If provided the caller is expected to
-        renormalise using bin widths; this function only averages symmetric
-        bin pairs and returns the symmetrised values.
+    Enforces particle-hole symmetry by replacing each bin with the average
+    of itself and its mirror-image bin on the opposite side of z = 0.
 
-    Returns
-    -------
-    numpy.ndarray
-        Symmetrised histogram values (same shape as ``z_hist``).
+    Args:
+        z_hist: 1-D array of histogram counts (or densities) over z bins,
+            assumed to be arranged symmetrically around z = 0.
+        z_bins: Bin edge array (optional, not used by this function).
+            Callers are responsible for renormalising the returned values
+            by bin widths if needed.
+
+    Returns:
+        Symmetrised histogram array of the same shape as ``z_hist``.
     """
+    # z_hist[::-1] reverses the array so that bin k is paired with its
+    # mirror bin -(k+1), enforcing symmetry about z = 0.
     symmetrised_z = 0.5 * (z_hist + z_hist[::-1])
     return symmetrised_z
 
 
 # ---------- Nu calculator ---------- #
 def calculate_nu(slope: float, rg_steps: int) -> float:
-    """Compute critical exponent ``nu`` from slope and number of RG steps.
+    """Compute the critical exponent ν from the EXP-run scaling slope.
 
-    Parameters
-    ----------
-    slope : float
-        Absolute slope obtained from a fit of z_peak vs perturbation.
-    rg_steps : int
-        Number of RG steps used in the scaling relation.
+    Uses the scaling relation ``ν = ln(2^rg_steps) / ln(|slope|)`` where
+    ``slope`` is the gradient of the shifted z-peak position versus
+    perturbation magnitude obtained from EXP runs.
 
-    Returns
-    -------
-    float
-        Computed critical exponent ``nu`` using ``nu = ln(2**rg_steps) / ln(|slope|)``.
+    Args:
+        slope: Gradient of the linear fit of z_peak vs perturbation shift
+            (from EXP runs).  The absolute value is used.
+        rg_steps: Number of RG iterations used in the EXP run; sets the
+            scale factor ``2^rg_steps`` in the numerator.
+
+    Returns:
+        Critical exponent ν as a Python float.
     """
     nu = np.log(2**rg_steps) / np.log(np.abs(slope))
 

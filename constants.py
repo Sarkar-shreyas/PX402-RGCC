@@ -1,23 +1,29 @@
-"""Project-wide constants and environment-derived paths.
+"""Global constants and environment-derived paths for the RG Monte Carlo pipeline.
 
-This module centralises constants used across the repo and reads required
-environment variables from a `.env` file via `python-dotenv`. It is imported
-by runtime helpers (for example, :mod:`file_management`) that rely on the
-environment for remote host and path configuration.
+Exports
+-------
+- Path variables (``data_dir``, ``local_dir``, ``root_dir``, ``taskfarm_dir``,
+  ``qshe_dir``, ``config_file``, ``host``, ``remote_dir``, ``qshe_test_dir``)
+  resolved from the ``.env`` file via ``python-dotenv``; downstream modules import
+  these rather than hardcoding paths.
+- Simulation constants: ``N``, ``SHIFTS``, ``CURRENT_VERSION``, ``NUM_RG``
+- Plot-parameter dictionaries: ``LEGENDS``, ``YLIMS``, ``XLIMS``
+- RG variable encoding maps: ``T_DICT``, ``PHI_DICT``, ``THETA_DICT``
 
-Environment variables (required)
--------------------------------
-- ``DATA_DIR``: Local destination root for pulled job outputs.
-- ``LOCAL_DIR``: Local folder for locally produced data.
-- ``ROOT_DIR``: Local repository root.
-- ``TASKFARM_DIR``: Local path to the Taskfarm folder used for staging.
-- ``HOST``: Remote SSH host used for transfers.
-- ``REMOTE_DIR``: Remote project base directory on the cluster (referred to
-  throughout the docs as ``<REMOTE_ROOT>``).
+Path resolution
+---------------
+``load_dotenv()`` populates ``os.environ`` from the local ``.env`` file.  All
+path variables are then read from the environment, so the same code works on
+every developer machine and on the HPC cluster without modification.  If any
+required variable is absent the module raises ``RuntimeError`` immediately so
+misconfigured environments are caught at import time rather than deep inside a
+run.
 
-The module will raise ``RuntimeError`` at import time when any required env
-vars are missing. This behaviour is intentional to fail fast when running
-transfer utilities or local tests that expect these values to be available.
+Downstream usage
+----------------
+All other modules (e.g. :mod:`file_management`, :mod:`analysis.critical_exponent`)
+import from this module instead of duplicating ``os.getenv`` calls or hardcoded
+strings.
 """
 
 import numpy as np
@@ -41,6 +47,9 @@ if missing_vars:
         f" Missing required env vars: {missing_vars}.\n See README.md for setup instructions."
     )
 
+# ---------------------------------------------------------------------------
+# Filesystem paths — resolved from .env; see module docstring for details.
+# ---------------------------------------------------------------------------
 data_dir = os.getenv("DATA_DIR")
 local_dir = os.getenv("LOCAL_DIR")
 root_dir = os.getenv("ROOT_DIR")
@@ -51,19 +60,46 @@ host = os.getenv("HOST")
 remote_dir = os.getenv("REMOTE_DIR")
 qshe_test_dir = os.getenv("QSHE_TEST_DIR")
 
+# ---------------------------------------------------------------------------
+# Monte Carlo sample count — total number of RG samples per run.
+# Local test runs use 32 M; HPC production runs use 480 M (this value).
+# ---------------------------------------------------------------------------
 # SHIFTS = [0.0, 0.003, 0.005, 0.007, 0.009]
 # SHIFTS = [0.0, 0.1, 0.2, 0.3, 0.4]
 # SHIFTS = [-0.4, -0.3, -0.2, -0.1, 0.0, 0.1, 0.2, 0.3, 0.4]
 # SHIFTS = ["0.0", "0.003", "0.005", "0.0075", "0.010"]
 # SHIFTS = ["0.0", "0.003", "0.004", "0.005", "0.006", "0.0075", "0.010"]
 N = 480000000
+
+# ---------------------------------------------------------------------------
+# EXP perturbation shifts — small detunings away from the critical fixed point
+# used in EXP runs to measure the growth rate of the relevant eigenvalue and
+# hence extract the critical exponent ν.
+# ---------------------------------------------------------------------------
 SHIFTS = ["0.0", "0.003", "0.004", "0.005", "0.006"]
+
+# ---------------------------------------------------------------------------
+# Run identifier — labels the output directory for the current production run;
+# encodes model type, method, and expression variant.
+# ---------------------------------------------------------------------------
 # CURRENT_VERSION = "1.84J"
 # CURRENT_VERSION = "1.90S"
 CURRENT_VERSION = "fp_iqhe_numerical_shaw"
+
+# ---------------------------------------------------------------------------
+# RG iteration depth — number of RG steps applied per run (HPC production).
+# Local runs typically use 7; production runs use 9 for better convergence.
+# ---------------------------------------------------------------------------
 NUM_RG = 9
 # NUM_RG = 10
 # NUM_RG = 12
+
+# ---------------------------------------------------------------------------
+# Plot layout parameters — legend placement, axis limits for every observable.
+# Keyed first by run type ("FP" / "EXP") then by observable name.
+# ---------------------------------------------------------------------------
+
+# Legend anchor positions for each observable in FP and EXP plots.
 LEGENDS = {
     "FP": {
         "r": "upper left",
@@ -93,6 +129,10 @@ LEGENDS = {
         "z": "upper left",
     },
 }
+
+# Y-axis display ranges; amplitude-like observables are bounded [0, 3],
+# broader phase-space quantities extend to 5.  z uses a narrow probability
+# density range [0, 0.3].
 YLIMS = {
     "FP": {
         "r": (0.0, 3.0),
@@ -123,6 +163,10 @@ YLIMS = {
         "z": (0.0, 0.3),
     },
 }
+
+# X-axis display ranges; amplitude observables are plotted over [0, 1] (the
+# physical range of t); z is plotted over [-25, 25] to capture the full
+# log-ratio distribution.
 XLIMS = {
     "FP": {
         "r": (0.0, 1.0),
@@ -154,7 +198,16 @@ XLIMS = {
     },
 }
 
+# ---------------------------------------------------------------------------
+# RG variable encoding maps — integer keys map CLI/config integer codes to
+# physical parameter values used in the RG transformation.
+# ---------------------------------------------------------------------------
+
+# Transmission amplitude t: 0 = uniform random; 1–4 = specific fixed values
+# including the critical point (1/√2) and the localised/delocalised limits.
 T_DICT = {"0": "random", "1": 0.0, "2": 0.5, "3": float(1 / np.sqrt(2)), "4": 1.0}
+
+# Scattering phase φ: 0 = random; 1–5 cover key fractions of π.
 PHI_DICT = {
     "0": "random",
     "1": 0.0,
@@ -163,6 +216,9 @@ PHI_DICT = {
     "4": float(np.pi),
     "5": float(np.pi * 2),
 }
+
+# Mixing angle θ: 0 = random; 1–8 span the range [0, π/2] at physically
+# motivated fractions, including the SU(2)-symmetric point (π/4).
 THETA_DICT = {
     "0": "random",
     "1": 0.0,

@@ -1,20 +1,60 @@
-"""Run an RG workflow locally.
+"""Local IQHE FP/EXP driver for development and testing.
 
-This script provides a single-process driver used for local testing of the RG
-Monte Carlo pipeline. It re-uses the library code in ``source/`` to run small
-FP (fixed-point) or EXP (shifted/exponent) workflows and writes NPZ histograms
-and a JSON manifest into a local output directory.
+Purpose
+-------
+Single-process driver for running IQHE Renormalization Group (RG) workflows
+locally, intended for development and testing only — not for production use.
+Re-uses the same ``source/`` library code as the Taskfarm HPC scripts but runs
+at reduced sample counts (typically 32 M samples, 7 steps) in one Python
+process without Slurm job arrays.
 
-Usage
------
+Differences from HPC Taskfarm scripts
+--------------------------------------
+- **Sample count**: 32 M samples locally vs 320 M–480 M on the cluster.
+- **RG steps**: 7 locally vs 9 on the cluster.
+- **No Slurm**: all computation is sequential in one process; HPC uses
+  parallelised job arrays coordinated by ``Taskfarm/scripts/run_rg.sh`` and
+  ``Taskfarm/scripts/run_shifts.sh``.
+- **No aggregation step**: the Taskfarm pipeline splits data generation and
+  histogram construction across many tasks; this driver combines both in a
+  single loop.
+
+CLI Usage
+---------
 Run from the repository root::
 
-        python -m Local.run_local --config Local/configs/local_iqhe --set "rg_settings.steps=2" --set "rg_settings.samples=10000" --type FP
+    python -m Local.run_local_iqhe \\
+        --config Local/configs/local_iqhe \\
+        --set "rg_settings.steps=3" "rg_settings.samples=10000000" \\
+        --type FP
+
+    python -m Local.run_local_iqhe \\
+        --config Local/configs/local_iqhe \\
+        --set "rg_settings.steps=3" "rg_settings.samples=10000000" \\
+        --type EXP
+
+Output Location
+---------------
+Outputs are written under ``Local data/`` in the repository root::
+
+    Local data/{version}_{method}_{expr}/FP/
+        hist/t/t_hist_RG{i}.npz
+        hist/z/z_sym_hist_RG{i}.npz   (or z_hist_RG{i}.npz when symmetrise=0)
+        output.txt
+        error.txt
+        output_locs.json
+        updated_config.yaml
+
+    Local data/{version}_{method}_{expr}/EXP/
+        {shift}/hist/t/t_hist_RG{i}.npz
+        {shift}/hist/z/z_hist_RG{i}.npz
 
 Notes
 -----
-- This module redirects stdout/stderr to ``output.txt``/``error.txt`` inside
-    the chosen output directory when executed as a script.
+- stdout and stderr are redirected to ``output.txt`` and ``error.txt`` inside
+  the chosen output directory when executed as a script.
+- The EXP workflow seeds its initial distribution from the last FP-step
+  z-histogram; run the FP workflow before EXP for a given config.
 """
 
 from time import time
@@ -53,17 +93,14 @@ from constants import T_DICT, PHI_DICT
 def build_default_output_dir(config: dict) -> Path:
     """Build the default local output directory for a config.
 
-    Parameters
-    ----------
-    config : dict
-        Parsed configuration dictionary (result of :func:`source.parse_config.validate_input`
-        / :func:`source.config.handle_config`). Must include ``main.version`` and
-        ``engine.method`` keys. ``engine.expr`` is also used to form the directory
-        name.
+    Args:
+        config: Parsed configuration dictionary (result of
+            :func:`source.parse_config.validate_input` /
+            :func:`source.config.handle_config`). Must include ``main.version``
+            and ``engine.method`` keys. ``engine.expr`` is also used to form
+            the directory name.
 
-    Returns
-    -------
-    Path
+    Returns:
         A path under the repository root of the form
         ``<repo_root>/Local data/{version}_{method}_{expr}``.
     """
@@ -80,18 +117,12 @@ def build_default_output_dir(config: dict) -> Path:
 def build_hist(data: np.ndarray, bins: int, range: tuple) -> dict:
     """Compute a histogram and return related arrays and densities.
 
-    Parameters
-    ----------
-    data : np.ndarray
-        1-D array of samples to histogram.
-    bins : int
-        Number of histogram bins.
-    range : tuple
-        (min, max) binning range.
+    Args:
+        data: 1-D array of samples to histogram.
+        bins: Number of histogram bins.
+        range: ``(min, max)`` binning range.
 
-    Returns
-    -------
-    dict
+    Returns:
         Dictionary with keys: ``hist`` (counts), ``edges`` (bin edges),
         ``centers`` (bin centers) and ``densities`` (density per bin computed
         using :func:`source.utilities.get_density`).
@@ -105,15 +136,13 @@ def build_hist(data: np.ndarray, bins: int, range: tuple) -> dict:
 def print_config(config: RGConfig) -> None:
     """Print a compact, human-readable summary of the main run settings.
 
-    Parameters
-    ----------
-    config : RGConfig
-        Configuration dataclass returned by :func:`source.config.build_config`.
+    Args:
+        config: Configuration dataclass returned by
+            :func:`source.config.build_config`.
 
-    Notes
-    -----
-    - If the configuration indicates an ``EXP`` run, this function expects
-      ``config.shifts`` to be iterable.
+    Notes:
+        If the configuration indicates an ``EXP`` run, this function expects
+        ``config.shifts`` to be iterable.
     """
     header = f" RG Configuration for {config.version}_{config.method}_{config.expr} "
     print(header)
@@ -143,41 +172,45 @@ def rg_fp(
 ) -> dict:
     """Run an FP (fixed-point) RG workflow locally and write histograms.
 
-    The function performs ``rg_config.steps`` iterations. For each step it
-    computes the transformed samples using :func:`source.utilities.rg_data_workflow`,
-    converts between t and z representations, computes histograms and writes
-    NPZ files via :func:`source.utilities.save_data` into the folders provided
-    by ``output_folders``.
+    Performs ``rg_config.steps`` RG iterations. Each step:
 
-    Parameters
-    ----------
-    rg_config : RGConfig
-        Configuration dataclass containing numeric settings (samples, bins,
-        ranges, resampling behaviour, seed, etc.).
-    output_folders : dict
-        Mapping with keys ``'t'`` and ``'z'`` giving output directories for
-        t- and z-histograms respectively. Values should be string paths.
-    starting_t : int
-        If non-zero, indicates a fixed starting t value will be used.
-    starting_phi : int
-        If non-zero, indicates a fixed starting phi value will be used.
+    1. Applies the RG map via :func:`source.utilities.rg_data_workflow` to
+       produce the next-step amplitude samples ``t'``.
+    2. Converts ``t'`` to the log-ratio ``z`` via
+       :func:`source.utilities.convert_t_to_z`.
+    3. Builds t- and z-histograms.
+    4. Optionally symmetrises the z-distribution (when
+       ``rg_config.symmetrise == 1``) to enforce particle-hole symmetry.
+    5. Launders the histogram back into a new sample array for the next step.
+    6. Writes NPZ histogram files to the ``t`` and ``z`` sub-folders of
+       ``output_folders``.
 
-    Returns
-    -------
-    dict
-        Mapping of step identifiers to the generated NPZ file paths, for
-        example ``{"RG0": {"t": "...", "z": "..."}, ...}``.
+    Args:
+        rg_config: Configuration dataclass containing numeric settings
+            (samples, bins, ranges, resampling behaviour, seed, etc.).
+        output_folders: Mapping with keys ``'t'`` and ``'z'`` giving output
+            directories for t- and z-histograms respectively.
+        starting_t: If non-zero, selects a fixed starting t value from
+            ``T_DICT`` (keyed by the ``--t`` CLI argument). Zero means draw
+            from a flat distribution.
+        starting_phi: If non-zero, selects a fixed starting phase from
+            ``PHI_DICT`` (keyed by the ``--phi`` CLI argument). Zero means
+            draw random phases.
 
-    Notes
-    -----
-    - The implementation currently references an external ``args`` variable
-      when constructing constant initial arrays if ``starting_t`` or
-      ``starting_phi`` is non-zero. This variable is provided when the module
-      is executed as a script; if you call :func:`rg_fp` programmatically you
-      must supply ``starting_t``/``starting_phi`` values accordingly.
-      (See module-level ``if __name__ == '__main__'`` block.)
-    - Side effects: writes NPZ files to disk and prints progress to stdout.
+    Returns:
+        Mapping of step identifiers to the generated NPZ file paths, e.g.
+        ``{"RG0": {"t": "...", "z": "..."}, ...}``.
+
+    Notes:
+        The implementation references an external ``args`` variable when
+        constructing constant initial arrays if ``starting_t`` or
+        ``starting_phi`` is non-zero. This variable is provided when the
+        module is executed as a script; if you call :func:`rg_fp`
+        programmatically you must supply ``starting_t``/``starting_phi``
+        values accordingly (see the module-level ``if __name__ == '__main__'``
+        block).
     """
+    # --- Unpack run settings from the validated config dataclass ---
     samples = rg_config.samples
     batch_size = rg_config.matrix_batch_size
     steps = rg_config.steps
@@ -193,11 +226,13 @@ def rg_fp(
     rng = build_rng(seed)
     t_data_folder = output_folders["t"]
     z_data_folder = output_folders["z"]
+    # Analytic method uses 4 loop phases; numerical (matrix) uses 8.
     if method == "analytic":
         i = 4
     else:
         i = 8
 
+    # --- Build initial sample arrays (t amplitudes and phases) ---
     if starting_t != 0:
         initial_t = generate_constant_array(samples, T_DICT[f"{args.t}"])
     else:
@@ -211,13 +246,22 @@ def rg_fp(
     # initial_t = generate_constant_array(samples, 1 / np.sqrt(2))
     # phases = generate_constant_array(samples, 0)
     output_files = {}
-    # Main rg loop
+
+    # --- Main RG iteration loop ---
     for step in range(steps):
         print(f" Proceeding with RG step {step}. ")
+
+        # Apply the RG map to produce next-step amplitudes t', then convert to z
         tprime = rg_data_workflow(method, ts, phases, samples, expr, batch_size)
         z = convert_t_to_z(tprime)
+
+        # Build histograms for both t and z representations
         t_data = build_hist(tprime, t_bins, t_range)
         z_data = build_hist(z, z_bins, z_range)
+
+        # Symmetrisation branch: fold z-distribution about zero to enforce
+        # particle-hole symmetry, then launder back to t samples.
+        # Unsymmetrised branch: launder directly from the t-histogram.
         if symmetrise == 1:
             print(" Symmetrising ")
             sym = "sym_"
@@ -244,7 +288,10 @@ def rg_fp(
         else:
             raise ValueError(f"Invalid symmetrise value entered: {symmetrise}")
 
+        # Resample from the laundered distribution for the next RG step
         ts = extract_t_samples(t_sample, samples, rng)
+
+        # Write histogram NPZ files for this step
         t_filename = f"{t_data_folder}/t_hist_RG{step + 1}.npz"
         z_filename = f"{z_data_folder}/z_{sym}hist_RG{step + 1}.npz"
         save_data(t_data["hist"], t_data["edges"], t_data["centers"], t_filename)
@@ -259,32 +306,42 @@ def rg_exp(
 ) -> dict:
     """Run an EXP (shifted / exponent) RG workflow locally and write histograms.
 
-    Parameters
-    ----------
-    rg_config : RGConfig
-        Configuration dataclass with samples, bins, ranges, shifts and other
-        resampling parameters.
-    output_folders : dict
-        Mapping that, for each shift value, provides folders for ``t`` and
-        ``z`` histograms (strings).
-    fp_dist : str
-        Path to a fixed-point NPZ file (containing keys ``'histval'``,
-        ``'binedges'`` and ``'bincenters'``). The file is loaded to construct
-        a laundered initial distribution.
-    starting_phi : int
-        If non-zero, a constant phase array is used; otherwise phases are
-        generated randomly from RNG.
+    Loads the last FP-run z-histogram, launders an initial sample from it,
+    then for each shift value in ``rg_config.shifts``:
 
-    Returns
-    -------
-    dict
-        Nested mapping containing NPZ output paths per shift and RG step.
+    1. Translates every resampled z-value by the shift: ``z' = z + shift``.
+    2. Maps the shifted z to amplitude ``t'`` via
+       :func:`source.utilities.convert_z_to_t`.
+    3. Runs ``rg_config.steps`` RG iterations (same per-step logic as
+       :func:`rg_fp`).
+    4. Writes NPZ histogram files per shift and per step.
 
-    Side effects
-    ------------
-    Writes NPZ files to disk (via :func:`source.utilities.save_data`) and prints
-    progress to stdout.
+    The growth of the mean z across shifts and steps is used by the analysis
+    scripts (``analysis/critical_exponent.py``) to extract the critical
+    exponent ν.
+
+    Args:
+        rg_config: Configuration dataclass with samples, bins, ranges, shifts
+            and other resampling parameters.
+        output_folders: Mapping that, for each shift value (as a string key),
+            provides a sub-dict with ``'t'`` and ``'z'`` keys giving the
+            corresponding output directory paths.
+        fp_dist: Path to a fixed-point NPZ file (containing keys
+            ``'histval'``, ``'binedges'`` and ``'bincenters'``). Loaded to
+            construct the laundered initial distribution that each shift is
+            applied to.
+        starting_phi: If non-zero, a constant phase array is used; otherwise
+            phases are generated randomly from the RNG.
+
+    Returns:
+        Nested mapping of shift → step → file paths, e.g.
+        ``{"0.003": {"RG0": {"t": "...", "z": "..."}}, ...}``.
+
+    Side effects:
+        Writes NPZ files to disk via :func:`source.utilities.save_data` and
+        prints progress to stdout.
     """
+    # --- Unpack run settings from the validated config dataclass ---
     samples = rg_config.samples
     batch_size = rg_config.matrix_batch_size
     steps = rg_config.steps
@@ -299,19 +356,26 @@ def rg_exp(
     z_range = rg_config.z_range
     shifts = [float(shift) for shift in rg_config.shifts]
     rng = build_rng(seed)
+    # Analytic method uses 4 loop phases; numerical (matrix) uses 8.
     if method == "analytic":
         i = 4
     else:
         i = 8
     output_files = {}
+
+    # --- Load the FP fixed-point z-histogram and launder an initial sample ---
     fp_data = np.load(fp_dist)
     fp_hist = fp_data["histval"]
     fp_edges = fp_data["binedges"]
     fp_centers = fp_data["bincenters"]
     initial_z = launder(samples, fp_hist, fp_edges, fp_centers, rng, resample)
+
+    # --- Iterate over each shift value ---
     for shift in shifts:
         t_data_folder = output_folders[f"{shift}"]["t"]
         z_data_folder = output_folders[f"{shift}"]["z"]
+
+        # Apply constant shift to z, then convert to t amplitude for RG input
         shifted_z = initial_z + shift
         shifted_t = convert_z_to_t(shifted_z)
         if starting_phi != 0:
@@ -319,12 +383,21 @@ def rg_exp(
         else:
             phases = generate_random_phases(samples, rng, i)
         ts = extract_t_samples(shifted_t, samples, rng)
+
+        # --- RG iteration loop for this shift ---
         for step in range(steps):
             print(f" Proceeding with RG step {step} of shift {shift}. ")
+
+            # Apply the RG map to produce next-step amplitudes t', then convert to z
             tprime = rg_data_workflow(method, ts, phases, samples, expr, batch_size)
             z = convert_t_to_z(tprime)
+
+            # Build histograms for both t and z representations
             t_data = build_hist(tprime, t_bins, t_range)
             z_data = build_hist(z, z_bins, z_range)
+
+            # Symmetrisation branch: fold z-distribution about zero, then launder
+            # back to t samples. Unsymmetrised branch: launder from t-histogram.
             if symmetrise == 1:
                 print(" Symmetrising ")
                 sym = "sym_"
@@ -351,6 +424,8 @@ def rg_exp(
             else:
                 raise ValueError(f"Invalid symmetrise value entered: {symmetrise}")
             ts = extract_t_samples(t_sample, samples, rng)
+
+            # Write histogram NPZ files for this shift and step
             t_filename = f"{t_data_folder}/t_hist_RG{step + 1}.npz"
             z_filename = f"{z_data_folder}/z_{sym}hist_RG{step + 1}.npz"
             save_data(t_data["hist"], t_data["edges"], t_data["centers"], t_filename)
@@ -366,7 +441,8 @@ if __name__ == "__main__":
     cur_date = get_current_date()
     start_time = time()
     print(f" [{cur_date}]: Starting simulation.")
-    # Build parser and read CLI args
+
+    # --- Build CLI argument parser and parse arguments ---
     parser = build_parser()
     parser.add_argument(
         "--type",
@@ -390,11 +466,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
     args_dict = validate_input(args)
 
-    # Process config
+    # --- Load YAML config and apply any CLI overrides, then build typed dataclass ---
     config = handle_config(args_dict["config"], args.override)
     rg_config = build_config(config)
 
-    # Make output folder and save config
+    # --- Resolve output directory and save the finalised config for reproducibility ---
     if args.out is None:
         base_output_dir = build_default_output_dir(config)
     else:
@@ -403,7 +479,7 @@ if __name__ == "__main__":
     output_dir.mkdir(parents=True, exist_ok=True)
     save_updated_config(output_dir, config)
 
-    # Change stdout and stderr to other files for logging
+    # --- Redirect stdout and stderr into per-run log files ---
     output_filename = f"{output_dir}/output.txt"
     error_filename = f"{output_dir}/error.txt"
     orig_output = sys.stdout
@@ -413,10 +489,11 @@ if __name__ == "__main__":
     sys.stdout = output_file
     sys.stderr = error_file
 
-    # Create children output folders for this workflow
+    # --- Create per-variable output sub-folders for histogram files ---
     print_config(rg_config)
     output_folders = {}
     if args_dict["type"] == "EXP":
+        # EXP runs write one folder tree per shift value
         shifts = [float(shift) for shift in rg_config.shifts]
         for shift in shifts:
             t_data_folder = output_dir / f"{shift}" / "hist/t"
@@ -427,6 +504,7 @@ if __name__ == "__main__":
                 {f"{shift}": {"t": str(t_data_folder), "z": str(z_data_folder)}}
             )
     else:
+        # FP runs write a single pair of t/z folders
         t_data_folder = output_dir / "hist/t"
         z_data_folder = output_dir / "hist/z"
         t_data_folder.mkdir(parents=True, exist_ok=True)
@@ -435,9 +513,11 @@ if __name__ == "__main__":
 
     print(f" Output folders: {json.dumps(output_folders, indent=2)} ")
     print("-" * 100)
-    # Run RG workflow
+
+    # --- Dispatch to FP or EXP workflow ---
     starting_t = args.t
     starting_phi = args.phi
+    # EXP seeds its initial distribution from the last FP z-histogram
     fp_data_file = f"{base_output_dir}/FP/hist/z/z_sym_hist_RG{rg_config.steps - 1}.npz"
     if args_dict["type"] == "FP":
         hist_outputs = rg_fp(rg_config, output_folders, starting_t, starting_phi)
@@ -445,7 +525,7 @@ if __name__ == "__main__":
         hist_outputs = rg_exp(rg_config, output_folders, fp_data_file, starting_phi)
     print("-" * 100)
 
-    # Closing off
+    # --- Restore stdout/stderr and write the output-file location manifest ---
     sys.stdout = orig_output
     sys.stderr = orig_err
     output_file.close()

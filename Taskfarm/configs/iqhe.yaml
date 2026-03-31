@@ -1,35 +1,61 @@
+##
+## TARGET:      HPC Taskfarm — vulcan2 Slurm cluster (production runs)
+## DESCRIPTION: Production IQHE fixed-point run configuration.
+##              320M samples over 9 RG steps; submit via run_rg.sh / run_shifts.sh.
+##
+## SECTIONS:
+##   main               — Run identity: version tag, environment id, pipeline type, output path.
+##   engine             — Physics model and RG transformation method/parametrisation.
+##   rg_settings        — Monte Carlo parameters: sample count, RG steps, RNG seed, batch size.
+##   data_settings      — Initial conditions, output step selection, and EXP shift magnitudes.
+##   parameter_settings — Histogram binning and range for the z and t' observables.
+##   convergence        — Tolerances used to detect fixed-point convergence across RG steps.
+##
+
 main:
-  version: "rg_iqhe"
-  id: "hpc"
-  type: "fp"
-  output_folder: ""
+  version: "rg_iqhe"    # Run identifier; used as the root output directory name
+  id: "hpc"             # Environment tag: "hpc" | "local" — distinguishes cluster from local runs in logs
+  type: "fp"            # Pipeline branch: "fp" = fixed-point run (no perturbation) |
+                        #   "exp" = shifted run for ν extraction (requires a completed FP run)
+  output_folder: ""     # Output root path; empty string uses the default REMOTE_DIR from .env on the cluster
 
 engine:
-  model: "iqhe"
-  method: "analytic"
-  resample: "i"
-  expr: "shaw"
-  symmetrise: 1
+  model: "iqhe"         # Physical model: "iqhe" (Integer Quantum Hall) | "qshe" (Quantum Spin Hall)
+  method: "analytic"    # RG map implementation: "analytic" = closed-form 4-phase map (faster) |
+                        #   "numerical" = 8-phase matrix multiplication (more accurate, ~2× slower)
+  resample: "i"         # Resampling strategy for drawing new samples from the histogram:
+                        #   "i" = inverse CDF (only supported option)
+  expr: "shaw"          # Parametrisation of the RG map; "shaw" is the only implemented expression
+  symmetrise: 1         # Enforce Z₂ (particle–hole) symmetry of the z-distribution: 0 = off | 1 = on.
+                        #   Set 1 at the critical point to suppress finite-sample asymmetry bias.
 
 rg_settings:
-  seed: 12345
-  steps: 9
-  samples: 320000000
-  matrix_batch_size: 100000
+  seed: 12345           # RNG seed (NumPy PCG64) for full reproducibility of MC sampling
+  steps: 9              # Number of RG iterations; 9 steps needed at 320M samples to reach convergence
+                        #   (local runs use 7 steps at 32M samples)
+  samples: 320000000    # Total MC samples per run; 10× the local count for HPC production accuracy
+  matrix_batch_size: 100000  # Samples processed per matrix-multiply batch; limits peak RAM usage
 
 data_settings:
-  inputs: [1.0, 0.0]
-  outputs: [8]
-  shifts: [0.003, 0.005, 0.007, 0.009]
+  inputs: [1.0, 0.0]   # Initial distribution parameters [t₀, phase₀]; [1.0, 0.0] seeds samples
+                        #   at the critical-point fixed point (amplitude = 1, phase = 0)
+  outputs: [8]          # RG step indices whose histograms are saved; step 8 is the converged FP
+                        #   distribution used as the starting point for EXP (shifted) runs
+  shifts: [0.003, 0.005, 0.007, 0.009]  # Perturbation magnitudes δ applied to the FP z-distribution
+                                         #   in EXP runs; used to extract ν via log-slope of the
+                                         #   diverging RG eigenvalue. Active only when type="exp".
 
 parameter_settings:
   z:
-    bins: 50000
-    range: [-25.0, 25.0]
+    bins: 50000         # Histogram resolution for z = ln(t/(1−t)); 50 000 bins gives sufficient
+                        #   resolution to resolve the sharp fixed-point peak without excessive memory
+    range: [-25.0, 25.0]  # z-axis extent; z ∈ (−∞,+∞) in principle but amplitude tails are negligible
+                           #   beyond |z| ≈ 10, so ±25 captures all physical probability mass
   tprime:
-      bins: 1000
-      range: [0.0, 1.0]
+      bins: 1000        # Histogram resolution for the amplitude t' ∈ [0, 1]
+      range: [0.0, 1.0] # Full physical range of t' (transmission amplitude, by definition ∈ [0,1])
 
 convergence:
-  msd_tol: 1.0e-3
-  std_tol: 5.0e-4
+  msd_tol: 1.0e-3      # Mean-squared displacement of z-histogram between consecutive RG steps;
+                        #   convergence is declared when Δ < this threshold
+  std_tol: 5.0e-4      # Change in std(z) between steps; secondary convergence criterion

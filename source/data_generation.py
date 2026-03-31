@@ -1,22 +1,64 @@
 #!/usr/bin/env python
 """Batch data-generation script for RG steps.
 
-This script is intended to be executed from the command-line (or a job
-script) to produce the next-step amplitude samples `t'` for a single RG
-step. It supports two modes:
+Purpose
+-------
+Produce the next-step amplitude samples ``t'`` for a single RG iteration.
+The script is intended to be executed directly from the command line or
+from a Slurm job-array task.  It performs no post-processing beyond saving
+the raw sample array, so multiple instances can run in parallel without
+interference.
 
-- Start from an initial analytic distribution (P(t)=2t-like) and generate
-    samples of size `ARRAY_SIZE`.
-- Continue from an existing `.npy` file containing prior samples.
+Two operating modes
+-------------------
+- **Fresh start** (``INITIAL=1``): draws ``ARRAY_SIZE`` amplitudes from a
+  flat ``P(g) = 1`` distribution (``t = √g``) via
+  ``generate_initial_t_distribution``.
+- **Continuation** (``INITIAL=0``): loads an existing ``(N,)`` float64
+  amplitude array from ``EXISTING_T_FILE`` produced by a prior RG step.
 
-Generated arrays are saved as `.npy` files to the specified output
-directory. The script intentionally performs minimal in-process
-post-processing so it can be run in parallel across job array tasks.
+CLI usage
+---------
+Fresh start::
 
-Usage
------
-See the `if __name__ == "__main__"` block for CLI usage details:
-`data_generation.py ARRAY_SIZE OUTPUT_DIR INITIAL RG_STEP METHOD EXPR [EXISTING_T_FILE]`.
+    python -m source.data_generation ARRAY_SIZE OUTPUT_DIR INITIAL RG_STEP SEED
+
+Continuation::
+
+    python -m source.data_generation ARRAY_SIZE OUTPUT_DIR INITIAL RG_STEP SEED EXISTING_T_FILE
+
+Arguments
+---------
+ARRAY_SIZE : int
+    Number of MC amplitude samples to generate.
+OUTPUT_DIR : str
+    Directory in which the output ``.npy`` file is written (created if
+    absent).
+INITIAL : int
+    ``1`` to draw a fresh distribution; ``0`` to load from
+    ``EXISTING_T_FILE``.
+RG_STEP : int
+    Current RG iteration index, used only for labelling the output file
+    and log messages.
+SEED : int
+    Integer seed passed to ``numpy.random.default_rng`` (PCG64 bit
+    generator) to make the MC sequence fully reproducible.  Use the same
+    seed on re-runs to obtain identical samples.
+EXISTING_T_FILE : str, optional
+    Path to a ``.npy`` file containing amplitude samples from the
+    preceding RG step.  Required when ``INITIAL=0``; ignored (and
+    internally set to ``"None"``) when ``INITIAL=1``.  Allows multi-step
+    pipelines to chain RG iterations without regenerating earlier data.
+
+Output file naming
+------------------
+The output array is saved as::
+
+    {OUTPUT_DIR}/t_data_RG{RG_STEP}_{ARRAY_SIZE}_samples.npy
+
+The file contains a 1-D ``float64`` array of ``ARRAY_SIZE`` amplitude
+values ``t' ∈ [0, 1]``.  Method (analytic/numerical) and expression
+variant are read from the ``RG_CONFIG`` environment variable at runtime.
 """
 
 import os
@@ -31,6 +73,16 @@ from source.utilities import (
 )
 from source.config import get_rg_config
 
+# ---------------------------------------------------------------------------
+# CLI entry point — positional argument order:
+#   1. ARRAY_SIZE      int   — number of MC amplitude samples to generate
+#   2. OUTPUT_DIR      str   — directory for the output .npy file
+#   3. INITIAL         int   — 1 = fresh distribution, 0 = load from file
+#   4. RG_STEP         int   — current RG iteration index (labelling only)
+#   5. SEED            int   — NumPy PCG64 RNG seed for reproducibility
+#   6. EXISTING_T_FILE str   — (optional) path to prior-step .npy samples;
+#                              required when INITIAL=0, omitted when INITIAL=1
+# ---------------------------------------------------------------------------
 if __name__ == "__main__":
     # Load input params, checking if we're starting RG steps or continuing from an input sample
     if len(sys.argv) == 6:
