@@ -12,3 +12,5 @@ archived/
 *.pdf
 *.html
 *.npz
+.ipynb_checkpoints/
+**/.ipynb_checkpoints/
