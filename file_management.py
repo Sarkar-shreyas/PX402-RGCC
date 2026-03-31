@@ -4,7 +4,7 @@ Purpose
 -------
 This module implements the canonical staging workflow for the RG Monte Carlo pipeline.
 It constructs and executes either ``scp`` (Windows) or ``rsync`` (Linux/Mac) commands
-to synchronise files between the local workstation and the HPC cluster (vulcan2).
+to synchronise files between the local workstation and the HPC cluster.
 
 Actions
 -------
@@ -28,19 +28,19 @@ pull
 Authentication
 --------------
 All remote operations use SSH under the hood (via ``scp`` or ``rsync``).
-**SSH key-based authentication to vulcan2 must be configured** — the commands
+**SSH key-based authentication to must be configured** — the commands
 are executed non-interactively and will hang or fail if a password prompt appears.
 Ensure your public key is present in ``~/.ssh/authorized_keys`` on the cluster and
-that ``~/.ssh/config`` resolves ``vulcan2`` to the correct hostname.
+that ``~/.ssh/config`` resolves to the correct hostname.
 
 Environment variables (read from ``.env`` via ``constants.py``)
 --------------------------------------------------------------
 HOST
-    Alias for the HPC cluster, e.g. ``vulcan2``.  Used as the ``user@host`` prefix
+    Alias for the HPC cluster.  Used as the ``user@host`` prefix
     in every remote path.
 REMOTE_DIR
     Absolute path to the project root on the cluster,
-    e.g. ``/storage/physics/phuhjf/fyp``.
+    e.g. ``/storage/physics/<user>/fyp``.
 DATA_DIR
     Local directory where pulled artefacts are written,
     e.g. ``...\\Data from taskfarm``.
@@ -61,7 +61,6 @@ from constants import (
     taskfarm_dir,
     root_dir,
 )
-from source.config import build_config, load_yaml
 
 
 # ---------- Utilities ---------- #

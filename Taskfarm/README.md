@@ -1,6 +1,6 @@
-# Taskfarm/ — HPC Orchestration for vulcan2
+# Taskfarm/ — HPC Orchestration
 
-This directory contains all Slurm job scripts and production YAML configs for running the IQHE and QSHE RG Monte Carlo pipeline at scale on the `vulcan2` HPC cluster. Nothing in this directory runs locally — it is staged onto the cluster via `file_management.py` and executed there by `sbatch`. The authoritative Python engine that these scripts invoke lives in `source/`.
+This directory contains all Slurm job scripts and production YAML configs for running the IQHE and QSHE RG Monte Carlo pipeline at scale on the `<host>` HPC cluster. Nothing in this directory runs locally — it is staged onto the cluster via `file_management.py` and executed there by `sbatch`. The authoritative Python engine that these scripts invoke lives in `source/`.
 
 File transfers between the local repository and the cluster are managed exclusively by [`file_management.py`](../file_management.py) at the repository root. See the [HPC Workflow section of the root README](../README.md#hpc-workflow) for the full push → submit → pull sequence.
 
@@ -8,11 +8,11 @@ File transfers between the local repository and the cluster are managed exclusiv
 
 ## Environment requirements
 
-- SSH access to `vulcan2` configured under the local `~/.ssh/config` (the `HOST` `.env` variable must resolve without a password prompt)
+- SSH access to `<host>` configured under the local `~/.ssh/config` (the `HOST` `.env` variable must resolve without a password prompt)
 - `.env` variables consumed by `file_management.py` at transfer time:
-  - `HOST` — SSH hostname (typically `vulcan2`)
+  - `HOST` — SSH hostname
   - `USERNAME` — remote username
-  - `REMOTE_DIR` — remote base directory (e.g. `/storage/physics/phuhjf/fyp`)
+  - `REMOTE_DIR` — remote base directory
 - On the cluster, the following must be available before submitting any job:
   - `GCC/13.3.0` and `SciPy-bundle/2024.05` modules (loaded by each script via `module load`)
   - A project virtualenv at `$REMOTE_DIR/.venv` providing PyYAML (activated by each script)
@@ -54,7 +54,7 @@ These scripts contain the `#SBATCH` resource directives and are submitted by the
 
 ### [iqhe.yaml](configs/iqhe.yaml) — IQHE production config
 
-Targets the `vulcan2` Slurm cluster for IQHE FP and EXP runs. Submit via `run_rg.sh` (FP) or `run_shifts.sh` (EXP).
+Targets the `<host>` Slurm cluster for IQHE FP and EXP runs. Submit via `run_rg.sh` (FP) or `run_shifts.sh` (EXP).
 
 | Key | HPC value | Local value | Reason for difference |
 |-----|-----------|-------------|----------------------|
@@ -68,7 +68,7 @@ All other keys (`engine`, `parameter_settings`, `convergence`, `data_settings`) 
 
 ### [qshe.yaml](configs/qshe.yaml) — QSHE production config
 
-Targets the `vulcan2` Slurm cluster for QSHE q-p parameter-sweep runs. Submit via `run_qp.sh`.
+Targets the `<host>` Slurm cluster for QSHE q-p parameter-sweep runs. Submit via `run_qp.sh`.
 
 | Key | Value | Notes |
 |-----|-------|-------|

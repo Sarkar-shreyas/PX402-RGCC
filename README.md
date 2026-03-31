@@ -19,8 +19,7 @@ to the Chalker-Coddington (CC) network model described in:
 > Chalker-Coddington model revisited: improved statistics,"
 > *Physica E*, 2024. [arXiv:2404.00660](https://arxiv.org/abs/2404.00660)
 
-The goal is an independent reproduction of their ν extraction pipeline at
-comparable sample counts, using the analytic and numerical RG unit variants described therein.
+The goal is an independent reproduction of their ν extraction pipeline at production scale (320M samples), using the analytic and numerical RG unit variants described therein.
 
 The QSHE pipeline seeks to apply the RSRG approach to the ℤ₂ network model
 and adopts the (p, q) parametrisation of scattering parameters described in:
@@ -29,9 +28,9 @@ and adopts the (p, q) parametrisation of scattering parameters described in:
 > "Conductance distributions in disordered quantum spin-Hall systems,"
 > *Phys. Rev. B* 82, 165301 (2010). arXiv:[1007.4073](https://arxiv.org/abs/1007.4073)
 
-An estimate of ν is obtained using a finite-size scaling (FSS) analysis of the RG flow 
+An estimate of ν is obtained using a finite-size scaling (FSS) analysis of the RG flow
 for the constructed ℤ₂ RG cell.
-    
+
 ---
 
 ## Repository Structure
@@ -50,9 +49,9 @@ Project Code/
 ├── Data from taskfarm/   # HPC outputs (read-only, not in context)
 ├── Local data/           # Local run outputs (not in context)
 ├── report/               # Thesis report (not in context)
+├── test_qshe.ipynb       # Core analysis performer for QSHE data
 ├── constants.py          # Global constants and paths (loads .env)
 ├── file_management.py    # scp/rsync transfer utility
-└── test_qshe.ipynb       # Core analysis performer for QSHE data
 ├── requirements.txt      # numpy>=1.26, scipy>=1.11, matplotlib>=3.8, PyYAML>=6.0
 └── .env                  # Local path config (not committed)
 ```
@@ -78,9 +77,9 @@ ROOT_DIR     = "...\Project Code"          # Repo root
 TASKFARM_DIR = "...\Taskfarm"
 QSHE_DIR     = "...\QSHE"
 CONFIG_FILE  = "...\Taskfarm\configs\iqhe.yaml"
-HOST         = "vulcan2"                   # HPC hostname
-USERNAME     = "phuhjf"
-REMOTE_DIR   = "/storage/physics/phuhjf/fyp"
+HOST         = # HPC hostname
+USERNAME     = # HPC username
+REMOTE_DIR   = # HPC remote directory
 ```
 
 ---

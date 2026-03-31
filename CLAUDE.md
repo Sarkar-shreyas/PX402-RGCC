@@ -7,7 +7,7 @@ This is a **Renormalization Group (RG) Monte Carlo pipeline** for studying phase
 - **IQHE** (Integer Quantum Hall Effect) — 2D electron systems under strong magnetic fields
 - **QSHE** (Quantum Spin Hall Effect) — topological edge states with spin-orbit coupling
 
-The pipeline runs locally for testing (32M samples) and on a Slurm HPC cluster (`vulcan2`) for production (320M samples). It extracts the **critical exponent ν** characterising the divergence of the correlation length at the quantum phase transition.
+The pipeline runs locally for testing (32M samples) and on a Slurm HPC cluster for production (320M samples). It extracts the **critical exponent ν** characterising the divergence of the correlation length at the quantum phase transition.
 
 ---
 
@@ -272,9 +272,9 @@ ROOT_DIR    = "...\\Project Code"          # Repo root
 TASKFARM_DIR= "...\\Taskfarm"
 QSHE_DIR    = "...\\QSHE"
 CONFIG_FILE = "...\\Taskfarm\\configs\\iqhe.yaml"
-HOST        = "vulcan2"                    # HPC hostname
-USERNAME    = "phuhjf"
-REMOTE_DIR  = "/storage/physics/phuhjf/fyp"
+HOST        = # HPC hostname
+USERNAME    = # HPC username
+REMOTE_DIR  = # HPC remote directory
 ```
 
 Install dependencies:
