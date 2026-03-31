@@ -28,6 +28,7 @@ Project Code/
 ├── report/               # Thesis report (not in context)
 ├── constants.py          # Global constants and paths (loads .env)
 ├── file_management.py    # scp/rsync transfer utility
+└── test_qshe.ipynb       # Core analysis performer for QSHE data
 ├── requirements.txt      # numpy>=1.26, scipy>=1.11, matplotlib>=3.8, PyYAML>=6.0
 └── .env                  # Local path config (not committed)
 ```
@@ -136,12 +137,6 @@ Run configuration follows a three-level hierarchy: a **YAML config file** (e.g. 
 
 ---
 
-## Testing
-
-Solver validation tests live in `testing/`; run individual test files with `python testing/<test_file>.py` or via your preferred test runner pointed at that directory.
-
----
-
 ## Documentation
 
 - [docs/Pipeline.md](docs/Pipeline.md) — end-to-end workflow description
@@ -150,6 +145,7 @@ Solver validation tests live in `testing/`; run individual test files with `pyth
 - [docs/Runbook.md](docs/Runbook.md) — operational procedures for common tasks
 - [docs/Troubleshooting.md](docs/Troubleshooting.md) — common issues and fixes
 
+A general README.md exists inside the `source/`, `Taskfarm/` and `analysis/` folders for further detail of each section.
 ---
 
 ## License / Academic Use
