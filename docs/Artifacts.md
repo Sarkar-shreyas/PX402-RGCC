@@ -1,36 +1,189 @@
-Deployment note
+# Artifacts
 
-- Artifacts written by the pipeline on the cluster are stored under `<REMOTE_ROOT>/job_outputs/{version}/{FP|EXP}/...` (this mapping is implemented in `file_management.py`). Pull them with `file_management.py`.
+This document describes every file format and directory layout produced by the pipeline.
+For a description of how each artifact is generated, see [Pipeline.md](Pipeline.md).
 
-Primary artifact formats
+---
 
-- NPZ histograms: `histval`, `binedges`, `bincenters` — produced by `source/utilities.py::save_data()`.
-- Laundered t batches: produced by the histogram manager and staged for the next RG step under the job outputs area on the cluster.
+## Shared file formats
 
-Where to find artifacts (local vs remote)
+### NPZ histogram (`.npz`)
 
-- Local (for small tests): `Local/run_local.py` writes outputs into the `output_dir` you configure locally.
-- Remote (cluster): aggregated artifacts and job outputs live under `<REMOTE_ROOT>/job_outputs/{version}/{FP|EXP}/...` on `<HOST>`; use `file_management.py` to retrieve them.
-- Note: `output_dir` on the remote server will live under <REMOTE_ROOT>/job_outputs
+All histogram files use this schema:
 
-# Artifacts catalog
+| Key | dtype | Shape | Description |
+|-----|-------|-------|-------------|
+| `histval` | float64 | `(n_bins,)` | Raw histogram counts |
+| `binedges` | float64 | `(n_bins + 1,)` | Bin edge positions |
+| `bincenters` | float64 | `(n_bins,)` | Bin centre positions |
 
-This document lists the primary artifacts produced by the pipeline, who writes them, and brief notes about regeneration.
+Load with:
 
-| Artifact path / pattern | Producer (script/module) | When created | Contents | Size considerations | Safe to delete / regen |
-|---|---:|---|---|---|---|
-| <output_dir>/hist/t/t_hist_RG{step}.npz | `rg_fp()` / `rg_exp()` in [Local/run_local.py](../Local/run_local.py) (cluster drivers produce equivalent files) | Each RG step | NPZ containing t-histogram arrays (saved via `save_data()`) | Can be large when `t_bins` is large; contains dense arrays | Regenerable by re-running step; safe to delete but will require re-run |
-| <output_dir>/hist/z/z_{sym}hist_RG{step}.npz | `rg_fp()` / `rg_exp()` in [Local/run_local.py](../Local/run_local.py) | Each RG step | NPZ containing z-histogram arrays (`histval` / `binedges` / `bincenters` observed in code) | z hist bins often large (`parameter_settings.z.bins`) — watch disk | Regenerable by re-running step (need upstream inputs) |
-| <output_dir>/output.txt, <output_dir>/error.txt | `Local/run_local.py` (stdout/stderr redirected) | Per run (local) | Console log and stderr for the run | Small text files but can grow if job is verbose | Safe to delete; useful for debugging |
-| <output_dir>/output_locs.json | `Local/run_local.py` | At the end of a local run | JSON manifest mapping RG steps to NPZ file paths | Small | Regenerable by re-running the run |
-| <output_dir>/config_snapshot.yaml or similar | `save_updated_config()` via [source/config.py](../source/config.py) | At run start | Config used for the run (full resolved config) | Small | Safe to keep; recommended to archive |
+```python
+data = np.load(filepath, allow_pickle=False)
+counts   = data["histval"]
+edges    = data["binedges"]
+centers  = data["bincenters"]
+```
 
-Notes:
-- Output files for taskfarm jobs can be found in the job_outputs folder. Logs produced by run_local.py will print to the 'Local data' folder
-- NPZ layout: the code that consumes FP runs (`rg_exp()` in [Local/run_local.py](../Local/run_local.py)) expects keys `histval`, `binedges`, and `bincenters` when loading saved FP distributions. These keys are written by `source/utilities.py::save_data()` using `np.savez_compressed(..., histval=..., binedges=..., bincenters=...)`.
-- Shared filesystem vs tmpdirs: the code constructs output paths from the project root and writes directly into configured output folders (see `build_default_output_dir()` and `output_dir` creation in [Local/run_local.py](../Local/run_local.py)). If jobs are run on a cluster with local scratch, ensure a subsequent copy to the shared data directory before aggregation.
+**`allow_pickle=False` is mandatory** throughout the pipeline.
 
-Regeneration notes:
+### NPY sample array (`.npy`)
 
-- Per-step histograms are regenerable by re-running the corresponding RG step(s). If the cluster pipeline stages are separated (e.g., generation vs aggregation), re-run only the missing stage if possible.
-- If you must free space quickly: remove intermediate NPZ steps far from the final output, but keep the FP distribution used by EXP runs if you intend to re-run exponent calculations.
+1-D float64 array of amplitude values.  Naming convention:
+
+```
+t_data_RG{step}_{size}_samples.npy
+```
+
+---
+
+## IQHE output directory layout
+
+### FP run
+
+```
+{version}/FP/
+├── hist/
+│   ├── t/
+│   │   └── t_hist_RG{i}.npz            t-histogram at step i
+│   ├── z/
+│   │   └── z_hist_RG{i}.npz            z-histogram at step i (unsymmetrised)
+│   └── sym_z/
+│       └── sym_z_hist_RG{i}.npz        symmetrised z-histogram (when engine.symmetrise=1)
+├── stats/
+│   └── {statistic}_moments.json        convergence statistics per RG step
+└── config/
+    └── updated_config.yaml             resolved config snapshot for this run
+```
+
+### EXP run
+
+```
+{version}/EXP/shift{s}/hist/
+├── t/
+│   └── t_hist_RG{i}.npz
+└── z/
+    └── z_hist_unsym_RG{i}.npz
+```
+
+`{s}` is the shift value (e.g. `0.003`).
+
+### Analysis outputs (`analysis/critical_exponent.py`)
+
+```
+{data_folder}/{version}/
+├── peaks.json               per-(RG step, shift) Gaussian peak estimates
+├── overall_stats.json       per-RG-step ν, slope, R² from peak and mean fits
+├── z_peaks.png              scatter/line plot of peak displacement vs shift
+├── Nu_{N}_shifts.png        ν vs system size (2^n) with error bars
+└── EXP/
+    ├── stats/{shift}/       per-shift moment statistics
+    └── plots/{shift}/       per-shift histogram PNG files
+```
+
+---
+
+## QSHE output directory layout
+
+### Per-block generation (`source/qshe_data_gen.py`)
+
+Written to a local scratch directory during the job, then moved atomically to the
+shared filesystem:
+
+```
+{OUTPUT_DIR}/q{b}/
+├── p_data_q{b}_{N}_samples.npy   shape (q_block_size, p_num, num_steps, met_dim)
+├── q_data_q{b}_{N}_samples.npy   shape (q_block_size, p_num, num_steps, met_dim)
+└── DONE                           empty sentinel; must exist before aggregation
+```
+
+### Aggregated data (`source/qshe_data_agg.py`)
+
+```
+{OUTPUT_DIR}/
+├── p_data_agg.npy                 shape (q_num, p_num, num_steps, met_dim)
+├── q_data_agg.npy                 shape (q_num, p_num, num_steps, met_dim)
+└── trial_state.json               grid metadata and run parameters
+```
+
+**Array shape** for the current production config (`Taskfarm/configs/qshe.yaml`):
+`(51, 500, 15, 3)` — (q_num=51, p_num=500, steps=15, met_dim=3 for `metric="all"`).
+
+`met_dim = 3` stores (median, mean, std) per observable per step.
+`met_dim = 1` for any other metric value.
+
+### `trial_state.json` schema
+
+Written by `source/qshe_data_agg.py::store_state`:
+
+```json
+{
+  "q":      {"Min": float, "Max": float, "Num": int, "Step": float},
+  "p":      {"Min": float, "Max": float, "Num": int, "Step": float},
+  "vars":   ["p", "q"],
+  "config": {
+    "Samples":    int,
+    "Steps":      int,
+    "Fixed":      bool,
+    "Metric":     "all",
+    "Block size": int
+  }
+}
+```
+
+The notebook (`test_qshe.ipynb`) does **not** read `trial_state.json` directly; it
+reconstructs the grid from `updated_config.yaml` via `build_config`.  The JSON is
+provided as a human-readable record.
+
+### Updated config snapshot
+
+```
+{DATA_DIR}/{dataversion}/QP/config/updated_config.yaml
+```
+
+Written by `source/config.py::save_updated_config`.  This is the resolved config
+(YAML + CLI overrides applied) and is the file that the notebook loads.
+
+### Notebook plot outputs
+
+All plots are saved under `{DATA_DIR}/{dataversion}/QP/plots/`:
+
+```
+plots/
+├── vfield/p/          streamplots and velocity heatmaps for p
+├── vfield/q/          streamplots and velocity heatmaps for q
+├── vfield/pq/         combined speed heatmaps
+├── grid/              gridded RG flow trajectory plots
+├── boundary/          phase boundary plots
+├── density/           parameter density histograms
+├── Gamma/             Γ(p) crossing and p_c(q) plots
+├── Nu/                ν vs q and ν vs system size plots
+├── stds/              per-(q,p) standard deviation plots
+└── variance/          per-(q,p) variance plots
+```
+
+Report-quality figures are saved directly to `./report/`:
+
+```
+report/
+├── nu_qshe.pdf          ν vs q_init for selected fitting windows
+├── qshe_nu_q0.pdf       ν vs RG step for q = 0 with literature comparison
+├── fitted_pc.pdf        fitted p_c vs q_init
+├── logfit.pdf           ln|T_k| vs ln(2^k) scaling plot
+└── z_pc.pdf             z(p) curves at p_c for multiple RG steps
+```
+
+---
+
+## Cluster artefact locations
+
+Remote artefacts live under `<REMOTE_ROOT>/job_outputs/{version}/{FP|EXP}/`.  Pull them
+with `file_management.py`:
+
+```bash
+python file_management.py --action pull --pull hist \
+    --version VERSION --type FP --sys linux
+```
+
+Slurm job logs are written to `<REMOTE_ROOT>/job_logs/{version}/{FP|EXP}/`.

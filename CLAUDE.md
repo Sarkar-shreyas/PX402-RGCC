@@ -249,15 +249,34 @@ The QSHE pipeline is split across two distinct stages with different tooling:
 - Slurm scripts in `Taskfarm/scripts/` handle job submission
 - Outputs land in `Data from taskfarm/` (excluded from context)
 
+**Local testing (QSHE):**
+
+```bash
+python -m Local.run_local_qshe \
+  --config Local/configs/local_qshe_qp
+# Output: Local data/{version}_{method}_{expr}/QP/
+```
+
+For a quick smoke-test, override to a coarse grid and small sample count:
+
+```bash
+python -m Local.run_local_qshe \
+  --config Local/configs/local_qshe_qp \
+  --set "rg_settings.samples=10000" "rg_settings.steps=5" \
+         "parameter_settings.q.num=10" "parameter_settings.p.num=10"
+```
+
 **Analysis (local, Jupyter):**
 - All post-processing, visualisation, and ν extraction is done in a
-  single notebook (not yet refactored into modules)
+  single notebook
 - The notebook lives at `test_qshe.ipynb`
 - Do not expect a CLI equivalent for QSHE analysis — there isn't one
-# TODO: refactor into module
 
 When working on QSHE analysis tasks, reference the notebook directly
 rather than looking for a `analysis/` equivalent of the IQHE pipeline.
+- The notebook has been exported to `test_qshe.py` via nbconvert and kept in sync
+  with the notebook. Use this file as the authoritative readable source for QSHE
+  analysis logic when the notebook is excluded from context.
 
 ---
 
@@ -439,13 +458,6 @@ No high-confidence cleanup targets. The `plot_z_fp` index-selection logic (~line
 |---|---|---|
 | `rg_fp`, lines ~236–244 | References `args.t` and `args.phi` directly from the enclosing `__main__` scope when `starting_t != 0` / `starting_phi != 0` — creates an implicit dependency on the global `args` object that is undocumented except in the docstring | medium |
 | `rg_fp` and `rg_exp` symmetrisation branches | Identical symmetrise / no-symmetrise if/elif/else block duplicated verbatim in both functions; the only difference is which folder variable is used | medium |
-
-### `Local/run_local_qshe.py`
-
-| Location | Issue | Confidence |
-|---|---|---|
-| `qshe_rg_workflow` FP branch, lines ~322–344 | Large commented-out block of alternative variable assignments (`z_sample`, `g_sample`, `t_sample`, `p_sample`, `f_sample_conv`) and an `assert` block | high |
-| `save_hist`, line 675 | `np.savez_compressed(filename, **data, allow_pickle=True)` — inconsistent with the rest of the pipeline which loads NPZ files with `allow_pickle=False`; the `allow_pickle=True` argument to `savez_compressed` is a no-op (savez never pickles), but the inconsistency is misleading | medium |
 
 ### `file_management.py`
 

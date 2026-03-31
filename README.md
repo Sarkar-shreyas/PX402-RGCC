@@ -112,6 +112,24 @@ python -m analysis.critical_exponent \
 
 ---
 
+## Quick-start (Local QSHE)
+
+Run a local (q, p) grid sweep with a reduced grid and sample count:
+
+```bash
+python -m Local.run_local_qshe \
+  --config Local/configs/local_qshe_qp \
+  --set "rg_settings.samples=10000" "rg_settings.steps=5" \
+         "parameter_settings.q.num=10" "parameter_settings.p.num=10"
+# Output: Local data/{version}_{method}_{expr}/QP/
+```
+
+To analyse the result, set `DATA_DIR` in `.env` to `<repo root>/Local data/`, update
+`dataversion` in `test_qshe.ipynb` to match the output directory name, and run all
+cells top-to-bottom.
+
+---
+
 ## HPC Workflow
 
 1. **Push** code, scripts, and config to the cluster:

@@ -1,140 +1,239 @@
-**Deployment / Staging model**
+# Runbook
 
-- The cluster does not run from a full git checkout. Runtime code is staged to `<REMOTE_ROOT>/code/source/` and scripts/configs to `<REMOTE_ROOT>/scripts/` by `file_management.py`.
+Operational procedures for the most common tasks.  For pipeline internals see
+[Pipeline.md](Pipeline.md); for config keys see [Config.md](Config.md).
 
-When something fails on the cluster, follow these steps (assume you have SSH access to `<HOST>` and the runtime assets are staged under `<REMOTE_ROOT>`):
+---
 
-1) Inspect job logs and outputs
+## IQHE — full HPC production run
 
-- Check job stdout/stderr files produced by Slurm under the working directories on the cluster. Master and worker scripts are `<REMOTE_ROOT>/scripts/rg_fp_master.sh`, `<REMOTE_ROOT>/scripts/rg_gen_batch.sh`, `<REMOTE_ROOT>/scripts/rg_hist_manager.sh`.
-- Check the remote job outputs under `<REMOTE_ROOT>/job_outputs/{version}/{FP|EXP}/` for per-step artifacts and `READY` markers.
-
-2) Recover or re-run a step
-
-- If a generation batch failed: inspect the batch directory on the cluster and re-run the generation array for the missing batches using the staged scripts in `<REMOTE_ROOT>/scripts/`.
-- If aggregation failed: re-run `<REMOTE_ROOT>/scripts/rg_hist_manager.sh` on the cluster with the same updated config YAML.
-
-3) Pull outputs to local machine for inspection
-
-- Use `file_management.py` to pull job outputs back to your local machine. Example (from `<LOCAL_REPO_ROOT>`):
+### 1. Prepare and push to the cluster
 
 ```bash
-python file_management.py --action pull --pull hist --version <version> --type FP --sys linux
+# Push source library, shell scripts, and config to the cluster
+python file_management.py --action push --push code scripts config \
+    --version fp_iqhe_numerical_shaw --sys linux
 ```
 
-Notes: use `file_management.py` as the authoritative tool for moving files between local and remote; it implements the exact remote folders and transfer method.
+This stages:
+- `source/` → `<REMOTE_ROOT>/code/source/`
+- `Taskfarm/scripts/` → `<REMOTE_ROOT>/scripts/`
+- `Taskfarm/configs/` → `<REMOTE_ROOT>/scripts/`
 
-# Runbook (HPC-focused)
-
-This runbook explains how to start, monitor and safely restart the pipeline. It treats the Taskfarm/Slurm path as authoritative and `Local/run_local.py` as a helper for testing.
-
-Entrypoints (observed in repo):
-
-- Taskfarm scripts: [Taskfarm/scripts/run_rg.sh](../Taskfarm/scripts/run_rg.sh), [Taskfarm/scripts/run_shifts.sh](../Taskfarm/scripts/run_shifts.sh), [Taskfarm/scripts/rg_fp_master.sh](../Taskfarm/scripts/rg_fp_master.sh)
-- Local helper: [Local/run_local.py](../Local/run_local.py) — for quick local FP/EXP runs and debugging
-
-Example execution (HPC):
-
-The Taskfarm entry scripts submit Slurm jobs using `sbatch`. `Taskfarm/scripts/run_rg.sh` calls `sbatch` to submit `rg_fp_master.sh`, and `Taskfarm/scripts/run_shifts.sh` calls `sbatch` to submit `shifted_rg.sh` (see those scripts for the exact arguments passed).
-
-- `--set` overrides maybe be written consecutively as shown in the 2nd example. Where multiple entries without a new command are found, they will be appended to `--set` input.
-
-Example local invocation (proven in repo):
+### 2. Submit the FP run (on the cluster)
 
 ```bash
-python -m Local.run_local --config Local/configs/local_iqhe --set "rg_settings.steps=2" --set "rg_settings.samples=10000" --type FP
-python -m Local.run_local --config Local/configs/local_iqhe --set "rg_settings.steps=2" "rg_settings.samples=10000" --type FP --set "engine.method=numerical"
+bash Taskfarm/scripts/run_rg.sh \
+    --config Taskfarm/configs/iqhe.yaml \
+    --set "engine.method=numerical" \
+    --out /tmp/configs
 ```
 
-Where to find logs and outputs
+`run_rg.sh` validates the config, writes an updated YAML to `--out`, and submits
+`rg_fp_master.sh` via `sbatch`.  The master script then submits generation array jobs
+and histogram manager jobs with Slurm dependencies for each RG step.
 
-- Local runs: `output.txt` and `error.txt` are created inside the run `output_dir` by [Local/run_local.py](../Local/run_local.py). The run also writes `output_locs.json` listing produced NPZ files.
-Cluster runs: the master Slurm script `Taskfarm/scripts/rg_fp_master.sh` sets SBATCH directives and runtime log locations. Example directives in that script:
-
-- `#SBATCH --output=../job_outputs/bootstrap/%x_%A.out`
-- `#SBATCH --error=../job_logs/bootstrap/%x_%A.err`
-
-At runtime the master script creates per-run folders and redirects stdout/stderr into per-run files under `job_outputs/${VERSIONSTR}/$TYPE` and `job_logs/${VERSIONSTR}/$TYPE` (see variables `joboutdir` and `logsdir` inside `rg_fp_master.sh`). Per-step generation and histogram jobs are also submitted via `sbatch` with `--output`/`--error` patterns (see `rg_gen_batch.sh` / `rg_hist_manager.sh` invocations in `rg_fp_master.sh`).
-
-Safe restart procedures
-
-- Restart from scratch:
-  - Remove the target run folder (or move it aside). Confirm that no other jobs are writing to the same folder.
-  - Re-submit the Taskfarm entry script (see Taskfarm/scripts).
-
-- Restart from RG step k (partial restart):
-  - Identify the last successfully written histograms: look for `t_hist_RG{k}.npz` / `z_sym_hist_RG{k}.npz` (naming from [Local/run_local.py](../Local/run_local.py)).
-  - If all tiles for RG{k} exist and downstream RG{k+1} has not run, re-run the aggregation/driver for RG{k+1} only. The master script `Taskfarm/scripts/rg_fp_master.sh` enqueues `rg_gen_batch.sh` (generation) and `rg_hist_manager.sh` (aggregation) with Slurm dependencies; re-submitting the appropriate aggregation job or running `rg_hist_manager.sh` with the same config and step index will reproduce the aggregation stage for that RG step.
-  - If RG{k} is partially complete (missing some tile NPZs), re-run the generator jobs for the missing tiles and then re-run aggregation.
-
-Handling partial failures
-
-- Generator jobs crashed (missing per-task NPZs): re-run the generator tasks for the missing task IDs. The per-task code is likely in `source/data_generation.py`; check Taskfarm submission arguments for task IDs (see Taskfarm/scripts).
-- Aggregation/hist jobs crashed: confirm the presence of per-task hist files and re-run the aggregation step. The local aggregation logic is visible in [Local/run_local.py](../Local/run_local.py) and [source/histogram_manager.py](../source/histogram_manager.py).
-
-Safety notes / assumptions
-
-- Large `rg_settings.samples` and `parameter_settings.z.bins` can cause high memory and disk usage. Adjust `rg_settings.matrix_batch_size` to control memory footprint (config key exists: see `Taskfarm/configs/iqhe.yaml`).
-- Always keep a copy of the FP NPZ corresponding to the final FP (used by EXP). The `rg_exp()` driver expects a saved FP NPZ at a particular path (see `Local/run_local.py`).
-
-Cluster job details & example sbatch invocations
-
-The Taskfarm scripts orchestrate submission of a master job which in turn submits per-step jobs. Concrete examples and behavior (extracted from the scripts):
-
-- Entry submission (helper): `Taskfarm/scripts/run_rg.sh` prepares an updated config and calls:
+### 3. Submit the EXP run (on the cluster, after FP completes)
 
 ```bash
-sbatch --parsable "$scriptsdir/rg_fp_master.sh" "$UPDATED_CONFIG"
+bash Taskfarm/scripts/run_shifts.sh \
+    --config Taskfarm/configs/iqhe.yaml \
+    --index 0 --out /tmp/configs
 ```
 
-- Master job (`rg_fp_master.sh`) then submits per-step generation jobs. Example submission pattern used by the master script:
+`--index N` selects the Nth shift value from `data_settings.shifts`.  Run once per
+shift index.
+
+### 4. Pull histograms
 
 ```bash
-sbatch --parsable \
-  --output=../job_outputs/bootstrap/rg_gen_RG${step}_%A_%a.out \
-  --error=../job_logs/bootstrap/rg_gen_RG${step}_%A_%a.err \
-  "$scriptsdir/rg_gen_batch.sh" \
-    "$UPDATED_CONFIG" "$TYPE" "$VERSIONSTR" "$N" "$step" "$SEED" "$METHOD" "$EXPR" "$INITIAL" "$EXISTING_T"
+# Pull FP histograms
+python file_management.py --action pull --pull hist \
+    --version fp_iqhe_numerical_shaw --type FP --sys linux
+
+# Pull EXP histograms
+python file_management.py --action pull --pull hist \
+    --version fp_iqhe_numerical_shaw --type EXP --sys linux
 ```
 
-- The generation job script (`rg_gen_batch.sh`) is submitted as an array job (see SBATCH header `--array=0-31%4` inside the script). It expects the following positional args when invoked:
+### 5. Extract ν
 
-  1. `UPDATED_CONFIG`
-  2. `TYPE` (FP/EXP)
-  3. `VERSION` / `VERSIONSTR`
-  4. `N` (total samples)
-  5. `RG_STEP` (step index)
-  6. `SEED`
-  7. `METHOD` (analytic/numerical)
-  8. `EXPR` (expression name)
-  9. `INITIAL` (0/1)
- 10. `EXISTING_T_FILE` (optional path)
- 11. `SHIFT` (optional for EXP)
-
-- Important behaviors in `rg_gen_batch.sh` (observed):
-  - Uses `SLURM_ARRAY_TASK_ID` to compute `TASK_ID` and derive a deterministic `JOB_SEED` per task.
-  - Writes per-batch files into a temporary directory `${TMPDIR:-/tmp}/${SLURM_JOB_NAME}_${SLURM_ARRAY_JOB_ID}_${TASK_ID}` and rsyncs back to a shared `batchdir` (with a `READY` marker file on success).
-  - Calls `python -m source.data_generation` with arguments: `BATCH_SIZE`, `batchsubdir`, `INITIAL`, `RG_STEP`, `JOB_SEED`, and optionally `T_INPUT`.
-
-- The master script submits a histogram manager job after generation, for example:
-- Note that: $scriptsdir = <REMOTE_ROOT>/scripts
 ```bash
-sbatch --parsable \
-  --dependency=afterok:${gen_job} \
-  --output=../job_outputs/bootstrap/rg_hist_RG${step}_%A.out \
-  --error=../job_logs/bootstrap/rg_hist_RG${step}_%A.err \
-  "$scriptsdir/rg_hist_manager.sh" \
-    "$UPDATED_CONFIG" "$TYPE" "$VERSIONSTR" "$N" "$step" "$SEED" "$SYMMETRISE"
+python -m analysis.critical_exponent \
+    --version fp_iqhe_numerical_shaw --mode EXP --steps 9
 ```
 
-- `rg_hist_manager.sh` behaviors and expectations:
-  - Validates presence of `batch_*` directories and a `READY` marker in each.
-  - Iterates over batches and calls `python -m "source.helpers"` and `python -m "source.histogram_manager"` to convert t'→z, and to append/construct aggregate histograms.
-  - Writes temporary histograms locally (under `TMPDIR`) and moves them to shared `jobdatadir` once complete.
-  - Performs runtime assertions using Python to ensure NPZ files contain keys `histval` and `binedges` before continuing.
-  - Produces additional artifacts: laundered t batches (`t_laundered_RG{step}_batch_{batch}.npy`), `input_t_hist_RG{step}.npz`, symmetrised histogram `sym_z_hist_RG{step}.npz` (for FP), and `DONE.json` metadata per RG step.
+Outputs `peaks.json`, `overall_stats.json`, and PNG plots to the version folder.
+See [Artifacts.md](Artifacts.md) for the full output layout.
 
-Restarting a failed aggregation job
+---
 
-- If `rg_hist_manager.sh` fails due to missing batches, re-run only that histogram manager job with the same positional args after ensuring missing `batch_*` folders are populated.
-- If some `batch_*` folders exist and others do not, re-run the generation array job (`rg_gen_batch.sh`) for the missing task indices (submit array with appropriate `--array` or individual `sbatch` calls for missing indices), then re-run `rg_hist_manager.sh`.
+## IQHE — local test run
+
+```bash
+# Minimal FP run (3 steps, 10M samples)
+python -m Local.run_local_iqhe \
+    --config Local/configs/local_iqhe \
+    --set "rg_settings.steps=3" "rg_settings.samples=10000000" \
+    --type FP
+
+# Follow with EXP run using the same version
+python -m Local.run_local_iqhe \
+    --config Local/configs/local_iqhe \
+    --set "rg_settings.steps=3" "rg_settings.samples=10000000" \
+    --type EXP
+```
+
+Outputs land in `Local data/{version}/FP/` and `Local data/{version}/EXP/`.
+
+For very fast sanity checks, reduce further:
+
+```yaml
+rg_settings.steps: 2
+rg_settings.samples: 1000000
+parameter_settings.z.bins: 500
+```
+
+---
+
+## QSHE — HPC data generation
+
+### 1. Push to the cluster
+
+```bash
+python file_management.py --action push --push code scripts config \
+    --version qp_unfixed_numerical_shreyas --sys linux
+```
+
+### 2. Submit generation jobs (on the cluster)
+
+The QSHE generation script is submitted as a Slurm array, one element per q-block:
+
+```bash
+sbatch Taskfarm/scripts/qshe_gen.sh \
+    <NUM_SAMPLES> <NUM_STEPS> <Q_BLOCK_SIZE> <OUTPUT_DIR>
+```
+
+Each array element invokes `python -m source.qshe_data_gen` with positional arguments:
+
+```
+NUM_SAMPLES  NUM_STEPS  Q_BLOCK  Q_BLOCK_SIZE  PHI_SEED  GEN_SEED  OUTPUT_DIR
+```
+
+### 3. Aggregate (on the cluster, after all generation jobs complete)
+
+```bash
+python -m source.qshe_data_agg \
+    NUM_SAMPLES NUM_STEPS Q_BLOCK_SIZE OUTPUT_DIR "p,q"
+```
+
+The aggregation script checks for `DONE` sentinels in every `q{b}/` sub-directory
+before concatenating.  It writes `p_data_agg.npy`, `q_data_agg.npy`, and
+`trial_state.json`.
+
+### 4. Pull aggregated data
+
+```bash
+python file_management.py --action pull --pull data \
+    --version qp_unfixed_numerical_shreyas --sys linux
+```
+
+### 5. Analyse in the notebook
+
+Open `test_qshe.ipynb` and run all cells top-to-bottom.  The notebook expects:
+
+```
+{DATA_DIR}/{dataversion}/QP/data/p_data_agg.npy
+{DATA_DIR}/{dataversion}/QP/data/q_data_agg.npy
+{DATA_DIR}/{dataversion}/QP/config/updated_config.yaml
+```
+
+The `dataversion` variable is set at line 977 of `test_qshe.py`:
+
+```python
+dataversion = "qp_unfixed_numerical_shreyas"
+```
+
+Update this string to point to a different dataset.  See [QSHE.md](QSHE.md) for a
+full walkthrough of the notebook.
+
+---
+
+## QSHE — local test run
+
+```bash
+# Minimal sweep (coarse grid, small sample count)
+python -m Local.run_local_qshe \
+    --config Local/configs/local_qshe_qp \
+    --set "rg_settings.samples=10000" "rg_settings.steps=5" \
+           "parameter_settings.q.num=10" "parameter_settings.p.num=10"
+
+# Full sweep using the config defaults
+python -m Local.run_local_qshe \
+    --config Local/configs/local_qshe_qp
+```
+
+Outputs land in `Local data/{version}_{method}_{expr}/QP/`.  To analyse the result in
+the notebook, set `DATA_DIR` in `.env` to `<repo root>/Local data/` and update
+`dataversion` at line 977 of `test_qshe.py` to match.
+
+---
+
+## Monitoring cluster jobs
+
+```bash
+# Check job status
+squeue -u $USER
+
+# Inspect exit codes for a completed job
+sacct -j <JOB_ID> --format=JobID,State,ExitCode,Elapsed
+
+# Check READY markers (indicates successful generation batch)
+ls <REMOTE_ROOT>/job_outputs/<version>/FP/data/batch_*/READY
+```
+
+---
+
+## Safe restart procedures
+
+### Restart an IQHE run from scratch
+
+1. Move or delete the existing output folder for the version (confirm no jobs are
+   writing to it).
+2. Re-submit via `run_rg.sh` as above.
+
+### Restart from RG step k (partial restart)
+
+1. Identify the last successfully written histograms:
+   `<job_outputs>/{version}/FP/hist/t/t_hist_RG{k}.npz` and
+   `<job_outputs>/{version}/FP/hist/sym_z/sym_z_hist_RG{k}.npz`.
+2. If all batches for step k are present but step k+1 has not run, re-submit the
+   histogram manager job with the same config.
+3. If some batches for step k are missing, re-submit the generation array for the
+   missing task indices only, then re-run the histogram manager.
+
+### Re-run a failed aggregation
+
+Confirm all `batch_*` directories contain a `READY` marker.  Re-run
+`rg_hist_manager.sh` with the same positional arguments.
+
+---
+
+## Pushing changes after editing source code
+
+```bash
+# Push only code
+python file_management.py --action push --push code \
+    --version <version> --sys linux
+
+# Push only scripts (e.g. after editing a .sh file)
+python file_management.py --action push --push scripts \
+    --version <version> --sys linux
+
+# Push only config
+python file_management.py --action push --push config \
+    --version <version> --sys linux
+```
+
+Multiple targets can be combined:
+`--push code scripts config`

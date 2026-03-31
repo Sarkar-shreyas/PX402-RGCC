@@ -1,0 +1,67 @@
+##
+## TARGET:      Local development machine (testing / debugging)
+## DESCRIPTION: Local QSHE (q, p) parameter-grid sweep configuration.
+##              10 000 samples per grid cell over 7 RG steps; launch via
+##              Local/run_local_qshe.py.
+##
+## USAGE:
+##   python -m Local.run_local_qshe --config Local/configs/local_qshe_qp
+##
+##   Override for a quick smoke-test:
+##   python -m Local.run_local_qshe --config Local/configs/local_qshe_qp \
+##       --set "rg_settings.samples=1000" "rg_settings.steps=3" \
+##             "parameter_settings.q.num=5" "parameter_settings.p.num=5"
+##
+## SECTIONS:
+##   main               — Run identity: version tag, environment id, output path.
+##   engine             — Physics model and RG transformation method.
+##   rg_settings        — Monte Carlo parameters: sample count, RG steps, seed,
+##                        batch size, sweep metric, and whether q is held fixed.
+##   data_settings      — Initial boundary conditions and solver output indices.
+##   parameter_settings — (q, p) grid bounds and resolution.
+##   convergence        — Tolerances stored for reference (not used in QP sweep).
+##
+
+main:
+  version: "rg_qshe"       # Run identifier; combined with method and expr to form
+                            # the output directory name: rg_qshe_numerical_shreyas
+  id: "local"              # Environment tag: "local" | "hpc"
+  type: "qp"               # Pipeline branch; always "qp" for this driver
+  output_folder: "Local data"
+
+engine:
+  model: "qshe"            # Physical model: must be "qshe" for QSHEConfig
+  method: "numerical"      # RG map implementation: "numerical" = 20×20 matrix solve
+  expr: "shreyas"          # Parametrisation of the QSHE RG map
+
+rg_settings:
+  seed: 1234               # RNG seed (NumPy PCG64) for reproducibility.
+                           # phi_rng = build_rng(seed), gen_rng = build_rng(seed+1)
+  steps: 7                 # Number of RG iterations per (q, p) trial
+  samples: 10000           # MC samples per (q, p) grid cell.
+                           # HPC production uses ~480 000; use 10 000–100 000 locally.
+  matrix_batch_size: 10000 # Samples processed per matrix-multiply batch; set equal to
+                           # samples so the full trial fits in a single batch locally
+  metric: "all"            # Aggregation statistic per step: "all" → (mean, median, std),
+                           # "mean" | "median" → single value.  Use "all" to match HPC.
+  fixed: 0                 # 0 = evolve both q and p freely (unfixed sweep);
+                           # 1 = hold q fixed at its initial value.
+
+data_settings:
+  inputs: [1.0, 0.0, 0.0, 0.0]  # Boundary-condition amplitudes fed to the 20×20 solver
+  outputs: [2, 9, 10, 17]        # Solver output indices: 2=t, 9=r, 10=tau, 17=f
+
+parameter_settings:
+  vars: ["t", "f", "p", "q"]    # Observable names tracked per trial (informational)
+  q:
+    min: 0.0                     # Lower bound of the q sweep axis
+    max: 0.5                     # Upper bound (physical range is [0, 0.5] for this model)
+    num: 20                      # Grid points along q; use 50–100 for production sweeps
+  p:
+    min: 0.001                   # Lower bound of p (avoid 0 to prevent log singularities)
+    max: 0.999                   # Upper bound of p (avoid 1 for the same reason)
+    num: 20                      # Grid points along p; use 50–999 for production sweeps
+
+convergence:
+  msd_tol: 1.0e-3               # Stored for reference; not used by the QP sweep driver
+  std_tol: 5.0e-4               # Stored for reference; not used by the QP sweep driver

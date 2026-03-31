@@ -11,6 +11,9 @@ Local data/
 # Thesis report (not relevant to code tasks)
 report/
 
+# Old files (not maintained)
+archived/
+
 # Jupyter notebooks excluded — cell outputs make them large and noisy.
 # For QSHE analysis tasks, export first:
 #   jupyter nbconvert --to script notebook.ipynb

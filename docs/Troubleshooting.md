@@ -1,93 +1,171 @@
-Deployment-aware troubleshooting
-
-- Since runtime assets on the cluster are staged under `<REMOTE_ROOT>/`, always inspect the staged scripts and job outputs there first. `file_management.py` is the canonical mapping tool — use it to pull outputs locally for deeper inspection.
-
-Common checks
-
-1) Missing batches
-
-- Inspect `<REMOTE_ROOT>/job_outputs/{version}/{FP|EXP}/data/` on the cluster for batch directories and `READY` markers.
-- If a batch is missing from job outputs, check the generation array job stdout/stderr from the Slurm logs produced by the staged scripts in `<REMOTE_ROOT>/scripts/`.
-
-2) NPZ load errors
-
-- Verify NPZ keys `histval`, `binedges`, `bincenters` (written by `source/utilities.py::save_data()`). Pull the NPZ to your workstation using `file_management.py` and inspect locally.
-
-3) Script mis-match on cluster
-
-- If a script on the cluster behaves unexpectedly, confirm you pushed the correct script/config via `file_management.py --push scripts --push config` and that the staged files in `<REMOTE_ROOT>/scripts/` match your local `Taskfarm/scripts/` and `Taskfarm/configs/`.
-
-Useful commands (examples run from `<LOCAL_REPO_ROOT>`):
-
-```bash
-# Pull the latest hist artifacts locally
-python file_management.py --action pull --pull hist --version <version> --type FP --sys linux
-
-# Re-upload scripts/configs after local edits
-python file_management.py --push scripts --push config --version <version> --sys linux
-```
-
-TODO: For cluster-specific permission or environment issues, inspect the cluster environment directly — see your cluster admin or the `file_management.py` comments for further guidance.
-
 # Troubleshooting
 
-Common failure modes, symptoms, likely causes, and where to inspect.
+Common failure modes, symptoms, likely causes, and fixes.  For recovery procedures
+see [Runbook.md](Runbook.md).
 
-1) Missing output directories or permission errors
+---
 
-- Symptoms: job fails early with `FileNotFoundError` or `PermissionError`. No `output_locs.json` in expected folder.
-- Likely cause: wrong `output_folder` in config or user lacks write permission to target path.
-- Where to inspect: `Local/run_local.py` (look for output dir creation using `Path(...).mkdir(parents=True, exist_ok=True)`), environment `.env` variables (top-level `.env`) and Taskfarm submission wrapper.
-- Fix: ensure `main.output_folder` points to an existing writable directory, or create it manually and re-run.
+## 1. Missing output directories or `FileNotFoundError` on startup
 
-2) Partial outputs for RG step (some NPZ files present, others missing)
+**Symptoms:** job fails immediately with `FileNotFoundError` or `PermissionError`; no
+`updated_config.yaml` in the expected folder.
 
-- Symptoms: some `t_hist_RG{k}.npz` or `z_hist_RG{k}.npz` files missing; aggregation stage fails.
-- Likely cause: per-task generator jobs crashed or were preempted; network/storage issues during write.
-- Where to inspect: Task job logs (Taskfarm job stdout/stderr), per-task output directories in the run folder.
-- Fix: re-run only the missing generator tasks; if unsure, re-run the aggregation for RG{k} after ensuring all per-task outputs are present.
+**Likely cause:** `main.output_folder` in the config points to a non-existent or
+unwritable path, or a required `.env` variable (`DATA_DIR`, `LOCAL_DIR`, etc.) is
+missing.
 
-3) OOM / memory errors during generation
+**Fix:**
+- Verify `.env` is present and all required variables are set (see
+  [Config.md](Config.md)).
+- `constants.py` raises `RuntimeError` at import time if any required variable is
+  absent — check the traceback for the variable name.
+- Create the target directory manually if needed; all drivers use
+  `os.makedirs(..., exist_ok=True)`.
 
-- Symptoms: job killed by OS; abrupt termination; kernel OOM messages.
-- Likely cause: `rg_settings.samples` is too large for available RAM or per-task `matrix_batch_size` is too big.
-- Where to inspect: `Taskfarm/configs/iqhe.yaml` and the config snapshot written by `save_updated_config()` in the run folder.
-- Fix: reduce `rg_settings.samples` and/or `rg_settings.matrix_batch_size` and re-run small-scale locally first.
+---
 
-4) Incompatible NPZ layout or load errors in `rg_exp()`
+## 2. Partial step outputs (some NPZ files missing)
 
-- Symptoms: `KeyError` when loading FP NPZ inside `rg_exp()` (`fp_data['histval']` missing).
-- Likely cause: `save_data()` produced different key names than expected, or NPZ was corrupted.
-- Where to inspect: `source/utilities.py::save_data()` and the NPZ consumer in [Local/run_local.py](../Local/run_local.py) (`rg_exp()` loads `histval`, `binedges`, `bincenters`).
-- Fix: open the NPZ with `numpy.load` and confirm keys, or re-create the NPZ with the expected keys.
+**Symptoms:** some `t_hist_RG{k}.npz` or `z_hist_RG{k}.npz` files exist but others
+are absent; histogram aggregation fails or produces incomplete results.
 
-5) Config parsing / override not applied
+**Likely cause:** one or more generation array tasks crashed or were preempted; network
+or storage issues during the rsync step in `rg_gen_batch.sh`.
 
-- Symptoms: overrides passed with `--set` do not take effect.
-- Likely cause: incorrect override syntax; quoting issues in shell.
-- Where to inspect: `source/parse_config.py::validate_input()` and `Local/run_local.py` (parser usage).
-- Fix: wrap key/value pairs in quotes and verify `validate_input()` implementation. Example pattern used in repo:
+**Fix:**
+- Check Slurm logs in `<REMOTE_ROOT>/job_logs/` for the failed task IDs.
+- Confirm which `batch_*/READY` markers are present in the job outputs directory.
+- Re-submit the generation array for the missing task indices, then re-run the
+  histogram manager (`rg_hist_manager.sh`) with the same config and step index.
 
-```bash
---set "rg_settings.steps=4"
+---
+
+## 3. Out-of-memory errors during sample generation
+
+**Symptoms:** job is killed abruptly by the OS; kernel OOM messages in the job log;
+no output files for the affected step.
+
+**Likely cause:** `rg_settings.samples` is too large for the available RAM, or
+`rg_settings.matrix_batch_size` exceeds per-task memory limits.
+
+**Fix:**
+- Reduce `rg_settings.matrix_batch_size` in the config (controls the size of the
+  matrix allocated per batch).
+- Test locally with a small sample count before resubmitting.
+- For very large runs, confirm the per-task memory request in the `#SBATCH --mem`
+  directive in `rg_gen_batch.sh` is sufficient.
+
+---
+
+## 4. `KeyError` when loading an NPZ file in `rg_exp()`
+
+**Symptoms:** `KeyError: 'histval'` (or `'binedges'`, `'bincenters'`) when the EXP
+driver attempts to load the FP distribution.
+
+**Likely cause:** the NPZ file was written with different key names, or the file is
+corrupted.
+
+**Fix:**
+```python
+import numpy as np
+data = np.load("path/to/file.npz", allow_pickle=False)
+print(list(data.keys()))   # expected: ['histval', 'binedges', 'bincenters']
 ```
+If keys are wrong, the file must be regenerated.  All correct NPZ files in this
+pipeline are written by `source/utilities.py::save_data` with these exact key names.
 
-6) Misc: unexpected behavior in symmetrisation / launder
+---
 
-- Symptoms: resulting distributions appear shifted or non-centred after `symmetrise` is enabled.
-- Likely cause: code path under `if symmetrise == 1:` in `Local/run_local.py` applies `center_z_distribution()` then `launder()`; differences may arise between analytic vs numerical `method` leading to differing sample sizes or phase handling.
-- Where to inspect: the `symmetrise` branch in [Local/run_local.py](../Local/run_local.py) and the implementations of `center_z_distribution()` and `launder()` in [source/utilities.py](../source/utilities.py).
+## 5. Config override (`--set`) not applied
 
-If you reach a blocker
+**Symptoms:** the run uses the YAML default value despite a `--set` override being
+passed on the command line.
 
-- Collect the run folder and logs (`output.txt`, `error.txt`, `output_locs.json`) and the config snapshot saved in the output directory, then open the relevant functions mentioned above.
+**Likely cause:** shell quoting split the `key=value` argument, or the key path is
+wrong.
 
-7) If nothing makes sense
+**Fix:**
+- Wrap each override in quotes: `--set "rg_settings.steps=3"`.
+- Check that the key path uses dots to separate nested levels:
+  `"parameter_settings.z.bins=500"`.
+- If multiple overrides are passed, they can be chained after a single `--set`:
+  `--set "rg_settings.steps=3" "rg_settings.samples=1000000"`.
 
-- Check config
-- Check last completed RG step
-- Check Slurm exit codes via
-```bash
-sacct -j `job_id` `format=`
-```
-- check READY markers
+---
+
+## 6. YAML key validation error (`KeyError: Key X must be all lowercase`)
+
+**Symptoms:** `build_config` or `handle_config` raises `KeyError` immediately after
+loading a YAML file.
+
+**Likely cause:** a config key contains an uppercase letter.
+
+**Fix:** Convert all YAML keys to lowercase.  Values (e.g. `"FP"`, `"EXP"`) may be
+uppercase; only the keys are restricted.
+
+---
+
+## 7. Symmetrisation produces an off-centre or asymmetric z-distribution
+
+**Symptoms:** after enabling `engine.symmetrise = 1` the z-histogram peak is not
+centred at zero; or the FP and EXP distributions look qualitatively different from
+prior runs.
+
+**Likely cause:** the `center_z_distribution` → `launder` branch in
+`Local/run_local_iqhe.py` is being applied to a non-critical starting distribution, or
+`engine.method` was changed between the FP and EXP runs.
+
+**Fix:**
+- Ensure the FP run converges (check `stats/*_moments.json` or the convergence output)
+  before running EXP.
+- Use the same `engine.method` for both FP and EXP runs.
+
+---
+
+## 8. QSHE aggregation fails with `RuntimeError: Block N incomplete`
+
+**Symptoms:** `source/qshe_data_agg.py` exits with `RuntimeError: Block N incomplete`
+before writing any aggregated files.
+
+**Likely cause:** the generation job for block N did not complete (no `DONE` sentinel
+in `{OUTPUT_DIR}/q{N}/`).
+
+**Fix:**
+- Check whether the generation job for that block exited successfully in its Slurm log.
+- Re-run `python -m source.qshe_data_gen` for the missing block with the same
+  arguments.
+- Once the `DONE` file is present, re-run `source/qshe_data_agg.py`.
+
+---
+
+## 9. Notebook cell fails with `NameError` or `FileNotFoundError`
+
+**Symptoms:** a notebook cell raises `NameError` (e.g. `name 'fits' is not defined`)
+or `FileNotFoundError` when loading `p_data_agg.npy`.
+
+**Likely cause:**
+- The notebook was not run top-to-bottom; variables from earlier cells are missing.
+- `dataversion` at line 977 of `test_qshe.py` does not match an existing directory
+  under `{DATA_DIR}`.
+- `.env` is not configured or `DATA_DIR` does not exist.
+
+**Fix:**
+- Use **Kernel → Restart and Run All** to execute cells in order.
+- Update `dataversion` to match your actual data directory name.
+- Verify `DATA_DIR` in `.env` and that the aggregated files exist:
+  `{DATA_DIR}/{dataversion}/QP/data/p_data_agg.npy`.
+
+---
+
+## 10. `isdigit` check in `file_management.py` never triggers the error branch
+
+**Symptoms:** passing an invalid `--step` argument to `file_management.py` does not
+raise the expected `ValueError`.
+
+**Cause (known bug):** line 285 of `file_management.py` reads
+`elif str(args.step).isdigit:` — `isdigit` without `()` is always truthy (method
+object reference rather than call).  The `raise ValueError` on the next line is
+unreachable dead code.
+
+**Workaround:** validate `--step` values manually before invoking the script.  This
+is a low-priority cleanup target recorded in [CLAUDE.md](../CLAUDE.md).
