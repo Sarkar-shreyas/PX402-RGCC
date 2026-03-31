@@ -282,7 +282,7 @@ def transfer_files(args) -> None:
     # Build the RG-step glob.  None means "all steps"; a digit selects one step.
     if args.step is None:
         rgs = "RG*"
-    elif str(args.step).isdigit:
+    elif str(args.step).isdigit():
         rgs = f"RG{args.step}"
     else:
         raise ValueError(f"Invalid RG step entered: {args.step}")
@@ -296,7 +296,7 @@ def transfer_files(args) -> None:
         raise ValueError(f"Invalid action {action} entered. Expected 'pull' or 'push'")
     print(f"Running commands for {dirs}")
     for dir in dirs:
-        current_commands = commands
+        current_commands = list(commands)
         dir = str(dir).strip().lower()
         if action == "pull":
             if dir == "config":
@@ -337,9 +337,6 @@ def transfer_files(args) -> None:
             # Append local source then remote destination to complete the command.
             current_commands.extend([local, remote])
             run_commands(current_commands)
-        # Reset to scp for the next iteration; rsync state must not bleed across
-        # separate transfer targets.
-        commands = ["scp", "-r"]
 
 
 if __name__ == "__main__":

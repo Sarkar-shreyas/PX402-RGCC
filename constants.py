@@ -64,11 +64,6 @@ qshe_test_dir = os.getenv("QSHE_TEST_DIR")
 # Monte Carlo sample count — total number of RG samples per run.
 # Local test runs use 32 M; HPC production runs use 480 M (this value).
 # ---------------------------------------------------------------------------
-# SHIFTS = [0.0, 0.003, 0.005, 0.007, 0.009]
-# SHIFTS = [0.0, 0.1, 0.2, 0.3, 0.4]
-# SHIFTS = [-0.4, -0.3, -0.2, -0.1, 0.0, 0.1, 0.2, 0.3, 0.4]
-# SHIFTS = ["0.0", "0.003", "0.005", "0.0075", "0.010"]
-# SHIFTS = ["0.0", "0.003", "0.004", "0.005", "0.006", "0.0075", "0.010"]
 N = 480000000
 
 # ---------------------------------------------------------------------------
@@ -82,8 +77,6 @@ SHIFTS = ["0.0", "0.003", "0.004", "0.005", "0.006"]
 # Run identifier — labels the output directory for the current production run;
 # encodes model type, method, and expression variant.
 # ---------------------------------------------------------------------------
-# CURRENT_VERSION = "1.84J"
-# CURRENT_VERSION = "1.90S"
 CURRENT_VERSION = "fp_iqhe_numerical_shaw"
 
 # ---------------------------------------------------------------------------
@@ -91,8 +84,6 @@ CURRENT_VERSION = "fp_iqhe_numerical_shaw"
 # Local runs typically use 7; production runs use 9 for better convergence.
 # ---------------------------------------------------------------------------
 NUM_RG = 9
-# NUM_RG = 10
-# NUM_RG = 12
 
 # ---------------------------------------------------------------------------
 # Plot layout parameters — legend placement, axis limits for every observable.

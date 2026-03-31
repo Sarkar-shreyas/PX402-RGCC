@@ -319,29 +319,13 @@ def qshe_rg_workflow(
                     rng,
                 )
             else:
-                # z_sample = data["z"]
-                # g_sample = convert_z_to_g(z_sample)
-                # g_sample = data["g"]
-                # t_sample = np.sqrt(g_sample)
-                # p_sample = data["p"]
-                # f_sample_conv = np.sqrt(q * (1 - p_sample))
-                # t_sample = data["t"]
-                # f_sample = data["f"]
                 p_sample = data["p"]
-                # f_sample = np.sqrt(q * (1 - p_sample))
                 f_sample = data["f"]
                 t_sample = np.sqrt(p_sample)
                 q_dist = (f_sample**2) / (1 - p_sample)
                 print(
                     f"Stats of q after RG step {step}; Mean : {np.mean(q_dist):.3f}, Median : {np.median(q_dist):.3f}, Min : {np.min(q_dist):.7f}, Max : {np.max(q_dist):.3f}"
                 )
-            # try:
-            #     dist = np.abs(f_sample**2 - data["f"] ** 2)
-            #     assert np.allclose(dist, 1e-12)
-            # except AssertionError:
-            #     print(
-            #         f"The distance of q(1-p) to f'^2 is too large : Min = {np.min(dist)}, Max = {np.max(dist)}"
-            #     )
 
             # Resample (t, f) pairs from the step output for the next iteration
             indexes = rng.integers(0, samples, size=(samples, 5))
@@ -672,7 +656,7 @@ def save_hist(var: str, sym: bool, folder_name: str, rg_step: int, data: dict) -
         sym_text = ""
     filename = f"{folder_name}/{sym_text}{var}_hist_RG{rg_step}.npz"
 
-    np.savez_compressed(filename, **data, allow_pickle=True)
+    np.savez_compressed(filename, **data)
 
 
 def qshe_sampler(

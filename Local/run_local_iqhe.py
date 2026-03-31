@@ -133,6 +133,56 @@ def build_hist(data: np.ndarray, bins: int, range: tuple) -> dict:
     return {"hist": hist, "edges": edges, "centers": centers, "densities": densities}
 
 
+def _apply_symmetrise(
+    symmetrise: int,
+    z_data: dict,
+    t_data: dict,
+    samples: int,
+    rng,
+    resample,
+) -> tuple[str, np.ndarray]:
+    """Apply symmetrise / no-symmetrise branch and return (sym_prefix, t_sample).
+
+    Args:
+        symmetrise: Flag from config — 1 to symmetrise, 0 to skip.
+        z_data: Dict with keys 'hist', 'edges', 'centers' for the z-histogram.
+        t_data: Dict with keys 'hist', 'edges', 'centers' for the t-histogram.
+        samples: Number of samples to draw when laundering.
+        rng: NumPy Generator instance.
+        resample: Resampling mode string passed to :func:`source.utilities.launder`.
+
+    Returns:
+        ``(sym, t_sample)`` where ``sym`` is ``"sym_"`` or ``""`` and
+        ``t_sample`` is the laundered 1-D array of t amplitudes.
+    """
+    if symmetrise == 1:
+        print(" Symmetrising ")
+        sym = "sym_"
+        z_data["hist"] = center_z_distribution(z_data["hist"])
+        z_sample = launder(
+            samples,
+            z_data["hist"],
+            z_data["edges"],
+            z_data["centers"],
+            rng,
+            resample,
+        )
+        t_sample = convert_z_to_t(z_sample)
+    elif symmetrise == 0:
+        sym = ""
+        t_sample = launder(
+            samples,
+            t_data["hist"],
+            t_data["edges"],
+            t_data["centers"],
+            rng,
+            resample,
+        )
+    else:
+        raise ValueError(f"Invalid symmetrise value entered: {symmetrise}")
+    return sym, t_sample
+
+
 def print_config(config: RGConfig) -> None:
     """Print a compact, human-readable summary of the main run settings.
 
@@ -262,31 +312,9 @@ def rg_fp(
         # Symmetrisation branch: fold z-distribution about zero to enforce
         # particle-hole symmetry, then launder back to t samples.
         # Unsymmetrised branch: launder directly from the t-histogram.
-        if symmetrise == 1:
-            print(" Symmetrising ")
-            sym = "sym_"
-            z_data["hist"] = center_z_distribution(z_data["hist"])
-            z_sample = launder(
-                samples,
-                z_data["hist"],
-                z_data["edges"],
-                z_data["centers"],
-                rng,
-                resample,
-            )
-            t_sample = convert_z_to_t(z_sample)
-        elif symmetrise == 0:
-            sym = ""
-            t_sample = launder(
-                samples,
-                t_data["hist"],
-                t_data["edges"],
-                t_data["centers"],
-                rng,
-                resample,
-            )
-        else:
-            raise ValueError(f"Invalid symmetrise value entered: {symmetrise}")
+        sym, t_sample = _apply_symmetrise(
+            symmetrise, z_data, t_data, samples, rng, resample
+        )
 
         # Resample from the laundered distribution for the next RG step
         ts = extract_t_samples(t_sample, samples, rng)
@@ -398,31 +426,9 @@ def rg_exp(
 
             # Symmetrisation branch: fold z-distribution about zero, then launder
             # back to t samples. Unsymmetrised branch: launder from t-histogram.
-            if symmetrise == 1:
-                print(" Symmetrising ")
-                sym = "sym_"
-                z_data["hist"] = center_z_distribution(z_data["hist"])
-                z_sample = launder(
-                    samples,
-                    z_data["hist"],
-                    z_data["edges"],
-                    z_data["centers"],
-                    rng,
-                    resample,
-                )
-                t_sample = convert_z_to_t(z_sample)
-            elif symmetrise == 0:
-                sym = ""
-                t_sample = launder(
-                    samples,
-                    t_data["hist"],
-                    t_data["edges"],
-                    t_data["centers"],
-                    rng,
-                    resample,
-                )
-            else:
-                raise ValueError(f"Invalid symmetrise value entered: {symmetrise}")
+            sym, t_sample = _apply_symmetrise(
+                symmetrise, z_data, t_data, samples, rng, resample
+            )
             ts = extract_t_samples(t_sample, samples, rng)
 
             # Write histogram NPZ files for this shift and step

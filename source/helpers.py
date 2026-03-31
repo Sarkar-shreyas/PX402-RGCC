@@ -142,5 +142,3 @@ if __name__ == "__main__":
         print("-" * 100)
     else:
         raise SystemExit("Invalid PROCESS entered. Valid: [0, 1, 2, 3]")
-    # Delete old files once done to prevent buildup
-    # os.remove(input_file)

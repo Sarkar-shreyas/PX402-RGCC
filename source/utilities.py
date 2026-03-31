@@ -31,13 +31,11 @@ Key physics variables
 # the line-length rule for this file to keep the formulas readable.
 # flake8: noqa: E501
 
-# from collections import defaultdict
 import numpy as np
 from typing import Optional
 from numpy.typing import ArrayLike
 import json
 
-# from time import time
 from datetime import datetime, timezone
 
 T_DICT = {"0": "random", "1": 0.0, "2": 0.5, "3": float(1 / np.sqrt(2)), "4": 1.0}
@@ -148,6 +146,8 @@ def collapse_data(data_dict: dict):
         return data_dict
 
 
+# Potentially unused in active pipeline — verify against test_qshe.ipynb
+# before removing.
 def build_state_dict(
     qvals: np.ndarray,
     gvals: np.ndarray,
@@ -221,6 +221,8 @@ def build_state_dict(
     return state
 
 
+# Potentially unused in active pipeline — verify against test_qshe.ipynb
+# before removing.
 def get_meds(
     step_a: int,
     step_b: int,
@@ -407,15 +409,6 @@ def generate_initial_qshe_data(
         f_val = 0.0
     f_array = generate_constant_array(n, f_val, 5)
     if t_val == 0:
-        # t_sample = launder(
-        #     n,
-        #     fp_data["histval"],
-        #     fp_data["binedges"],
-        #     fp_data["bincenters"],
-        #     rng,
-        #     config.resample,
-        # )
-        # t_array = extract_t_samples(t_sample, n, rng)
         split = 1 - f_array**2
         # t_array = rng.uniform(0, np.sqrt(split), size=(n, 5))
         t_sample = generate_initial_t_distribution(n, rng, split[0, 0])
@@ -742,19 +735,6 @@ def solve_qshe_matrix(
     I3_down = input_array[1]
     I10_down = input_array[2]
     I8_up = input_array[3]
-    # # b matrix for M
-    # b[:, 0, 0] = r1 * tau1 * I1
-    # b[:, 1, 0] = 1j * t1 * tau1 * I1
-    # b[:, 2, 0] = -f1 * I1
-    # b[:, 5, 0] = f2 * I2
-    # b[:, 6, 0] = 1j * t2 * tau2 * I2
-    # b[:, 7, 0] = r2 * tau2 * I2
-    # b[:, 12, 0] = 1j * t4 * tau4 * I3
-    # b[:, 13, 0] = r4 * tau4 * I3
-    # b[:, 15, 0] = f4 * I3
-    # b[:, 16, 0] = f5 * I4
-    # b[:, 18, 0] = r5 * tau5 * I4
-    # b[:, 19, 0] = 1j * t5 * tau5 * I4
 
     # b matrix for M2
     b[:, 0, 0] = t1 * I1_up
@@ -777,8 +757,6 @@ def solve_qshe_matrix(
     for output in output_indexes:
         sol.update({output: x[:, output]})
     return sol
-
-    # return ts
 
 
 def generate_t_prime(
@@ -1006,22 +984,20 @@ def qshe_numerical_solver(
     if batch_size > N:
         batch_size = N
     num_batches = N // batch_size
-    out_dict = {}
-    for index in output_indexes:
-        output = np.empty(shape=(N, 1), dtype=np.float64)
-        for i in range(num_batches):
-            indexes = slice(i * batch_size, (i + 1) * batch_size)
-            output_dict = solve_qshe_matrix(
-                ts[indexes],
-                fs[indexes],
-                phis[indexes],
-                batch_size,
-                output_indexes,
-                inputs,
-            )
-            output[indexes] = np.abs(output_dict[index])
-        out_dict.update({index: output[:]})
-    return out_dict
+    outputs = {index: np.empty(shape=(N, 1), dtype=np.float64) for index in output_indexes}
+    for i in range(num_batches):
+        indexes = slice(i * batch_size, (i + 1) * batch_size)
+        output_dict = solve_qshe_matrix(
+            ts[indexes],
+            fs[indexes],
+            phis[indexes],
+            batch_size,
+            output_indexes,
+            inputs,
+        )
+        for index in output_indexes:
+            outputs[index][indexes] = np.abs(output_dict[index])
+    return outputs
 
 
 def qp_trials(
@@ -1225,7 +1201,7 @@ def convert_t_to_g(t: np.ndarray) -> np.ndarray:
         Array of squared amplitudes g = |t|², same shape as input,
         values in ``[0, 1]``.
     """
-    return np.abs(t) * np.abs(t)
+    return t * t
 
 
 def convert_g_to_z(g: np.ndarray) -> np.ndarray:
@@ -1305,8 +1281,8 @@ def convert_t_to_geff(t: np.ndarray, f: np.ndarray) -> np.ndarray:
     Returns:
         Array of effective squared amplitudes g_eff, same shape as input.
     """
-    t2 = np.abs(t) ** 2
-    f2 = np.abs(f) ** 2
+    t2 = t * t
+    f2 = f * f
     return t2 + f2
 
 
@@ -1323,7 +1299,7 @@ def convert_geff_to_t(g_eff: np.ndarray, f: np.ndarray) -> np.ndarray:
     Returns:
         Array of transmission amplitudes t, same shape as input.
     """
-    f2 = np.abs(f) ** 2
+    f2 = f**2
     t2 = g_eff - f2
     return np.sqrt(t2)
 
@@ -1936,22 +1912,6 @@ def conditional_2d_resampler(
             print(
                 f"Rejection sampler iteration {num_iters}. {filled} samples accepted so far."
             )
-    # z_centers = data_dict[var0]["bincenters"]
-    # mix_centers = data_dict[var1]["bincenters"]
-    # z_take = rejection_sampler(
-    #     N,
-    #     data_dict[var0]["histval"],
-    #     data_dict[var0]["binedges"],
-    #     data_dict[var0]["bincenters"],
-    #     rng,
-    # )
-    # mix_take = rejection_sampler(
-    #     N,
-    #     data_dict[var1]["histval"],
-    #     data_dict[var1]["binedges"],
-    #     data_dict[var1]["bincenters"],
-    #     rng,
-    # )
     print(f"Took {num_iters} iterations in total.")
     return z_take, mix_take
 
@@ -2064,9 +2024,9 @@ def center_z_distribution(
     Args:
         z_hist: 1-D array of histogram counts (or densities) over z bins,
             assumed to be arranged symmetrically around z = 0.
-        z_bins: Bin edge array (optional, not used by this function).
-            Callers are responsible for renormalising the returned values
-            by bin widths if needed.
+        z_bins: Accepted for call-site compatibility (source/helpers.py passes
+            bin edges positionally) but never used inside this function.
+            Do not remove without updating all call sites.
 
     Returns:
         Symmetrised histogram array of the same shape as ``z_hist``.

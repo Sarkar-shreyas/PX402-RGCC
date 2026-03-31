@@ -16,7 +16,6 @@ report/
 #   jupyter nbconvert --to script notebook.ipynb
 # then feed the .py output directly to Claude Code.
 *.ipynb
-*.ipynb
 
 # Environment / secrets
 .env

@@ -74,7 +74,6 @@ if __name__ == "__main__":
     seed = int(sys.argv[4].strip())
     shift = float(sys.argv[5].strip())
     rng = build_rng(seed)
-    perturbation = shift
     rg_config = get_rg_config()
     sampler = rg_config.resample
     sym_z = np.load(input_file)
@@ -96,10 +95,10 @@ if __name__ == "__main__":
     # Translate every z-sample by the perturbation magnitude.  This rigid
     # shift of the distribution is the EXP initial condition; the bin edges
     # of the source histogram are unchanged — only the sampled values move.
-    shifted_sample = sym_sample + perturbation
+    shifted_sample = sym_sample + shift
     # Map shifted z back to amplitude t via t = sqrt(1 / (1 + exp(z))).
     shifted_t = convert_z_to_t(shifted_sample)
-    print(f"Shifted laundered sample by {perturbation}")
+    print(f"Shifted laundered sample by {shift}")
     np.save(output_file, shifted_t)
 
     print(f"Shifted t sample has been saved to {output_file}")

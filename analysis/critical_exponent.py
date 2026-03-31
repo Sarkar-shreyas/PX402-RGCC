@@ -264,8 +264,6 @@ def main():
         shift = shifts[j]
         shift_val = float(shift)
         print(f"Estimating peak for shift {shift}")
-        # peaks[0, j] = estimate_z_peak(fp_counts, fp_bins, fp_centers)
-        # means[0, j], stds[0, j] = hist_moments(fp_counts, fp_bins)
         peaks[0, j] = 0.0
         peak_errs[0, j] = 0.0
         means[0, j] = 0.0
@@ -278,27 +276,19 @@ def main():
                 counts, bins, centers, densities, shift_val
             )
             mean, std = hist_moments(sliced_counts, sliced_bins)
-            # test = launder(1000000, sliced_counts, sliced_bins, sliced_centers, rng)
-
-            # test_mu, test_std = norm.fit(test)
-            # print(f"Fitted mu = {test_mu}, Calculated mean = {mean}")
             min_peaks[i, j], max_peaks[i, j], peaks[i, j] = estimate_z_peak(
                 sliced_counts, sliced_bins, sliced_centers, rng, sampler
             )
             peak_errs[i, j] = max_peaks[i, j] - min_peaks[i, j]
             means[i, j] = mean
             stds[i, j] = std
-        # print(
-        #     f"Shift {shift}, RG {i}: Min bin = {min(bins)}, Max bin = {max(bins)}, Min center = {min(centers)}, Max center = {max(centers)}"
-        # )
-        # print("-" * 100)
         print(f"Peak estimated for shift {shift} after {time() - start:.3f} seconds")
     print("Finished peaks estimation for every shift")
     print("=" * 100)
     # print(z_moments)
     overall_stats = defaultdict(dict)
     peak_data = defaultdict(dict)
-    peak_data_file = f"{main_dir}/peaks.json"          # per-(RG step, shift) peak estimates for downstream inspection
+    peak_data_file = f"{main_dir}/peaks.json"  # per-(RG step, shift) peak estimates for downstream inspection
     overall_stats_file = f"{main_dir}/overall_stats.json"  # primary output: ν estimates, slopes, and R² for every RG step
     x = np.array(shifts).astype(float)
     nus = []
@@ -328,14 +318,9 @@ def main():
         m = means[i, :] - means[i, 0]
         min_y = min_peaks[i, :] - min_peaks[i, 0]
         max_y = max_peaks[i, :] - max_peaks[i, 0]
-        # y -= peaks[i, 0]
-        # m -= means[i, 0]
-        # min_y -= min_peaks[i, 0]
-        # max_y -= max_peaks[i, 0]
         x_fit = x[:]
         y_fit = y[:]
         m_fit = m[:]
-        # print(f"For RG{i}: Mean diffs: {m}")
         ms, mr2 = fit_z_peaks(x_fit, m_fit)
         slope, r2 = fit_z_peaks(x_fit, y_fit)
         ax_0.set_title("Means")
@@ -343,7 +328,6 @@ def main():
         if i in (1, 2, 3, 4, 5, 6, 7):
             ax_0.scatter(x_fit[1:], m_fit[1:])
             ax_0.plot(x, ms * x, label=f"RG_{i}")
-            # ax_1.scatter(x_fit, y_fit)
             e = ax_1.errorbar(
                 x_fit[1:],
                 y_fit[1:],
@@ -353,7 +337,6 @@ def main():
                 capsize=2.5,
             )
             c = e[0].get_color()
-            # ax_1.set_ylim((0.0, 0.01))
             x_line = np.linspace(0, float(max(shifts)) + shifts[1], 200)
             y_line = slope * x_line
             ax_1.plot(x_line, y_line, label=f"RG_{i}", color=c)
@@ -399,21 +382,16 @@ def main():
     print(f"Overall stats for z saved to {overall_stats_file}")
     print(f"Peak data saved to {peak_data_file}")
     print(f"z peaks data plotted and saved to {z_peaks_plot}")
-    system_size = [2**i for i in range(starting_index, rg)]  # system size grows as 2^n with each RG step
+    system_size = [
+        2**i for i in range(starting_index, rg)
+    ]  # system size grows as 2^n with each RG step
     fig, (ax_2, ax_3) = plt.subplots(1, 2, figsize=(10, 4))
-    # ax_2.set_xlim([0, 0.01])
-    # ax_2.set_ylim([2.3, 2.8])
     ax_2.set_title("Scatter plot of Nu vs System size from means")
     ax_2.set_xlabel("2^n")
     ax_2.set_ylabel("Nu")
-    # ax_2.set_xticks(system_size, system_size)
     ax_3.set_title("Scatter plot of Nu vs System size from peaks")
     ax_3.set_xlabel("2^n")
     ax_3.set_ylabel("Nu")
-    # ax_3.set_xticks(system_size, system_size)
-    # ax_3.set_xlim([0, 0.01])
-    # ax_3.set_ylim([2, 5])
-    # ind = 2
     ax_2.scatter(system_size, other_nus)
     ax_3.errorbar(
         system_size[:],
@@ -425,12 +403,10 @@ def main():
         markersize=4.0,
     )
 
-    # ax_3.scatter(system_size, nus)
     plt.savefig(Nu_plot, dpi=150)
     plt.close()
     print(f"Nu data plotted and saved to {Nu_plot}")
     print("-" * 100)
-    # calculate_average_nu(overall_stats, 7, rg)
     print("-" * 100)
     print(f"Analysis done after {time() - start:.3f} seconds")
 

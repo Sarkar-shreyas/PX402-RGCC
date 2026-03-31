@@ -134,7 +134,4 @@ if __name__ == "__main__":
     os.makedirs(output_dir, exist_ok=True)
     np.save(t_filename, t_prime)
     print(f"t data generated for RG step {rg_step} and saved to {t_filename}")
-    # if existing_t_file is not None and os.path.exists(existing_t_file):
-    #     # Delete old files once done to prevent buildup
-    #     os.remove(existing_t_file)
     print("-" * 100)

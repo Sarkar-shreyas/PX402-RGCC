@@ -22,7 +22,7 @@ from constants import (
     YLIMS,
     config_file,
 )
-from mpl_toolkits.mplot3d import Axes3D
+import mpl_toolkits.mplot3d  # noqa: F401 — registers 3D projection as side effect
 
 TYPE = "FP"
 DIST_TOLERANCE = 1e-3

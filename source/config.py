@@ -450,11 +450,9 @@ def get_nested_data(config: dict, path: str, default: Any = None) -> Any:
     keys = path.split(".")
     data = config
     for key in keys:
-        # print(f"Key {key} found.")
         if not isinstance(data, dict) or key not in data:
             return default
         data = data[key]
-    # print(f"Data is currently: {data}")
     return data
 
 
@@ -520,7 +518,6 @@ def parse_overrides(input_overrides: list[str]) -> dict:
                 temp_overrides[key] = {}
             temp_overrides = temp_overrides[key]
         temp_overrides[keys[-1]] = value
-    # print(overrides)
     return overrides
 
 

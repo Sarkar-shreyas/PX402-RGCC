@@ -24,9 +24,6 @@ heavy dependencies.
 """
 
 import numpy as np
-from numpy.polynomial import polynomial
-
-# from scipy.optimize import curve_fit
 from scipy.interpolate import UnivariateSpline
 from scipy.stats import norm
 from source.utilities import launder
@@ -54,11 +51,6 @@ def std_derivative(
     derivative_line = spline.derivative()
     std_primes = derivative_line(rgs)
     return std_primes
-
-
-def _gauss(x: np.ndarray, a: float, mu: float, sigma: float):
-    """Simple gaussian for curve fit"""
-    return a * np.exp(-0.5 * ((x - mu) / sigma) ** 2)
 
 
 def estimate_z_peak(
@@ -101,20 +93,15 @@ def estimate_z_peak(
         ValueError: If the top-5% bin selection yields an empty count array,
             or if no fit parameters are returned from the bootstrap loop.
     """
-    # Restrict calculations within [-25,25]
-    # z_min = -25.0 + shift
-    # z_max = 25.0 + shift
-    # mask = np.logical_and((z_bin_centers >= z_min), (z_bin_centers <= z_max))
-    # z_hist = z_hist[mask]
     z_length = len(z_hist)
     top_five_percent = int(0.05 * z_length)
-    top_indices = np.argsort(z_hist)[-top_five_percent:]
-    top_bin_indices = np.argsort(z_hist)[-top_five_percent - 1 :]
+    _sorted = np.argsort(z_hist)
+    top_indices = _sorted[-top_five_percent:]
+    top_bin_indices = _sorted[-top_five_percent - 1 :]
     top_indices = np.sort(top_indices)
     top_bin_indices = np.sort(top_bin_indices)
     bin_centers = z_bin_centers[top_indices]
     bin_edges = z_bins[top_bin_indices]
-    # print(f"Min bin = {bin_edges[0]}, Max bin = {bin_edges[-1]}")
     y_values = z_hist[top_indices]
     sample = launder(10000000, y_values, bin_edges, bin_centers, rng, sampler)
     if len(y_values) == 0:
@@ -122,23 +109,13 @@ def estimate_z_peak(
     overall_peak, _ = norm.fit(sample)
     length = rng.permutation(len(sample))
     subsets = np.array_split(sample[length], 10)
-    # subsets = [bin_values[needed[i]] for i in range(10)]
-    # print("Fitting subsets")
     params = [norm.fit(x) for x in subsets]
     if len(params) == 0:
         raise ValueError("No parameters were stored from the fit in estimate_z_peak.")
 
     mus = [i for i, j in params]
-    # std = np.std(mus, ddof=1)
     min_mean = float(min(mus))
     max_mean = float(max(mus))
-    # print(f"Min = {min_mean}, Max= {max_mean}, std = {std}")
-    # avg_mean = float(np.sum(mus) / 10)
-    # min_mean = float(avg_mean - std)
-    # max_mean = float(avg_mean + std)
-    # print(f"Min bin = {bin_centers[0]}, Max bin = {bin_centers[-1]}")
-    # print(f"Min mean = {float(min(mus))}, Max mean = {float(max(mus))}, std = {std}")
-    # print(f"Avg peak = {avg_mean}, Overall peak = {overall_peak}")
     return (min_mean, max_mean, overall_peak)
 
 
@@ -168,13 +145,11 @@ def fit_z_peaks(x: np.ndarray, y: np.ndarray) -> tuple:
         ν is extracted from the slope of log(peak displacement) vs
         log(perturbation shift).  A slope closer to 1 indicates a single
         scaling regime; deviations flag finite-size effects or multi-step
-        corrections.  The implementation uses
-        `numpy.polynomial.Polynomial.fit` for the residual and `numpy.polyfit`
-        for the linear coefficient; both assume finite numeric input.
+        corrections.  The implementation uses a single `numpy.polyfit` call
+        (``full=True``) to obtain both the linear coefficient and the residual;
+        assumes finite numeric input.
     """
-    passns, p = polynomial.Polynomial.fit(x, y, deg=1, full=True)
-    resid = p[0]
+    coef, resid, _, _, _ = np.polyfit(x, y, 1, full=True)
     sst = float(np.dot(y, y))
-    r2 = 1 - (resid / sst)  # type:ignore
-    coef = np.polyfit(x, y, 1)
+    r2 = 1 - (resid[0] / sst)
     return float(np.abs(coef[0])), float(r2)
