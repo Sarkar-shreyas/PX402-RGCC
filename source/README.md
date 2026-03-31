@@ -29,9 +29,24 @@ This directory is the single source of truth for the entire RG Monte Carlo pipel
 
 These names and definitions are used consistently across every file in this directory.
 
-| Name | Domain | Physical meaning |
-|------|--------|-----------------|
-| `t` | [0, 1] | Transmission amplitude — the fundamental RG variable. Represents the probability amplitude for an electron to transmit through a scattering region. |
-| `z` | ℝ | Log-ratio RG flow parameter: `z = ln((1 − t²) / t²)`. At the RG critical fixed point the z-distribution is symmetric about z = 0. EXP runs measure how a shift in z grows under repeated RG iterations. |
-| `tprime` | [0, 1] | Renormalised transmission amplitude after one RG step — the output of `generate_t_prime` or `numerical_t_prime`. Becomes the `t` input for the next step. |
-| `shifts` | ℝ (small) | Constant perturbations added to every z-sample to initialise EXP runs (e.g. `0.003`, `0.005`). Must be small enough to remain in the linear regime near the fixed point. The growth rate of the shift over RG steps yields the relevant RG eigenvalue λ = 1/ν. |
+### IQHE
+
+|   Name   |  Domain  | Physical meaning |
+|----------|----------|------------------|
+|    `t`   |  [0, 1]  | Transmission amplitude — the fundamental RG variable. Represents the probability amplitude for an electron to transmit through a scattering region. |
+|    `g`   |  [0, 1]  | Total probability of transmission, `|t|²`. Represents the microscopic dimensionless conductance at a scattering region. |
+|    `z`   |     ℝ    | Log-ratio RG flow parameter: `z = ln((1 − g) / g)`. At the RG critical fixed point the z-distribution is symmetric about z = 0. EXP runs measure how a shift in z grows under repeated RG iterations. |
+| `tprime` |  [0, 1]  | Renormalised transmission amplitude after one RG step — the output of `generate_t_prime` or `numerical_t_prime`. Becomes the `t` input for the next step. |
+| `shifts` | ℝ, ~1e-3 | Constant perturbations added to every z-sample to initialise EXP runs (e.g. `0.003`, `0.005`). Must be small enough to remain in the linear regime near the fixed point. The growth rate of the shift over RG steps yields the relevant RG eigenvalue λ = 1/ν. |
+
+### QSHE
+
+| Name |  Domain  | Physical meaning |
+|------|----------|-----------------|
+| `t`  |  [0, 1]  | Spin-preserved transmission amplitude. Represents the probability amplitude for an electron to transmit through a scattering region without flipping spin. |
+| `f`  |  [0, 1]  | Spin-flipped transmission amplitude. Represents the probability amplitude for an electron to transmit through a scattering region while flipping spin. |
+| `p`  |  [0, 1]  | Transmission control parameter. Tuning knob representing `|t|²`. q-p trials are conducted with an initial p value. When q = 0, p = g. |
+| `q`  | [0, 0.5] | Spin-mixing control parameter. Tuning knob representing the ratio `|f|² / (1 - |t|²)`. q-p trials are conducted with an initial q value. |
+
+- In the QSHE case, `g = p + (1-p)*q`, and `z` follows the same definition as in the IQHE case, in terms of `g`. 
+
