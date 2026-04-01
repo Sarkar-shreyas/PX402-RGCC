@@ -58,7 +58,7 @@ Targets the `<host>` Slurm cluster for IQHE FP and EXP runs. Submit via `run_rg.
 
 | Key | HPC value | Local value | Reason for difference |
 |-----|-----------|-------------|----------------------|
-| `rg_settings.samples` | `320000000` (320M) | `32000000` (32M) | 10× larger sample count for production accuracy |
+| `rg_settings.samples` | `480000000` (480M) | `32000000` (32M) | 10× larger sample count for production accuracy |
 | `rg_settings.steps` | `9` | `7` | More steps needed to reach convergence at higher N |
 | `rg_settings.seed` | `12345` | `1234` | Different seeds keep local and HPC runs statistically independent |
 | `main.id` | `"hpc"` | `"local"` | Environment tag used in log output |

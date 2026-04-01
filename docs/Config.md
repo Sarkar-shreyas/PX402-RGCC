@@ -44,7 +44,7 @@ Reference file: [`Taskfarm/configs/iqhe.yaml`](../Taskfarm/configs/iqhe.yaml)
 |-----|------|-------|-----|-------------|
 | `seed` | int | `1234` | `12345` | RNG seed (NumPy PCG64); determines the full MC sequence |
 | `steps` | int | `7` | `9` | Number of RG iterations |
-| `samples` | int | `32000000` | `320000000` | Total MC samples per run |
+| `samples` | int | `32000000` | `480000000` | Total MC samples per run |
 | `matrix_batch_size` | int | `100000` | `100000` | Samples per matrix-multiply batch; controls peak RAM usage |
 
 ### `data_settings`

@@ -83,18 +83,21 @@ for both p and q.
 The notebook extracts the critical exponent ν using a finite-size scaling (FSS)
 analysis of the RG flow.  The approach mirrors the method of Kobayashi et al. (2010):
 
-1. Define Γ_n(p) = z_n(p) / 2^(n+1) where z = ln((1−g)/g), g = p + (1−p)q, and n is
-   the RG step index (system size L_n = 2^(n+1)).
+1. Define Γ_k(p) = z_k(p) where z = ln((1−g)/g), g = p + (1−p)q, and k is
+   the RG step index (system size L_k = 2^k).
 2. Identify the critical point p_c(q) as the crossing of consecutive Γ_n(p) curves.
 3. Compute the slope T_k(q) = dΓ/dp |_{p = p_c(q)} at RG step k.
 4. The FSS hypothesis predicts T_k ~ L_k^{1/ν}, so a log-log fit of |T_k| vs 2^k
-   gives slope m and hence ν = 1/(m + 1).
+   gives slope m and hence ν = 1/m.
+
 
 An effective ν is also computed step-by-step as:
 
-    ν_eff = 1 / (Δ_slope / ln 2 + 1)
+    ν_eff = 1 / (Δ_slope / ln 2)
 
 where Δ_slope is the difference in log-slope between consecutive steps.
+
+- Note : Previous implementations mistakenly defined Γ_k(p) = z_k(p) / 2^k. This definition recovers the same result with the correction ν = 1/(m + 1), and similarly ν_eff = 1 / ((Δ_slope / ln 2) + 1)
 
 ---
 

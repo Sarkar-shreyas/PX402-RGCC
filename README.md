@@ -19,17 +19,18 @@ to the Chalker-Coddington (CC) network model described in:
 > Chalker-Coddington model revisited: improved statistics,"
 > *Physica E*, 2024. [arXiv:2404.00660](https://arxiv.org/abs/2404.00660)
 
-The goal is an independent reproduction of their ν extraction pipeline at production scale (320M samples), using the analytic and numerical RG unit variants described therein.
+The goal is an independent reproduction of their ν extraction pipeline at production scale (480M samples), using the analytic and numerical RG unit variants described therein.
 
-The QSHE pipeline seeks to apply the RSRG approach to the ℤ₂ network model
-and adopts the (p, q) parametrisation of scattering parameters described in:
+The QSHE pipeline applies the RSRG approach to the ℤ₂ network model,
+adopting the (p, q) parametrisation of scattering parameters described in:
 
 > K. Kobayashi, T. Ohtsuki, H. Obuse, and K. Slevin,
 > "Conductance distributions in disordered quantum spin-Hall systems,"
 > *Phys. Rev. B* 82, 165301 (2010). arXiv:[1007.4073](https://arxiv.org/abs/1007.4073)
 
-An estimate of ν is obtained using a finite-size scaling (FSS) analysis of the RG flow
-for the constructed ℤ₂ RG cell.
+A sweep through the 2D (p,q) parameter space yields a transition line p_c(q). Using a
+finite-size scaling (FSS) analysis of the RG flow within the neighbourhood of the
+p_c(q) line, an estimate of ν is then obtained.
 
 ---
 
@@ -110,6 +111,9 @@ python -m analysis.critical_exponent \
   --version fp_iqhe_numerical_shaw --mode EXP --steps 9
 ```
 
+- Time : A local trial consisting of 100M samples and 9 RG steps, with 8 shifts takes ~14.5hrs
+- Note : There is no parallelisation in place for local runs. Running 1M sample trials with similar specs instead requires a few minutes.
+
 ---
 
 ## Quick-start (Local QSHE)
@@ -128,9 +132,11 @@ To analyse the result, set `DATA_DIR` in `.env` to `<repo root>/Local data/`, up
 `dataversion` in `test_qshe.ipynb` to match the output directory name, and run all
 cells top-to-bottom.
 
+- Time : The time taken scales exponentially. Total no. of RG iterations is q_num x p_num x steps. However, random bias from phase generation appears non-negligible when using less than 10k samples. For verification, I recommend sweeping at most 1 q value and 10-20 p values at a time.
+
 ---
 
-## HPC Workflow
+## HPC Workflow for the IQHE
 
 1. **Push** code, scripts, and config to the cluster:
 
@@ -170,11 +176,49 @@ cells top-to-bottom.
      --version fp_iqhe_numerical_shaw --mode EXP --steps 9
    ```
 
+- Time : Each gen job for 15M samples requires around 18s, a hist job with 32 batches takes around 140s. Job time may vary based on scheduler overhead. Gen job timings varied from 18s - 2min, while hist job timings varied from ~10min to 1hr.
+- Note : Cores used had a RAM of 4 GB. Exceeding 15M samples per gen job is feasible, but the optimal number of samples to use is dependent on available RAM.
+
+## HPC Workflow for the QSHE
+
+1. **Push** code, scripts, and config to the cluster:
+
+   ```bash
+   python file_management.py --action push --push code scripts config \
+     --version rg_qshe_numerical_shreyas --sys linux
+   ```
+
+2. **Submit QP sweep** on the cluster:
+
+   ```bash
+   bash <REMOTE_DIR>/scripts/run_qp.sh \
+     --config <REMOTE_DIR>/configs/qshe.yaml \
+     --q-block-size 5 \
+     --set "parameter_settings.q.num=20" \
+     --out /tmp/configs
+   ```
+
+3. **Pull** q-p data from the cluster:
+
+   ```bash
+   python file_management.py --action pull --pull QP \
+     --version rg_qshe_numerical_shreyas --type QP --sys linux
+   ```
+
+- Time : Gen jobs for 100k samples, 15 RG steps, 2 q-values and 500 p-values take ~10-11hrs.
+- Note : All analysis is done using test_qshe.ipynb. See notebook documentation for details.
+
+
 ---
 
 ## Configuration
 
-Run configuration follows a three-level hierarchy: a **YAML config file** (e.g. `Taskfarm/configs/iqhe.yaml` or `Local/configs/local_iqhe.yaml`) provides all base settings; **CLI overrides** via `--set "key.nested.path=value"` (parsed by `source/parse_config.py`) allow per-invocation mutations without editing the file; the merged dictionary is then validated and promoted into a typed **dataclass** (`IQHEConfig` or `QSHEConfig`, constructed by `source/config.py`) that all downstream modules consume. See [docs/Config.md](docs/Config.md) for the full key reference.
+Run configuration follows a three-level hierarchy:
+- A **YAML config file** (e.g. `Taskfarm/configs/iqhe.yaml` or `Local/configs/local_iqhe.yaml`) provides all base settings.
+- **CLI overrides** via `--set "key.nested.path=value"` (parsed by `source/parse_config.py`) allow per-invocation mutations without editing the file.
+- The merged dictionary is then validated and promoted into a typed **dataclass** (`IQHEConfig` or `QSHEConfig`, constructed by `source/config.py`) that all downstream modules consume.
+
+See [docs/Config.md](docs/Config.md) for the full key reference.
 
 ---
 

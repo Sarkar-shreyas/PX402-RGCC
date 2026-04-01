@@ -7,7 +7,7 @@ This is a **Renormalization Group (RG) Monte Carlo pipeline** for studying phase
 - **IQHE** (Integer Quantum Hall Effect) — 2D electron systems under strong magnetic fields
 - **QSHE** (Quantum Spin Hall Effect) — topological edge states with spin-orbit coupling
 
-The pipeline runs locally for testing (32M samples) and on a Slurm HPC cluster for production (320M samples). It extracts the **critical exponent ν** characterising the divergence of the correlation length at the quantum phase transition.
+The pipeline runs locally for testing (32M samples) and on a Slurm HPC cluster for production (480M samples). It extracts the **critical exponent ν** characterising the divergence of the correlation length at the quantum phase transition.
 
 ---
 
@@ -81,7 +81,7 @@ engine:
 rg_settings:
   seed: 1234
   steps: 7                # RG iterations (local: 7, HPC: 9)
-  samples: 32000000       # total MC samples (local: 32M, HPC: 320M)
+  samples: 48000000       # total MC samples (local: 32M, HPC: 480M)
   matrix_batch_size: 100000
 data_settings:
   inputs: [1.0, 0.0]      # initial parameter values
@@ -158,7 +158,7 @@ Load with: `np.load(file, allow_pickle=False)`
 
 | Parameter | Typical Values | Description |
 |-----------|---------------|-------------|
-| `N` | 32M / 320M | Total MC samples |
+| `N` | 32M / 480M | Total MC samples |
 | `steps` | 7–9 (IQHE), 15 (QSHE) | RG iterations |
 | `method` | `"analytic"` / `"numerical"` | RG transformation method |
 | `expr` | `"shaw"` | Mathematical expression for RG map |
