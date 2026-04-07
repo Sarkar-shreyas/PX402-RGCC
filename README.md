@@ -132,7 +132,8 @@ To analyse the result, set `DATA_DIR` in `.env` to `<repo root>/Local data/`, up
 `dataversion` in `test_qshe.ipynb` to match the output directory name, and run all
 cells top-to-bottom.
 
-- Time : The time taken scales exponentially. Total no. of RG iterations is q_num x p_num x steps. However, random bias from phase generation appears non-negligible when using less than 10k samples. For verification, I recommend sweeping at most 1 q value and 10-20 p values at a time.
+- Time : The time taken scales exponentially. Total no. of RG iterations is q_num x p_num x steps, with each iteration taking ~20s for 15M samples.
+- Note : Random bias from phase generation appears non-negligible when using less than 10k samples. For quick tests, >10k samples suffices. 
 
 ---
 
@@ -176,8 +177,8 @@ cells top-to-bottom.
      --version fp_iqhe_numerical_shaw --mode EXP --steps 9
    ```
 
-- Time : Each gen job for 15M samples requires around 18s, a hist job with 32 batches takes around 140s. Job time may vary based on scheduler overhead. Gen job timings varied from 18s - 2min, while hist job timings varied from ~10min to 1hr.
-- Note : Cores used had a RAM of 4 GB. Exceeding 15M samples per gen job is feasible, but the optimal number of samples to use is dependent on available RAM.
+- Time : Each gen job for 15M samples requires around 18s, a hist job with 32 batches takes around 140s. Job time may vary based on scheduler overhead. Gen job timings varied from 18s - 2min, while hist job timings varied from ~2min to 1hr.
+- Note : Cores used had a RAM of 4 GB. Exceeding 15M samples per gen job is easily feasible, but the optimal number of samples to use is dependent on available RAM. Matrix inversion in the numerical method is batched by config param matrix_batch_size, and can be edited according to memory capabilities.
 
 ## HPC Workflow for the QSHE
 
@@ -205,7 +206,7 @@ cells top-to-bottom.
      --version rg_qshe_numerical_shreyas --type QP --sys linux
    ```
 
-- Time : Gen jobs for 100k samples, 15 RG steps, 2 q-values and 500 p-values take ~10-11hrs.
+- Time : Gen jobs for 100k samples, 15 RG steps, 2 q-values and 500 p-values (total 150k RG iterations) take ~10-11hrs.
 - Note : All analysis is done using test_qshe.ipynb. See notebook documentation for details.
 
 
@@ -236,4 +237,4 @@ A general README.md exists inside the `source/`, `Taskfarm/` and `analysis/` fol
 
 ## License / Academic Use
 
-TODO
+This project is licensed under the GNU General Public License v3.0 (GPLv3). See the [LICENSE](./LICENSE) file for details.
